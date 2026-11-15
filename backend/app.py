@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import hmac
+import json
 import operator
 import os
 import sqlite3
@@ -96,6 +97,11 @@ def init_db() -> None:
                 id BIGSERIAL PRIMARY KEY, role TEXT NOT NULL,
                 reward DOUBLE PRECISION NOT NULL, created_at TEXT NOT NULL
             )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS neural_learning_state (
+                id INTEGER PRIMARY KEY,
+                state_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )""")
         else:
             execute(db, """
                 CREATE TABLE IF NOT EXISTS memories (
@@ -120,9 +126,40 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT NOT NULL,
                 reward REAL NOT NULL, created_at TEXT NOT NULL
             )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS neural_learning_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                state_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )""")
+
+
+def load_associative_memory() -> None:
+    """Restore the bounded plasticity state from the server database."""
+    with connect_db() as db:
+        row = execute(db, "SELECT state_json FROM neural_learning_state WHERE id = 1").fetchone()
+    if row:
+        try:
+            ASSOCIATIVE_MEMORY.load_state_dict(json.loads(row["state_json"]))
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return
+
+
+def persist_associative_memory() -> None:
+    state_json = json.dumps(ASSOCIATIVE_MEMORY.state_dict(), separators=(",", ":"), sort_keys=True)
+    updated_at = datetime.now(timezone.utc).isoformat()
+    with connect_db() as db:
+        existing = execute(db, "SELECT id FROM neural_learning_state WHERE id = 1").fetchone()
+        if existing:
+            execute(db, "UPDATE neural_learning_state SET state_json = ?, updated_at = ? WHERE id = 1",
+                    (state_json, updated_at))
+        else:
+            execute(db, "INSERT INTO neural_learning_state(id, state_json, updated_at) VALUES (1, ?, ?)",
+                    (state_json, updated_at))
+
 
 
 init_db()
+load_associative_memory()
 
 
 class ChatRequest(BaseModel):
@@ -330,7 +367,7 @@ def brain_status(request: Request) -> dict[str, Any]:
         "external_ai_tokens_required": False,
         "web_research_enabled": True,
         "experimental_associative_learning": True,
-        "associative_memory_persistence": "process_memory_only",
+        "associative_memory_persistence": "database_checkpointed",
         "memory_enabled": True,
         "autonomous_production_changes": False,
     }
@@ -355,11 +392,12 @@ def brain_learn(payload: NeuralLearningRequest) -> dict[str, Any]:
     outcome = LEXICAL_ENCODER.encode(payload.outcome)
     try:
         result = ASSOCIATIVE_MEMORY.observe(context, outcome, payload.reward)
+        persist_associative_memory()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"learning": result, "method": "three_factor_reward_modulated_association",
             "flywire_synapses_modified": False, "language_model_weights_modified": False,
-            "persistence": "process_memory_only"}
+            "persistence": "database_checkpointed"}
 
 
 @app.post("/brain/recall", dependencies=[Depends(require_api_token)])
