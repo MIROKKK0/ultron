@@ -63,8 +63,9 @@ jobs:
           path: vendor/swift-llama-cpp/Artifacts/llama-b11960.xcframework
       - name: Generate red ULTRON app icon
         run: |
-          python3 -m pip install --quiet cairosvg
-          python3 scripts/generate_app_icon.py
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet cairosvg
+          .venv/bin/python scripts/generate_app_icon.py
       - name: Generate Xcode project
         run: xcodegen generate
       - name: Build for iOS Simulator
@@ -105,8 +106,9 @@ jobs:
           path: vendor/swift-llama-cpp/Artifacts/llama-b11960.xcframework
       - name: Generate red ULTRON app icon
         run: |
-          python3 -m pip install --quiet cairosvg
-          python3 scripts/generate_app_icon.py
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet cairosvg
+          .venv/bin/python scripts/generate_app_icon.py
       - name: Generate Xcode project
         run: xcodegen generate
       - name: Build unsigned app for physical iPhone
