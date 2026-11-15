@@ -92,3 +92,22 @@ Depois, instale o IPA pelo SideStore. A compilação de simulador não pode ser 
 - O FlyBrain consome a codificação e usa a recordação associativa como sinal limitado de atividade do grupo de memória.
 - O feedback explícito no aplicativo atualiza apenas prioridades das estratégias, com limites; não modifica o conectoma FlyWire ou os pesos de um LLM.
 - Isso é uma camada computacional inspirada em aprendizagem biológica, não uma reprodução completa do mushroom body nem prova de inteligência geral.
+
+
+## Geração de linguagem online (opcional, com fallback local)
+
+O chat continua executando o FlyBrain antes de qualquer decodificador. Quando credenciais são configuradas no ambiente do backend, a camada de linguagem pode usar provedores OpenAI-compatible em uma ordem controlada; se todos falharem ou atingirem suas cotas, o backend retorna ao decodificador local. O app iOS usa a resposta online diretamente e só executa o Qwen local quando o backend informa que a geração foi local.
+
+Configuração no painel de hospedagem (nunca no app, no repositório ou em commits):
+
+- `GROQ_API_KEY`: chave da conta Groq. Modelo padrão: `openai/gpt-oss-20b`.
+- `OPENROUTER_API_KEY`: chave OpenRouter. Modelo padrão: `openrouter/free`, que seleciona apenas modelos gratuitos.
+- `ULTRON_AI_PROVIDER_ORDER`: opcional; ordem separada por vírgulas, padrão `groq,openrouter`.
+- `GROQ_MODEL` ou `OPENROUTER_MODEL`: não altere para modelos pagos sem entender a cobrança. Modelos diferentes dos padrões são bloqueados, a menos que `ULTRON_ALLOW_PAID_AI=1` seja explicitamente configurado.
+- `GET /ai/status`: informa provedores configurados sem revelar chaves.
+
+A implementação não cria contas nem chaves e não ativa cobrança. Os planos gratuitos continuam sujeitos a limites por minuto, tokens e dia; quando as cotas acabam, o ULTRON tenta o próximo provedor configurado e depois usa o fallback local. Isso melhora a disponibilidade, mas não é uso ilimitado. O chat público continua sem memória compartilhada e não envia histórico privado ao provedor. Cada solicitação online envia apenas a mensagem atual e sinais de controle não privados do FlyBrain.
+
+Provedores de referência e limites oficiais:
+- Groq: https://console.groq.com/docs/rate-limits e https://console.groq.com/docs/models
+- OpenRouter Free: https://openrouter.ai/collections/free-models
