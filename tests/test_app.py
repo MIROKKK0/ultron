@@ -30,6 +30,20 @@ class UltronTests(unittest.TestCase):
         response = client.post("/chat", json={"message": "oi"})
         self.assertEqual(response.status_code, 401)
 
+    def test_agent_self_and_planner(self):
+        identity = client.get("/self", headers=AUTH)
+        self.assertEqual(identity.status_code, 200)
+        self.assertEqual(identity.json()["identity"]["name"], "ULTRON")
+        plan = client.post("/agent/plan", json={"goal": "Apagar dados antigos"}, headers=AUTH)
+        self.assertEqual(plan.status_code, 200)
+        self.assertTrue(plan.json()["human_approval_required"])
+
+    def test_feedback_is_persisted(self):
+        response = client.post("/feedback", json={"rating": 5, "comment": "Resposta útil"}, headers=AUTH)
+        self.assertEqual(response.status_code, 200)
+        summary = client.get("/feedback/summary", headers=AUTH)
+        self.assertGreaterEqual(summary.json()["total"], 1)
+
     def test_memory_crud(self):
         created = client.post(
             "/memory",
