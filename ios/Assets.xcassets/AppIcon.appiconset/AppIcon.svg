@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+ <linearGradient id="bg" x2="0" y2="1"><stop stop-color="#180607"/><stop offset=".55" stop-color="#050506"/><stop offset="1" stop-color="#210707"/></linearGradient>
+ <linearGradient id="metal" x2="0" y2="1"><stop stop-color="#fff"/><stop offset=".25" stop-color="#9ca3af"/><stop offset=".55" stop-color="#30343b"/><stop offset=".8" stop-color="#d1d5db"/><stop offset="1" stop-color="#555b64"/></linearGradient>
+ <linearGradient id="red" x2="0" y2="1"><stop stop-color="#fff"/><stop offset=".2" stop-color="#ff6666"/><stop offset=".55" stop-color="#f20d19"/><stop offset="1" stop-color="#700008"/></linearGradient>
+ <filter id="glow"><feGaussianBlur stdDeviation="12" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+ <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse"><path d="M42 0H0V42" fill="none" stroke="#7f1d1d" stroke-opacity=".28" stroke-width="2"/></pattern>
+</defs>
+<rect width="1024" height="1024" rx="180" fill="url(#bg)"/><rect x="24" y="24" width="976" height="976" rx="160" fill="url(#grid)" stroke="#ef2028" stroke-width="10"/>
+<g fill="none" stroke="#ff202b" stroke-width="10" opacity=".9" filter="url(#glow)">
+ <path d="M90 300L180 210 240 210M934 300L844 210 784 210M100 700L190 790 250 790M924 700L834 790 774 790"/>
+ <path d="M160 430C220 300 290 190 420 160M864 430C804 300 734 190 604 160"/>
+ <path d="M160 570C230 700 310 770 430 800M864 570C794 700 714 770 594 800"/>
+</g>
+<g filter="url(#glow)" fill="none" stroke="#ff242e" stroke-width="15" stroke-linecap="round">
+ <path d="M512 105V160M512 160C460 120 410 135 380 175C315 160 260 220 275 280C225 315 245 385 290 405C270 475 335 520 390 500C425 550 480 535 512 500"/>
+ <path d="M512 160C564 120 614 135 644 175C709 160 764 220 749 280C799 315 779 385 734 405C754 475 689 520 634 500C599 550 544 535 512 500"/>
+ <path d="M512 160V500M350 245L420 300 360 365 445 420M674 245L604 300 664 365 579 420"/>
+</g>
+<path d="M350 345L425 405V590Q425 655 512 655Q599 655 599 590V405L674 345V610Q674 745 512 745Q350 745 350 610Z" fill="url(#metal)" stroke="#ff2630" stroke-width="16" filter="url(#glow)"/>
+<path d="M390 405L450 450V590Q450 630 512 630Q574 630 574 590V450L634 405" fill="none" stroke="#16191f" stroke-width="18"/>
+<path d="M512 170V310" stroke="#fff" stroke-width="5" opacity=".8" filter="url(#glow)"/>
+<text x="512" y="850" text-anchor="middle" font-family="Arial,sans-serif" font-size="112" font-weight="900" letter-spacing="7" fill="url(#metal)" stroke="#55080c" stroke-width="4" paint-order="stroke">ULTRON</text>
+<text x="512" y="910" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" font-weight="700" letter-spacing="10" fill="#f3dada">FLYBRAIN  •  QWEN  •  AI</text>
+<path d="M420 955H604" stroke="#ff202b" stroke-width="8" filter="url(#glow)"/>
+<circle cx="512" cy="280" r="15" fill="#fff" filter="url(#glow)"/>
+</svg>
