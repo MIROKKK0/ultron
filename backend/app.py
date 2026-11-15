@@ -512,6 +512,10 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
             response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; o núcleo FlyBrain continua ativo."
     elif calculation:
         expression = calculation.group(1).replace(",", ".")
+        expression = re.sub(r"\\b(vezes|multiplicado por)\\b", "*", expression, flags=re.I)
+        expression = re.sub(r"\\b(dividido por|dividido)\\b", "/", expression, flags=re.I)
+        expression = re.sub(r"\\b(mais)\\b", "+", expression, flags=re.I)
+        expression = re.sub(r"\\b(menos)\\b", "-", expression, flags=re.I)
         try:
             response = f"O resultado é {calculate(expression)}."
         except ValueError:
