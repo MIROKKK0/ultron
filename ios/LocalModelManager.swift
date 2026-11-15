@@ -121,7 +121,6 @@ final class LocalModelManager: ObservableObject {
         Estado: \(brainContext?.core ?? "FlyBrain") / \(brainContext?.runtime ?? "runtime local").
         Conectoma: \(connectome). Novidade: \(brainContext?.novelty ?? 0).
         Atividade: \(groupActivity). Prioridades: \(roleScores).
-        Contexto verificado pelo servidor: \(serverReply)
         Responda diretamente à pergunta mais recente do usuário em português brasileiro. O estado neural acima é contexto auxiliar, não uma resposta pronta. Não use saudações nem apresentações, exceto quando o usuário cumprimentar. Nunca copie ou parafraseie respostas genéricas anteriores. Se a pergunta pedir explicação, explique; se pedir uma ação, informe o que pode executar e o que depende de autorização. Preserve apenas fatos e fontes realmente presentes no histórico. Não invente pesquisas, fontes, ações, memórias ou capacidades. Não afirme consciência, AGI ou autoevolução geral. Se faltar informação, diga exatamente o que falta. Seja claro e conciso.
         """
 
