@@ -1,0 +1,6 @@
+# Optional, isolated environment for the real FlyWire v783 simulator.
+# Install only on a machine/runner with enough RAM and disk; not on Render Free.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.5,<3
+pandas>=2.2,<3
+pyarrow>=18,<24
