@@ -55,8 +55,9 @@ def run_cognitive_cycle(
     goal: str,
     memories: Iterable[str],
     execute: Callable[[str], str],
+    include_researcher: bool = False,
 ) -> dict:
-    """Ask three bounded specialist perspectives in parallel, then synthesize."""
+    """Ask bounded specialist perspectives in parallel, then synthesize."""
     goal = goal.strip()
     if not goal:
         raise ValueError("Informe o objetivo.")
