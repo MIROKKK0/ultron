@@ -24,3 +24,26 @@ Important implementation boundary:
   than the current lightweight Render deployment is known to provide.
 - Do not describe this reduced circuit as the original fly brain or as a
   biologically complete/validated artificial intelligence.
+
+
+## On-device language runtime and model
+
+- ULTRON's optional iOS language-generation runtime uses
+  [swift-llama-cpp](https://github.com/pgorzelany/swift-llama-cpp), pinned in
+  the iOS workflow to commit
+  `c0de205096bc735093a1b73107ca4fe52bf99877`. The wrapper is MIT licensed.
+- The runtime downloads the official llama.cpp b11960 Apple XCFramework;
+  its SHA-256 is verified by Swift Package Manager. The workflow separately
+  builds the iOS Simulator slice from the matching upstream source revision.
+  llama.cpp is MIT licensed.
+- The optional model is Qwen3-0.6B Q4_K_M in GGUF format from
+  `tauqir02/Qwen3-0.6B-GGUF`, derived from Qwen/Qwen3-0.6B. Its published
+  file SHA-256 is verified before the app accepts the download:
+  `373db06783953f0981572d008f183eb2167b93304f5adbf7c4ce6ed6a91ee437`.
+  The Qwen3 model is Apache-2.0 licensed; retain the upstream model card and
+  license when redistributing model weights. Model weights are downloaded by
+  the user after installation and are not embedded in the IPA.
+- The model is a small language-generation component, not the FlyBrain.
+  The server-side FlyBrain runs first and sends non-private control signals;
+  the local model uses those signals to phrase the response. It does not
+  train or modify FlyBrain synapses or its connectome.
