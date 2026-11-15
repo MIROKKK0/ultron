@@ -42,18 +42,12 @@ struct ContentView: View {
                         LazyVStack(spacing: 14) {
                             ForEach(messages) { message in
                                 MessageBubble(message: message) { rating, strategy in
-                                    Task {
-                                        do {
-                                            try await client.sendFeedback(
-                                                rating,
-                                                strategy: strategy,
-                                                serverURL: serverURL,
-                                                apiToken: apiToken
-                                            )
-                                        } catch {
-                                            errorMessage = "Feedback não enviado: \(error.localizedDescription)"
-                                        }
-                                    }
+                                    try await client.sendFeedback(
+                                        rating,
+                                        strategy: strategy,
+                                        serverURL: serverURL,
+                                        apiToken: apiToken
+                                    )
                                 }
                                 .id(message.id)
                             }
@@ -136,8 +130,9 @@ struct ContentView: View {
 
 private struct MessageBubble: View {
     let message: ChatMessage
-    let onFeedback: (Int, String) -> Void
+    let onFeedback: (Int, String) async throws -> Void
     @State private var feedbackSent = false
+    @State private var feedbackError: String?
 
     var body: some View {
         HStack {
@@ -159,20 +154,34 @@ private struct MessageBubble: View {
                             .foregroundStyle(.secondary)
                         Spacer()
                         if feedbackSent {
-                            Text("Aprendizado registrado")
+                            Text("Feedback registrado")
                                 .font(.caption2)
                                 .foregroundStyle(.green)
                         } else {
                             Button {
-                                onFeedback(5, strategy)
-                                feedbackSent = true
+                                Task {
+                                    do {
+                                        try await onFeedback(5, strategy)
+                                        feedbackSent = true
+                                        feedbackError = nil
+                                    } catch {
+                                        feedbackError = error.localizedDescription
+                                    }
+                                }
                             } label: {
                                 Image(systemName: "hand.thumbsup")
                             }
                             .accessibilityLabel("Resposta útil")
                             Button {
-                                onFeedback(1, strategy)
-                                feedbackSent = true
+                                Task {
+                                    do {
+                                        try await onFeedback(1, strategy)
+                                        feedbackSent = true
+                                        feedbackError = nil
+                                    } catch {
+                                        feedbackError = error.localizedDescription
+                                    }
+                                }
                             } label: {
                                 Image(systemName: "hand.thumbsdown")
                             }
@@ -180,6 +189,12 @@ private struct MessageBubble: View {
                         }
                     }
                     .padding(.horizontal, 8)
+                    if let feedbackError {
+                        Text("Falha no feedback: \\(feedbackError)")
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                            .padding(.horizontal, 8)
+                    }
                 }
             }
             if message.role == .assistant { Spacer(minLength: 48) }
