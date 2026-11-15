@@ -34,12 +34,13 @@ Com Bearer token, o backend oferece:
 - `POST /improvement-proposals`: proposta testável, sem aplicar alterações automaticamente.
 - `GET /benchmarks`: casos internos de fumaça.
 - `GET /brain/status`: estado e limites do cérebro.
+- `POST /brain/research` com `{"goal":"..."}`: pesquisa com fontes via Gemini Google Search grounding (requer `ULTRON_ENABLE_WEB_SEARCH=true`).
 - `POST /brain/run` com `{"goal":"..."}`: ciclo cognitivo com planejador, solucionador, crítico e síntese.
 - `POST /brain/multitask` com `{"tasks":["...","..."]}`: até cinco tarefas independentes em paralelo.
 - `POST /feedback` com avaliação de 1 a 5 e comentário opcional.
 - `GET /feedback/summary`: média de avaliações armazenadas.
 
-A memória do chat prioriza itens com maior correspondência lexical e acrescenta até 12 mensagens recentes como contexto temporário. No próprio chat do iPhone, use `/self`, `/plan seu objetivo`, `/brain seu objetivo complexo`, `/multi tarefa 1 || tarefa 2`, `/remember sua nota` e `/calc 12*(3+4)`. O endpoint `/brain/run` coordena três perspectivas em paralelo e uma síntese; `/brain/multitask` aceita até cinco tarefas. Feedback fica registrado para avaliação do produto, mas não atualiza automaticamente os pesos do Gemini/OpenAI.
+A memória do chat prioriza itens com maior correspondência lexical e acrescenta até 12 mensagens recentes como contexto temporário. No próprio chat do iPhone, use `/self`, `/plan seu objetivo`, `/brain seu objetivo complexo`, `/multi tarefa 1 || tarefa 2`, `/remember sua nota` e `/calc 12*(3+4)`. O endpoint `/brain/run` coordena três perspectivas em paralelo e uma síntese; quando `ULTRON_ENABLE_WEB_SEARCH=true` e Gemini estão configurados, inclui um pesquisador com Google Search grounding. `/brain/research` e `/research` retornam URLs de fontes; pesquisa externa fica desligada por padrão. `/brain/multitask` aceita até cinco tarefas. Feedback fica registrado para avaliação do produto, mas não atualiza automaticamente os pesos do Gemini/OpenAI.
 
 Para PostgreSQL, defina `DATABASE_URL`. Para ativar respostas inteligentes, defina `GOOGLE_API_KEY` (Gemini) ou `OPENAI_API_KEY`. O Gemini é a opção prevista para começar com o nível gratuito disponível na conta Google AI Studio; limites e disponibilidade dependem da conta e do modelo.
 
