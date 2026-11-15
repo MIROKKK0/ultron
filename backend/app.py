@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hmac
 import operator
 import os
 import sqlite3
@@ -8,14 +9,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 DB_PATH = Path(os.getenv("ULTRON_DB_PATH", "ultron.db"))
 
-app = FastAPI(title=APP_NAME, version="0.3.0", description="Assistente pessoal com memória persistente e ações seguras.")
+app = FastAPI(title=APP_NAME, version="0.4.0", description="Assistente pessoal com memória persistente e ações seguras.")
 
 _ALLOWED_OPERATORS = {
     ast.Add: operator.add,
@@ -27,6 +28,16 @@ _ALLOWED_OPERATORS = {
     ast.USub: operator.neg,
     ast.UAdd: operator.pos,
 }
+
+
+def require_api_token(authorization: str | None = Header(default=None)) -> bool:
+    expected = os.getenv("ULTRON_API_TOKEN")
+    if not expected:
+        raise HTTPException(status_code=503, detail="Servidor ainda não configurou o token de acesso.")
+    scheme, _, supplied = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Token de acesso inválido.")
+    return True
 
 
 def connect_db():
@@ -154,33 +165,45 @@ def answer_without_provider(message: str) -> str:
         )
     return (
         "Estou online, mas a IA ainda não foi configurada. "
-        "O administrador precisa definir OPENAI_API_KEY no servidor."
+        "Defina GOOGLE_API_KEY (Gemini) ou OPENAI_API_KEY no servidor."
     )
 
 
 def answer_with_provider(message: str) -> str:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return answer_without_provider(message)
+    google_key = os.getenv("GOOGLE_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
 
     try:
-        from openai import OpenAI
+        if google_key:
+            from google import genai
 
-        client = OpenAI(api_key=api_key)
-        response = client.responses.create(
-            model=os.getenv("ULTRON_MODEL", "gpt-4.1-mini"),
-            instructions=(
-                "Você é ULTRON, um assistente pessoal em português brasileiro. "
-                "Seja claro e útil. Não alegue executar ações que não executou. "
-                "Não forneça instruções para invadir sistemas, roubar credenciais, "
-                "burlar assinaturas ou causar dano. Peça confirmação antes de "
-                "qualquer ação externa ou irreversível."
-            ),
-            input=message,
-        )
-        return response.output_text
+            client = genai.Client(api_key=google_key)
+            response = client.models.generate_content(
+                model=os.getenv("ULTRON_GEMINI_MODEL", "gemini-2.5-flash"),
+                contents=message,
+            )
+            return response.text or "Não consegui gerar uma resposta agora."
+
+        if openai_key:
+            from openai import OpenAI
+
+            client = OpenAI(api_key=openai_key)
+            response = client.responses.create(
+                model=os.getenv("ULTRON_MODEL", "gpt-4.1-mini"),
+                instructions=(
+                    "Você é ULTRON, um assistente pessoal em português brasileiro. "
+                    "Seja claro e útil. Não alegue executar ações que não executou. "
+                    "Não forneça instruções para invadir sistemas, roubar credenciais, "
+                    "burlar assinaturas ou causar dano. Peça confirmação antes de "
+                    "qualquer ação externa ou irreversível."
+                ),
+                input=message,
+            )
+            return response.output_text
     except Exception as exc:
         raise HTTPException(status_code=502, detail="O provedor de IA não respondeu.") from exc
+
+    return answer_without_provider(message)
 
 
 @app.get("/health")
@@ -192,11 +215,12 @@ def health() -> dict[str, Any]:
         "status": "online",
         "version": app.version,
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
-        "ai_configured": bool(os.getenv("OPENAI_API_KEY")),
+        "ai_configured": bool(os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")),
+        "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
     }
 
 
-@app.post("/chat")
+@app.post("/chat", dependencies=[Depends(require_api_token)])
 def chat(request: ChatRequest) -> dict[str, str]:
     message = request.message.strip()
     save_conversation("user", message)
@@ -205,7 +229,7 @@ def chat(request: ChatRequest) -> dict[str, str]:
     return {"reply": response}
 
 
-@app.post("/memory")
+@app.post("/memory", dependencies=[Depends(require_api_token)])
 def add_memory(request: MemoryRequest) -> dict[str, Any]:
     content = request.content.strip()
     with connect_db() as db:
@@ -226,7 +250,7 @@ def add_memory(request: MemoryRequest) -> dict[str, Any]:
     return {"id": memory_id, "content": content}
 
 
-@app.get("/memory")
+@app.get("/memory", dependencies=[Depends(require_api_token)])
 def list_memory() -> dict[str, Any]:
     with connect_db() as db:
         rows = execute(
@@ -236,7 +260,7 @@ def list_memory() -> dict[str, Any]:
     return {"items": [dict(row) for row in rows]}
 
 
-@app.delete("/memory/{memory_id}")
+@app.delete("/memory/{memory_id}", dependencies=[Depends(require_api_token)])
 def delete_memory(memory_id: int) -> dict[str, bool]:
     with connect_db() as db:
         cursor = execute(db, "DELETE FROM memories WHERE id = ?", (memory_id,))
