@@ -39,14 +39,14 @@ def decode_local(
             "planejar tarefas, calcular e consultar minhas memórias. Não uso "
             "tokens nem APIs de IA externas."
         )
-    if lower in {"/help", "ajuda", "o que você faz?"}:
+    if lower in {"/help", "ajuda", "o que você faz?", "quem é você?", "quem e voce?", "o que você é?"}:
         return (
             "ULTRON — núcleo FlyBrain obrigatório, memória local, planejamento "
             "estruturado, cálculo seguro e reflexão. Comandos: /self, /plan objetivo, "
             "/remember nota, /calc expressão, /brain objetivo e /multi tarefa1 || tarefa2. "
             "O decodificador é local e determinístico; não é um LLM nem finge ser."
         )
-    if lower.startswith("/self"):
+    if lower.startswith("/self") or lower in {"quem é você", "quem e voce", "me fale sobre você", "me fale sobre voce"}:
         return (
             "Sou ULTRON. O núcleo neural FlyBrain controla atenção e prioridade; "
             "a camada linguística local converte a intenção em respostas estruturadas. "
@@ -86,7 +86,7 @@ def decode_local(
             return "Ainda não encontrei memórias relevantes para essa solicitação."
         return "Memórias relevantes:\n" + "\n".join(f"- {item}" for item in memory_list[:5])
 
-    if any(word in lower for word in ("plano", "planeje", "organize", "como faço", "como fazer", "etapas")):
+    if any(word in lower for word in ("plano", "planeje", "organize", "como faço", "como fazer", "etapas", "me ajuda a planejar", "quero planejar")):
         return (
             f"Vou priorizar a estratégia {strategy}, conforme a atividade neural.\n"
             f"Objetivo identificado: {text}\n"
@@ -96,6 +96,10 @@ def decode_local(
             "4. Testar o resultado antes de avançar.\n"
             "5. Guardar aprendizados úteis na memória."
         )
+    if any(word in lower for word in ("obrigado", "obrigada", "valeu", "agradeço", "agradeco")):
+        return "Por nada! Estou aqui. Pode continuar falando comigo normalmente, sem comandos especiais."
+    if any(word in lower for word in ("tudo bem", "como você está", "como voce esta")):
+        return "Estou funcionando dentro dos recursos locais disponíveis. Meu núcleo FlyBrain processa a entrada; posso ajudar com planejamento, cálculos e pesquisa quando a internet estiver disponível."
     if memory_list:
         query_matches = [
             item for item in memory_list
