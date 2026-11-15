@@ -36,6 +36,7 @@ Com Bearer token, o backend oferece:
 - `GET /benchmarks`: casos internos de fumaça.
 - `GET /brain/status`: diagnóstico sem caminhos internos do host, com disponibilidade real, arquivos/dependências ausentes, runtime carregado, estímulos suportados e limites da aprendizagem.
 - `POST /brain/research`: pesquisa web sem chave, com limite público por IP e resultados com URLs.
+- `POST /brain/perception` com `{"goal":"..."}`: ponte conservadora de linguagem para os únicos estímulos do simulador FlyWire já documentados: alimentação → `sugar` e locomoção → `p9`; outros pedidos são marcados como não mapeados e continuam no núcleo LIF leve.
 - `POST /brain/run` com `{"goal":"..."}`: ciclo cognitivo com planejador, solucionador, crítico e síntese.
 - `POST /brain/multitask` com `{"tasks":["...","..."]}`: até cinco tarefas independentes em paralelo.
 - `POST /feedback` com avaliação de 1 a 5 e comentário opcional.
