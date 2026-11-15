@@ -1,4 +1,5 @@
 import unittest
+import sqlite3
 
 from backend.agent_core import (
     SELF_MODEL,
@@ -42,6 +43,15 @@ class AgentCoreTests(unittest.TestCase):
             {"content": "Receita de bolo de cenoura"},
         ]
         self.assertEqual(rank_memories("configurar Gemini no ULTRON", memories)[0], "Projeto ULTRON usa Gemini")
+
+    def test_memory_ranking_accepts_sqlite_rows(self):
+        connection = sqlite3.connect(":memory:")
+        connection.row_factory = sqlite3.Row
+        connection.execute("CREATE TABLE memories(content TEXT)")
+        connection.execute("INSERT INTO memories(content) VALUES (?)", ("ULTRON usa Gemini",))
+        rows = connection.execute("SELECT content FROM memories").fetchall()
+        self.assertEqual(rank_memories("configurar Gemini", rows)[0], "ULTRON usa Gemini")
+        connection.close()
 
     def test_planner_marks_destructive_actions_for_approval(self):
         plan = plan_task("Apagar todos os dados antigos")
