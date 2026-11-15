@@ -35,12 +35,15 @@ jobs:
       - name: Run real 138k-neuron connectome smoke simulations
         env:
           ULTRON_FLYWIRE_ROOT: vendor/fly-brain
+        env:
+          ULTRON_FLYWIRE_ROOT: vendor/fly-brain
+          FLYWIRE_VALIDATION_OUTPUT: artifacts/flywire-validation.json
         run: python scripts/validate_flywire.py
       - name: Upload simulation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: flywire-validation-${{ github.run_id }}
-          path: vendor/fly-brain/data/results/
+          path: artifacts/flywire-validation.json
           if-no-files-found: ignore
           retention-days: 14
