@@ -197,8 +197,8 @@ def answer_without_provider(message: str, memories: list[str] | None = None,
         return "Anotado na memória persistente do ULTRON."
     if lower.startswith("/plan "):
         plan = plan_task(normalized[6:].strip())
-        steps = "\\n".join(f"{item['step']}. {item['action']}" for item in plan["steps"])
-        return "\\n".join([f"Plano: {plan['goal']}", f"Risco: {plan['risk']}",
+        steps = "\n".join(f"{item['step']}. {item['action']}" for item in plan["steps"])
+        return "\n".join([f"Plano: {plan['goal']}", f"Risco: {plan['risk']}",
             f"Aprovação humana: {'sim' if plan['human_approval_required'] else 'não'}", steps])
     if lower == "/self":
         return str(SELF_MODEL.public_dict())
@@ -293,7 +293,7 @@ def brain_multitask(request: MultiTaskRequest) -> dict[str, Any]:
     result = run_multitask(tasks, execute_task_with_memory)
     for item in result["results"]:
         if item["status"] == "completed":
-            save_conversation("assistant", f"[Multitarefa] {item['task']}\\n{item['result']}")
+            save_conversation("assistant", f"[Multitarefa] {item['task']}\n{item['result']}")
     return result
 
 
