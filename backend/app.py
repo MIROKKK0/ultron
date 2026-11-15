@@ -229,7 +229,7 @@ def answer_with_provider(message: str, memories: list[str] | None = None) -> str
     if lower.startswith("/plan "):
         plan = plan_task(normalized[6:].strip())
         steps = "\n".join(f"{item['step']}. {item['action']}" for item in plan["steps"])
-        return f"Plano: {plan['goal']}\\nRisco: {plan['risk']}\\nAprovação humana: {'sim' if plan['human_approval_required'] else 'não'}\\n{steps}"
+        return "\n".join([f"Plano: {plan['goal']}", f"Risco: {plan['risk']}", f"Aprovação humana: {'sim' if plan['human_approval_required'] else 'não'}", steps])
     if lower == "/self":
         return str(SELF_MODEL.public_dict())
     if lower.startswith("/propose "):
