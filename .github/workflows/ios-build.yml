@@ -2,7 +2,7 @@ name: ULTRON iOS Build
 
 on:
   push:
-    branches: ["feat/**", "main"]
+    branches: ["main"]
     paths:
       - "ios/**"
       - "project.yml"
