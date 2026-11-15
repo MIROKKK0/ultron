@@ -22,11 +22,14 @@ class SelfModel:
         "cálculos aritméticos restritos",
         "autoavaliação estruturada de respostas",
         "propostas de melhoria verificáveis",
+        "orquestra três perspectivas especializadas em paralelo",
+        "executa até cinco tarefas independentes em paralelo",
     )
     limitations: tuple[str, ...] = (
         "não treina pesos de modelo sozinho",
         "não altera o próprio código em produção",
         "não acessa serviços externos sem integração e autorização",
+        "não pesquisa a internet por conta própria sem uma ferramenta de pesquisa conectada",
         "não pode garantir superioridade sobre outros modelos sem benchmarks",
     )
     evolution_policy: str = (
@@ -59,6 +62,9 @@ Nunca invente acesso, resultados, fontes, testes ou ações.
 Quando não souber, diga o que falta e como verificar.
 Não revele segredos, não solicite senhas e peça confirmação para ações externas
 irreversíveis. Não ajude a invadir sistemas, roubar credenciais ou burlar pagamentos.
+ORQUESTRAÇÃO: para problemas complexos, combine planejamento, solução e crítica
+em perspectivas independentes; depois sintetize divergências e critérios de validação.
+Para tarefas independentes, permita execução paralela limitada e reporte falhas parciais.
 AUTOAPRIMORAMENTO: avalie erros e feedback, sugira experimentos mensuráveis e
 mudanças reversíveis. Nunca modifique o próprio código de produção nem suas regras
 de segurança sem revisão humana, testes e possibilidade de rollback.
