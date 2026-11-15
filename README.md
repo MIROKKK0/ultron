@@ -39,7 +39,7 @@ Com Bearer token, o backend oferece:
 - `POST /feedback` com avaliação de 1 a 5 e comentário opcional.
 - `GET /feedback/summary`: média de avaliações armazenadas.
 
-A memória do chat prioriza itens com maior correspondência lexical. No próprio chat do iPhone, use `/self`, `/plan seu objetivo`, `/brain seu objetivo complexo`, `/multi tarefa 1 || tarefa 2`, `/remember sua nota` e `/calc 12*(3+4)`. O endpoint `/brain/run` coordena três perspectivas em paralelo e uma síntese; `/brain/multitask` aceita até cinco tarefas. Feedback fica registrado para avaliação do produto, mas não atualiza automaticamente os pesos do Gemini/OpenAI.
+A memória do chat prioriza itens com maior correspondência lexical e acrescenta até 12 mensagens recentes como contexto temporário. No próprio chat do iPhone, use `/self`, `/plan seu objetivo`, `/brain seu objetivo complexo`, `/multi tarefa 1 || tarefa 2`, `/remember sua nota` e `/calc 12*(3+4)`. O endpoint `/brain/run` coordena três perspectivas em paralelo e uma síntese; `/brain/multitask` aceita até cinco tarefas. Feedback fica registrado para avaliação do produto, mas não atualiza automaticamente os pesos do Gemini/OpenAI.
 
 Para PostgreSQL, defina `DATABASE_URL`. Para ativar respostas inteligentes, defina `GOOGLE_API_KEY` (Gemini) ou `OPENAI_API_KEY`. O Gemini é a opção prevista para começar com o nível gratuito disponível na conta Google AI Studio; limites e disponibilidade dependem da conta e do modelo.
 
