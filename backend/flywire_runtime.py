@@ -8,6 +8,7 @@ The FlyWire model is a sensory/motor neural simulator, not a text-generating LLM
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import os
 import sys
 import threading
@@ -32,14 +33,18 @@ def status() -> dict[str, Any]:
     root = _root()
     missing = [str(path) for path in DATA_FILES if not (root / path).is_file()]
     code_ready = (root / "code" / "run_pytorch.py").is_file()
+    dependencies = {name: importlib.util.find_spec(name) is not None for name in ("torch", "pandas", "pyarrow")}
+    missing_dependencies = [name for name, present in dependencies.items() if not present]
     return {
-        "available": not missing and code_ready,
+        "available": not missing and code_ready and not missing_dependencies,
         "connectome": "FlyWire FAFB v783",
         "expected_neurons": EXPECTED_NEURONS,
         "upstream": UPSTREAM,
         "root": str(root),
         "missing_files": missing,
         "upstream_code_present": code_ready,
+        "dependencies": dependencies,
+        "missing_dependencies": missing_dependencies,
         "backend": "PyTorch CPU",
         "license_note": "Upstream code GPL-2.0-or-later; FlyWire-derived data terms must be preserved.",
     }
