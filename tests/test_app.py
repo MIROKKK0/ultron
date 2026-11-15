@@ -53,52 +53,23 @@ class UltronTests(unittest.TestCase):
         summary = client.get("/feedback/summary", headers=AUTH)
         self.assertGreaterEqual(summary.json()["total"], 1)
 
-    def test_explicit_feedback_calibrates_only_the_selected_strategy(self):
+    def test_public_feedback_is_stored_without_changing_global_policy(self):
         feedback = client.post(
             "/feedback",
             json={"rating": 5, "strategy": "solver", "comment": "A solução ajudou"},
             headers=AUTH,
         )
         self.assertEqual(feedback.status_code, 200)
-        self.assertTrue(feedback.json()["used_for_policy_calibration"])
-        neural_state = {
-            "role_scores": {"planner": 1.0, "solver": 1.0, "critic": 1.0},
-            "core": "drosophila_lif_microcircuit",
-        }
-        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state):
-            with patch("backend.app.answer_without_provider", return_value="resposta"):
-                response = client.post("/chat", json={"message": "resolver tarefa"}, headers=AUTH)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["strategy"], "solver")
-        self.assertGreater(neural_state["role_scores"]["solver"], 1.0)
-        self.assertEqual(neural_state["policy_learning"]["synaptic_weights_changed"], False)
+        self.assertTrue(feedback.json()["stored"])
+        self.assertFalse(feedback.json()["used_for_policy_calibration"])
 
-    def test_explicit_feedback_calibrates_only_the_selected_strategy(self):
-        feedback = client.post(
-            "/feedback",
-            json={"rating": 5, "strategy": "solver", "comment": "A solução ajudou"},
-            headers=AUTH,
-        )
-        self.assertEqual(feedback.status_code, 200)
-        self.assertTrue(feedback.json()["used_for_policy_calibration"])
-        neural_state = {
-            "role_scores": {"planner": 1.0, "solver": 1.0, "critic": 1.0},
-            "core": "drosophila_lif_microcircuit",
-        }
-        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state):
-            with patch("backend.app.answer_without_provider", return_value="resposta"):
-                response = client.post("/chat", json={"message": "resolver tarefa"}, headers=AUTH)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["strategy"], "solver")
-        self.assertGreater(neural_state["role_scores"]["solver"], 1.0)
-        self.assertFalse(neural_state["policy_learning"]["synaptic_weights_changed"])
-
-    def test_chat_includes_recent_conversation_context(self):
-        save_conversation("user", "Contexto anterior de teste")
+    def test_public_chat_does_not_read_shared_private_conversation_context(self):
+        save_conversation("user", "Contexto privado de teste")
         with patch("backend.app.answer_without_provider", return_value="resposta") as mocked:
-            response = client.post("/chat", json={"message": "continue"}, headers=AUTH)
+            response = client.post("/chat", json={"message": "continue"})
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(any("Contexto anterior de teste" in item for item in mocked.call_args.args[2]))
+        self.assertEqual(mocked.call_args.args[1], [])
+        self.assertEqual(mocked.call_args.args[2], [])
 
     def test_every_chat_turn_passes_through_mandatory_neural_core(self):
         neural_state = {"core": "drosophila_lif_microcircuit", "mandatory": True}
