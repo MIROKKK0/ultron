@@ -24,7 +24,7 @@ struct ContentView: View {
                     .frame(width: 46, height: 46)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("ULTRON").font(.headline.weight(.bold)).tracking(1.5)
-                        Text(isSending ? "Pensando…" : (localModel.isModelAvailable ? "FlyBrain + IA local" : "FlyBrain • IA local não instalada")).font(.caption).foregroundStyle(.secondary)
+                        Text(isSending ? "Respondendo…" : (localModel.isModelAvailable ? "FlyBrain + IA local" : "FlyBrain • IA local não instalada")).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Circle().fill(serverURL.isEmpty ? .orange : .green).frame(width: 8, height: 8)
@@ -53,7 +53,7 @@ struct ContentView: View {
                             if isSending {
                                 HStack {
                                     ProgressView().tint(.cyan)
-                                    Text("ULTRON está pensando").font(.caption).foregroundStyle(.secondary)
+                                    Text("ULTRON está respondendo").font(.caption).foregroundStyle(.secondary)
                                     Spacer()
                                 }
                                 .padding(.horizontal)
@@ -120,20 +120,39 @@ struct ContentView: View {
         Task {
             do {
                 let result = try await client.send(text, serverURL: serverURL)
-                var finalReply = result.reply
+                // Show the server/FlyBrain answer immediately while the local model
+                // improves its wording in a visible token stream.
+                let assistantMessage = ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy)
+                messages.append(assistantMessage)
+
                 if localModel.isModelAvailable && !Self.requiresExactServerReply(text) {
                     do {
-                        finalReply = try await localModel.generate(
+                        let stream = try await localModel.stream(
                             userMessage: text,
-                            previousMessages: Array(messages.dropLast().suffix(8)),
+                            previousMessages: Array(messages.dropLast(2).suffix(4)),
                             brainContext: result.brainContext,
                             serverReply: result.reply
                         )
+                        var generated = ""
+                        for try await token in stream {
+                            generated += token
+                            if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
+                                messages[index].text = generated
+                            }
+                        }
+                        let cleaned = generated
+                            .replacingOccurrences(of: "<think>[\\s\\S]*?</think>", with: "", options: .regularExpression)
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
+                            messages[index].text = cleaned.isEmpty ? result.reply : cleaned
+                        }
                     } catch {
-                        errorMessage = "IA local indisponível nesta resposta; usei o resultado seguro do FlyBrain. \(error.localizedDescription)"
+                        if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
+                            messages[index].text = result.reply
+                        }
+                        errorMessage = "Mantive a resposta do FlyBrain; a geração local falhou: \(error.localizedDescription)"
                     }
                 }
-                messages.append(ChatMessage(role: .assistant, text: finalReply, strategy: result.strategy))
             } catch {
                 errorMessage = error.localizedDescription
                 messages.append(ChatMessage(role: .assistant, text: "Não consegui concluir a solicitação. Confira o servidor e a conexão."))
@@ -239,7 +258,7 @@ private struct SettingsView: View {
                 }
                 Section("Cérebro linguístico local") {
                     Text(localModel.isModelAvailable
-                         ? "Qwen3 0.6B Q4_K_M está salvo neste iPhone. A cada mensagem, o servidor executa o FlyBrain primeiro e envia os sinais neurais para orientar a geração local."
+                         ? "Qwen3 0.6B Q4_K_M está salvo neste iPhone. O FlyBrain processa primeiro; a geração local chega em fluxo, token por token."
                          : "Baixe o modelo Qwen3 0.6B quantizado (~462 MiB). A inferência acontece no iPhone via llama.cpp/Metal; não usa chave de IA.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
