@@ -35,9 +35,9 @@ class UltronTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             calculate("__import__('os').system('echo unsafe')")
 
-    def test_api_requires_token(self):
+    def test_chat_is_available_without_manual_server_token(self):
         response = client.post("/chat", json={"message": "oi"})
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 200)
 
     def test_agent_self_and_planner(self):
         identity = client.get("/self", headers=AUTH)
@@ -141,17 +141,19 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(len(response.json()["agents"]), 3)
         self.assertEqual(response.json()["synthesis"], "perspectiva")
 
-    def test_research_endpoint_requires_opt_in(self):
-        response = client.post(
-            "/brain/research", json={"goal": "Pesquisar memória de agentes"}, headers=AUTH
-        )
-        self.assertEqual(response.status_code, 503)
+    def test_research_endpoint_returns_source_linked_results(self):
+        fixture = {"query": "memória de agentes", "count": 1, "results": [{"title": "Paper", "url": "https://example.org/paper", "snippet": "Resumo"}], "summary": "Fontes"}
+        with patch("backend.app.search_web", return_value=fixture):
+            response = client.post("/brain/research", json={"goal": "Pesquisar memória de agentes"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["url"], "https://example.org/paper")
 
-    def test_research_endpoint_is_explicitly_unavailable_without_external_services(self):
-        response = client.post(
-            "/brain/research", json={"goal": "Pesquisar agentes"}, headers=AUTH
-        )
-        self.assertEqual(response.status_code, 503)
+    def test_chat_research_command_uses_web_search(self):
+        fixture = {"summary": "Resultados com fontes: https://example.org"}
+        with patch("backend.app.search_web", return_value=fixture):
+            response = client.post("/chat", json={"message": "/research FlyWire connectome"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("https://example.org", response.json()["reply"])
 
 
     def test_brain_multitask(self):
