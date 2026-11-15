@@ -41,7 +41,7 @@ _RULES: tuple[tuple[str, Stimulus, tuple[str, ...]], ...] = (
         "movimento corporal", "locomotion", "walking", "walk",
     )),
 )
-_NEGATION = re.compile(r"(?:\bnao\b|\bnunca\b|\bsem\b|\bevito\b|\bdispenso\b)(?:\s+\w+){0,3}\s*$", re.I)
+_NEGATION = re.compile(r"(?:\bnão\b|\bnao\b|\bnunca\b|\bsem\b|\bevito\b|\bdispenso\b)(?:\s+\w+){0,3}\s*$", re.I)
 _CLAUSE_BREAK = re.compile(r"[,;.!?]|\b(?:mas|porém|porem|entretanto)\b", re.I)
 
 
