@@ -1,0 +1,56 @@
+name: FlyWire Full Connectome Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: ["feat/ultron-core-assistant"]
+    paths:
+      - "backend/flywire_runtime.py"
+      - "backend/fly_brain.py"
+      - "scripts/**"
+      - "requirements-flywire.txt"
+      - ".github/workflows/flywire-validation.yml"
+  push:
+    branches: ["feat/ultron-core-assistant"]
+    paths:
+      - "backend/flywire_runtime.py"
+      - "backend/fly_brain.py"
+      - "scripts/**"
+      - "requirements-flywire.txt"
+      - ".github/workflows/flywire-validation.yml"
+  schedule:
+    - cron: "0 7 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  full-connectome-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install ULTRON and FlyWire CPU dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-flywire.txt
+      - name: Fetch upstream FlyWire source and v783 data
+        run: bash scripts/bootstrap_flywire.sh
+      - name: Run real 138k-neuron connectome smoke simulations
+        env:
+          ULTRON_FLYWIRE_ROOT: vendor/fly-brain
+          FLYWIRE_VALIDATION_OUTPUT: artifacts/flywire-validation.json
+        run: python scripts/validate_flywire.py
+      - name: Upload simulation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flywire-validation-${{ github.run_id }}
+          path: artifacts/flywire-validation.json
+          if-no-files-found: ignore
+          retention-days: 14
