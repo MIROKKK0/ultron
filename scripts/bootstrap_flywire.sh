@@ -9,6 +9,8 @@ if ! command -v git-lfs >/dev/null 2>&1; then
   exit 2
 fi
 
+git lfs install
+
 mkdir -p "$(dirname "$ROOT")"
 if [[ ! -d "$ROOT/.git" ]]; then
   git clone --depth 1 "$REPO" "$ROOT"
