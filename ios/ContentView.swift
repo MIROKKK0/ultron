@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var errorMessage: String?
     @State private var failedMessage: String?
     @State private var serverOnline = false
+    @State private var hostedLanguageAvailable = false
     @State private var checkingServer = true
     @StateObject private var localModel = LocalModelManager()
     @FocusState private var composerFocused: Bool
@@ -84,7 +85,7 @@ struct ContentView: View {
                     }
                 }
 
-                if !localModel.isModelAvailable {
+                if !localModel.isModelAvailable && !hostedLanguageAvailable {
                     languageModelSetup
                 }
 
@@ -132,7 +133,7 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                     Text("·")
                         .foregroundStyle(.tertiary)
-                    Text(localModel.isModelAvailable ? "IA local pronta" : "FlyBrain")
+                    Text(localModel.isModelAvailable ? "IA local pronta" : (hostedLanguageAvailable ? "IA online pronta" : "FlyBrain"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -360,15 +361,17 @@ struct ContentView: View {
                 let result = try await client.send(text, serverURL: serverURL)
                 serverOnline = true
                 checkingServer = false
+                hostedLanguageAvailable = result.languageProvider != "local"
 
                 var assistantMessage = ChatMessage(
                     role: .assistant,
-                    text: localModel.isModelAvailable ? "Estou formulando uma resposta para sua pergunta…" : result.reply,
+                    text: localModel.isModelAvailable && result.languageProvider == "local" ? "Estou formulando uma resposta para sua pergunta…" : result.reply,
                     strategy: result.strategy
                 )
                 let server = result.timingsMS
                 let serverSummary = "Rede: \(Int(result.networkRoundTripMS)) ms · Servidor: \(Int(server["server_total"] ?? 0)) ms · FlyBrain: \(Int(server["flybrain"] ?? 0)) ms · Política: \(Int(server["strategy_policy"] ?? 0)) ms"
-                assistantMessage.diagnostics = serverSummary + (localModel.isModelAvailable ? " · Qwen: processando" : " · Qwen: não instalado")
+                let languageSummary = result.languageProvider == "local" ? (localModel.isModelAvailable ? "Qwen: processando" : "sem modelo de linguagem online/local") : "IA online: \(result.languageProvider) · geração: \(Int(server["language_generation"] ?? 0)) ms"
+                assistantMessage.diagnostics = serverSummary + " · " + languageSummary
                 messages.append(assistantMessage)
 
                 // Do not expose a generic decoder fallback as the final answer.
@@ -376,6 +379,7 @@ struct ContentView: View {
                 isSending = false
 
                 guard localModel.isModelAvailable,
+                      result.languageProvider == "local",
                       !Self.requiresExactServerReply(text),
                       !isLocalGenerating else { return }
 
