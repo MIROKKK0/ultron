@@ -23,7 +23,7 @@ struct ContentView: View {
                     .frame(width: 46, height: 46)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("ULTRON").font(.headline.weight(.bold)).tracking(1.5)
-                        Text(isSending ? "Pensando…" : "Assistente pessoal").font(.caption).foregroundStyle(.secondary)
+                        Text(isSending ? "Pensando…" : (localModel.isModelAvailable ? "FlyBrain + IA local" : "FlyBrain • IA local não instalada")).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Circle().fill(serverURL.isEmpty ? .orange : .green).frame(width: 8, height: 8)
@@ -95,11 +95,17 @@ struct ContentView: View {
             .background(Color(.systemBackground))
             .navigationBarHidden(true)
             .sheet(isPresented: $showSettings) {
-                SettingsView(serverURL: $serverURL)
+                SettingsView(serverURL: $serverURL, localModel: localModel)
                     .presentationDetents([.medium, .large])
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    private static func requiresExactServerReply(_ text: String) -> Bool {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.hasPrefix("/calc ") || normalized == "/self" ||
+            normalized.hasPrefix("/remember ")
     }
 
     private func send() {
@@ -113,7 +119,20 @@ struct ContentView: View {
         Task {
             do {
                 let result = try await client.send(text, serverURL: serverURL)
-                messages.append(ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy))
+                var finalReply = result.reply
+                if localModel.isModelAvailable && !Self.requiresExactServerReply(text) {
+                    do {
+                        finalReply = try await localModel.generate(
+                            userMessage: text,
+                            previousMessages: Array(messages.dropLast().suffix(8)),
+                            brainContext: result.brainContext,
+                            serverReply: result.reply
+                        )
+                    } catch {
+                        errorMessage = "IA local indisponível nesta resposta; usei o resultado seguro do FlyBrain. \\(error.localizedDescription)"
+                    }
+                }
+                messages.append(ChatMessage(role: .assistant, text: finalReply, strategy: result.strategy))
             } catch {
                 errorMessage = error.localizedDescription
                 messages.append(ChatMessage(role: .assistant, text: "Não consegui concluir a solicitação. Confira o servidor e a conexão."))
@@ -201,6 +220,7 @@ private struct MessageBubble: View {
 
 private struct SettingsView: View {
     @Binding var serverURL: String
+    @ObservedObject var localModel: LocalModelManager
     @Environment(\.dismiss) private var dismiss
     @State private var draftURL = ""
 
@@ -215,6 +235,30 @@ private struct SettingsView: View {
                     Text("Use o endereço HTTPS do servidor. O chat público usa limite de requisições e não pede token manual.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+                Section("Cérebro linguístico local") {
+                    Text(localModel.isModelAvailable
+                         ? "Qwen3 0.6B Q4_K_M está salvo neste iPhone. A cada mensagem, o servidor executa o FlyBrain primeiro e envia os sinais neurais para orientar a geração local."
+                         : "Baixe o modelo Qwen3 0.6B quantizado (~462 MiB). A inferência acontece no iPhone via llama.cpp/Metal; não usa chave de IA.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if localModel.isDownloading {
+                        ProgressView("Baixando modelo (~462 MiB)…")
+                    } else if localModel.isModelAvailable {
+                        Label("Modelo disponível", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Button("Remover modelo deste iPhone", role: .destructive) {
+                            localModel.removeModel()
+                        }
+                    } else {
+                        Button("Baixar modelo local (~462 MiB)") {
+                            Task { await localModel.downloadModel() }
+                        }
+                        .disabled(localModel.isDownloading)
+                    }
+                    if let modelError = localModel.errorMessage {
+                        Text(modelError).font(.caption).foregroundStyle(.red)
+                    }
                 }
                 Section {
                     Button("Salvar configuração") {
