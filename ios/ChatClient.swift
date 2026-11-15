@@ -5,14 +5,16 @@ struct ChatMessage: Identifiable, Codable {
     let role: Role
     var text: String
     let strategy: String?
+    var diagnostics: String?
 
     enum Role: String, Codable { case user, assistant }
 
-    init(role: Role, text: String, strategy: String? = nil) {
+    init(role: Role, text: String, strategy: String? = nil, diagnostics: String? = nil) {
         self.id = UUID()
         self.role = role
         self.text = text
         self.strategy = strategy
+        self.diagnostics = diagnostics
     }
 }
 
