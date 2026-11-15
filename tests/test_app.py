@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 os.environ["ULTRON_DB_PATH"] = str(Path(tempfile.gettempdir()) / "ultron-tests.sqlite3")
@@ -43,6 +44,32 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         summary = client.get("/feedback/summary", headers=AUTH)
         self.assertGreaterEqual(summary.json()["total"], 1)
+
+    def test_brain_status(self):
+        response = client.get("/brain/status", headers=AUTH)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["parallel_task_limit"], 5)
+
+    def test_brain_run_uses_parallel_specialists(self):
+        with patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"}):
+            with patch("backend.app.answer_with_provider", return_value="perspectiva"):
+                response = client.post(
+                    "/brain/run", json={"goal": "Planejar uma melhoria"}, headers=AUTH
+                )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["agents"]), 3)
+        self.assertEqual(response.json()["synthesis"], "perspectiva")
+
+    def test_brain_multitask(self):
+        with patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"}):
+            with patch("backend.app.answer_with_provider", side_effect=lambda prompt, memories=None: "feito: " + prompt):
+                response = client.post(
+                    "/brain/multitask",
+                    json={"tasks": ["resumir projeto", "listar riscos"]},
+                    headers=AUTH,
+                )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["completed"], 2)
 
     def test_memory_crud(self):
         created = client.post(
