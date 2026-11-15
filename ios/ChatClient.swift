@@ -17,14 +17,43 @@ struct ChatMessage: Identifiable, Codable {
 }
 
 private struct ChatRequest: Encodable { let message: String }
-private struct ChatResponse: Decodable { let reply: String; let strategy: String? }
+private struct ChatResponse: Decodable {
+    let reply: String
+    let strategy: String?
+    let brainContext: BrainContext?
+
+    enum CodingKeys: String, CodingKey {
+        case reply, strategy
+        case brainContext = "brain_context"
+    }
+}
 private struct FeedbackRequest: Encodable {
     let rating: Int
     let strategy: String
     let comment: String
 }
 
-struct ChatResult { let reply: String; let strategy: String? }
+struct BrainContext: Decodable {
+    let core: String
+    let runtime: String
+    let isFullConnectome: Bool
+    let novelty: Double
+    let groupActivity: [String: Double]
+    let roleScores: [String: Double]
+
+    enum CodingKeys: String, CodingKey {
+        case core, runtime, novelty
+        case isFullConnectome = "is_full_connectome"
+        case groupActivity = "group_activity"
+        case roleScores = "role_scores"
+    }
+}
+
+struct ChatResult {
+    let reply: String
+    let strategy: String?
+    let brainContext: BrainContext?
+}
 
 enum ChatClientError: LocalizedError {
     case invalidServerURL
@@ -35,7 +64,7 @@ enum ChatClientError: LocalizedError {
         switch self {
         case .invalidServerURL: return "Configure o endereço HTTPS do servidor."
         case .invalidResponse: return "Resposta inválida do servidor."
-        case .serverError(let code): return "O servidor respondeu com erro (\(code))."
+        case .serverError(let code): return "O servidor respondeu com erro (\\(code))."
         }
     }
 }
@@ -55,7 +84,7 @@ struct ChatClient {
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else { throw ChatClientError.serverError(http.statusCode) }
         let result = try JSONDecoder().decode(ChatResponse.self, from: data)
-        return ChatResult(reply: result.reply, strategy: result.strategy)
+        return ChatResult(reply: result.reply, strategy: result.strategy, brainContext: result.brainContext)
     }
 
     func sendFeedback(_ rating: Int, strategy: String, serverURL: String) async throws {
