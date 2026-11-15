@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import threading
 from dataclasses import asdict, dataclass
 from typing import Iterable
@@ -63,6 +64,24 @@ class FlyBrainCore:
         if (source, target) in {(2, 1), (3, 0)}:
             return -0.035
         return 0.0
+
+    @staticmethod
+    def _full_connectome_signal(goal: str) -> dict | None:
+        """Use the real upstream brain only for its documented sensory experiments."""
+        if os.getenv("ULTRON_ENABLE_FULL_FLYWIRE", "0").strip().lower() not in {"1", "true", "yes", "on"}:
+            return None
+        normalized = goal.casefold()
+        if any(word in normalized for word in ("açúcar", "comida", "alimento", "food", "sugar")):
+            stimulus = "sugar"
+        elif any(word in normalized for word in ("andar", "caminhar", "locomoção", "movimento", "walk", "p9")):
+            stimulus = "p9"
+        else:
+            return None
+        try:
+            from backend.flywire_runtime import simulate
+            return simulate(stimulus, 0.01)
+        except (RuntimeError, ValueError) as exc:
+            return {"available": False, "error": str(exc), "stimulus": stimulus}
 
     def process(self, goal: str, memories: Iterable[str] = ()) -> dict:
         goal = str(goal).strip()
@@ -123,13 +142,20 @@ class FlyBrainCore:
                 "critic": 0.55 + self._trace[2] + novelty * 0.2,
                 "researcher": 0.4 + self._trace[0] * 0.35 + novelty * 0.35,
             }
+            full_connectome = self._full_connectome_signal(goal)
+            if full_connectome and full_connectome.get("full_connectome_loaded"):
+                activity = min(1.0, full_connectome["active_neurons"] / max(1, full_connectome["neurons"]))
+                role_scores["solver"] += activity * 0.25
+                role_scores["planner"] += activity * 0.15
+                role_scores["critic"] += activity * 0.10
             self._last_tokens = tokens
             return {
                 "core": "drosophila_lif_microcircuit",
                 "version": FLY_BRAIN_VERSION,
                 "source": FLY_BRAIN_SOURCE,
                 "runtime": "local_cpu_lif",
-                "is_full_connectome": False,
+                "is_full_connectome": bool(full_connectome and full_connectome.get("full_connectome_loaded")),
+                "full_connectome": full_connectome,
                 "neurons": self.neurons_per_group * len(GROUPS),
                 "simulation_steps": self.steps,
                 "novelty": round(novelty, 4),
