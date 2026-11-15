@@ -100,7 +100,11 @@ def generate_reply(
         config = _PROVIDER_DEFAULTS[provider]
         api_key = os.getenv(config["key_env"], "").strip()
         base_url = os.getenv(config["base_env"], config["base_url"]).strip().rstrip("/")
-        model = os.getenv(config["model_env"], config["model"]).strip()
+        requested_model = os.getenv(config["model_env"], "").strip()
+        allow_paid_model = os.getenv("ULTRON_ALLOW_PAID_AI", "0").strip().lower() in {"1", "true", "yes"}
+        if requested_model and requested_model != config["model"] and not allow_paid_model:
+            continue
+        model = requested_model or config["model"]
         if not api_key or not base_url.startswith("https://") or not model:
             continue
 
@@ -124,7 +128,7 @@ def generate_reply(
 
         started = time.perf_counter()
         try:
-            with httpx.Client(timeout=httpx.Timeout(9.0, connect=3.0)) as client:
+            with httpx.Client(timeout=httpx.Timeout(6.0, connect=2.0)) as client:
                 response = client.post(
                     f"{base_url}/chat/completions",
                     headers=headers,
