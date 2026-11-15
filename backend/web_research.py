@@ -13,9 +13,20 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
         raise ValueError("A pesquisa deve ter no máximo 500 caracteres.")
     if searcher is None:
         from ddgs import DDGS
-        searcher = DDGS(timeout=8).text
-    raw = searcher(cleaned, region="br-pt", safesearch="moderate",
-                   max_results=max(1, min(max_results, 8)), backend="auto")
+        searcher = DDGS(timeout=12).text
+    raw = []
+    last_error: Exception | None = None
+    # Try auto-discovery first, then a set of independent supported engines.
+    for backend in ("auto", "bing,duckduckgo,yahoo,startpage,wikipedia"):
+        try:
+            raw = searcher(cleaned, region="br-pt", safesearch="moderate",
+                           max_results=max(1, min(max_results, 8)), backend=backend)
+            if raw:
+                break
+        except Exception as exc:
+            last_error = exc
+    if not raw and last_error is not None:
+        raise RuntimeError("Todos os mecanismos de pesquisa falharam temporariamente.") from last_error
     results = []
     for item in raw or []:
         title = str(item.get("title", "")).strip()[:300]
