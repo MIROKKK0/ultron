@@ -51,9 +51,9 @@ struct ContentView: View {
                                 HStack(spacing: 10) {
                                     ProgressView().tint(.red)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(isSending ? "FlyBrain está respondendo" : "Qwen está refinando em segundo plano")
+                                        Text(isSending ? "FlyBrain está respondendo" : "Qwen está formulando sua resposta")
                                             .font(.subheadline.weight(.medium))
-                                        Text(isSending ? "A resposta do servidor chega primeiro" : "Você já pode enviar outra mensagem")
+                                        Text(isSending ? "Processando sua mensagem" : "Aguarde a resposta para evitar respostas duplicadas")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -260,8 +260,8 @@ struct ContentView: View {
                     .frame(width: 48, height: 48)
                     .background(Color.red, in: Circle())
             }
-            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
-            .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending ? 0.45 : 1)
+            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending || isLocalGenerating)
+            .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending || isLocalGenerating ? 0.45 : 1)
             .accessibilityLabel("Enviar mensagem")
         }
         .padding(.horizontal, 14)
@@ -330,7 +330,7 @@ struct ContentView: View {
 
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isSending else { return }
+        guard !text.isEmpty, !isSending, !isLocalGenerating else { return }
         draft = ""
         composerFocused = false
         messages.append(ChatMessage(role: .user, text: text))
@@ -356,7 +356,7 @@ struct ContentView: View {
 
                 var assistantMessage = ChatMessage(
                     role: .assistant,
-                    text: result.reply,
+                    text: localModel.isModelAvailable ? "Estou formulando uma resposta para sua pergunta…" : result.reply,
                     strategy: result.strategy
                 )
                 let server = result.timingsMS
@@ -364,8 +364,8 @@ struct ContentView: View {
                 assistantMessage.diagnostics = serverSummary + (localModel.isModelAvailable ? " · Qwen: processando" : " · Qwen: não instalado")
                 messages.append(assistantMessage)
 
-                // Show the verified FlyBrain reply immediately. Qwen refinement
-                // runs after the network request and never blocks the composer.
+                // Do not expose a generic decoder fallback as the final answer.
+                // Keep the composer locked while the single on-device Qwen instance runs.
                 isSending = false
 
                 guard localModel.isModelAvailable,
@@ -381,8 +381,7 @@ struct ContentView: View {
                     let stream = try await localModel.stream(
                         userMessage: text,
                         previousMessages: contextMessages,
-                        brainContext: result.brainContext,
-                        serverReply: result.reply
+                        brainContext: result.brainContext
                     )
                     var generated = ""
                     var firstTokenMS: Int?
