@@ -15,6 +15,14 @@ AUTH = {"Authorization": "Bearer test-ultron-token"}
 
 
 class UltronTests(unittest.TestCase):
+    def test_root_and_local_self_command(self):
+        root = client.get("/")
+        self.assertEqual(root.status_code, 200)
+        self.assertEqual(root.json()["name"], "ULTRON")
+        response = client.post("/chat", json={"message": "/self"}, headers=AUTH)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ULTRON", response.json()["reply"])
+
     def test_health(self):
         response = client.get("/health")
         self.assertEqual(response.status_code, 200)
