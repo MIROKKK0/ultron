@@ -17,6 +17,9 @@ from typing import Any
 
 UPSTREAM = "https://github.com/eonsystemspbc/fly-brain"
 EXPECTED_NEURONS = 138_639
+SNAPSHOT_NEURONS = 139_255
+UNMODELED_NEURONS = SNAPSHOT_NEURONS - EXPECTED_NEURONS
+MODEL_COVERAGE_PERCENT = round(EXPECTED_NEURONS / SNAPSHOT_NEURONS * 100.0, 2)
 DATA_FILES = (
     Path("data/2025_Completeness_783.csv"),
     Path("data/2025_Connectivity_783.parquet"),
@@ -82,6 +85,10 @@ def status() -> dict[str, Any]:
         "available": not missing and code_ready and not missing_dependencies,
         "connectome": "FlyWire FAFB v783",
         "expected_neurons": EXPECTED_NEURONS,
+        "snapshot_neurons": SNAPSHOT_NEURONS,
+        "modeled_neurons": EXPECTED_NEURONS,
+        "unmodeled_snapshot_neurons": UNMODELED_NEURONS,
+        "model_coverage_percent": MODEL_COVERAGE_PERCENT,
         "upstream": UPSTREAM,
         "root": str(root),
         "missing_files": missing,
