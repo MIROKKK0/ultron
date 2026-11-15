@@ -357,25 +357,30 @@ struct ContentView: View {
 
         Task {
             do {
-                let result = try await client.send(text, serverURL: serverURL)
+                let result = try await client.send(
+                    text,
+                    history: Array(messages.dropLast().suffix(10)),
+                    serverURL: serverURL
+                )
                 serverOnline = true
                 checkingServer = false
 
                 var assistantMessage = ChatMessage(
                     role: .assistant,
-                    text: localModel.isModelAvailable ? "Estou formulando uma resposta para sua pergunta…" : result.reply,
+                    text: result.providerUsed ? result.reply : (localModel.isModelAvailable ? "Estou formulando uma resposta para sua pergunta…" : result.reply),
                     strategy: result.strategy
                 )
                 let server = result.timingsMS
                 let serverSummary = "Rede: \(Int(result.networkRoundTripMS)) ms · Servidor: \(Int(server["server_total"] ?? 0)) ms · FlyBrain: \(Int(server["flybrain"] ?? 0)) ms · Política: \(Int(server["strategy_policy"] ?? 0)) ms"
-                assistantMessage.diagnostics = serverSummary + (localModel.isModelAvailable ? " · Qwen: processando" : " · Qwen: não instalado")
+                assistantMessage.diagnostics = serverSummary + (result.providerUsed ? " · (result.providerName ?? "IA online")" : (localModel.isModelAvailable ? " · Qwen: processando" : " · Qwen: não instalado"))
                 messages.append(assistantMessage)
 
                 // Do not expose a generic decoder fallback as the final answer.
                 // Keep the composer locked while the single on-device Qwen instance runs.
                 isSending = false
 
-                guard localModel.isModelAvailable,
+                guard !result.providerUsed,
+                      localModel.isModelAvailable,
                       !Self.requiresExactServerReply(text),
                       !isLocalGenerating else { return }
 
