@@ -2,6 +2,22 @@ name: FlyWire Full Connectome Validation
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: ["feat/ultron-core-assistant"]
+    paths:
+      - "backend/flywire_runtime.py"
+      - "backend/fly_brain.py"
+      - "scripts/**"
+      - "requirements-flywire.txt"
+      - ".github/workflows/flywire-validation.yml"
+  push:
+    branches: ["feat/full-flywire-runtime-integration"]
+    paths:
+      - "backend/flywire_runtime.py"
+      - "backend/fly_brain.py"
+      - "scripts/**"
+      - "requirements-flywire.txt"
+      - ".github/workflows/flywire-validation.yml"
   schedule:
     - cron: "0 7 * * 1"
 
@@ -15,11 +31,6 @@ jobs:
     steps:
       - name: Checkout ULTRON
         uses: actions/checkout@v4
-      - name: Install Git LFS
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git-lfs
-          git lfs install
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
