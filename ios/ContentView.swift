@@ -7,6 +7,7 @@ struct ContentView: View {
     ]
     @State private var draft = ""
     @State private var isSending = false
+    @State private var isLocalGenerating = false
     @State private var showSettings = false
     @State private var errorMessage: String?
     @State private var failedMessage: String?
@@ -46,13 +47,13 @@ struct ContentView: View {
                                 .id(message.id)
                             }
 
-                            if isSending {
+                            if isSending || isLocalGenerating {
                                 HStack(spacing: 10) {
                                     ProgressView().tint(.red)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text("ULTRON está trabalhando")
+                                        Text(isSending ? "FlyBrain está respondendo" : "Qwen está refinando em segundo plano")
                                             .font(.subheadline.weight(.medium))
-                                        Text("FlyBrain está processando sua mensagem")
+                                        Text(isSending ? "A resposta do servidor chega primeiro" : "Você já pode enviar outra mensagem")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -328,44 +329,51 @@ struct ContentView: View {
                 )
                 messages.append(assistantMessage)
 
-                if localModel.isModelAvailable && !Self.requiresExactServerReply(text) {
-                    do {
-                        let stream = try await localModel.stream(
-                            userMessage: text,
-                            previousMessages: Array(messages.dropLast(2).suffix(4)),
-                            brainContext: result.brainContext,
-                            serverReply: result.reply
-                        )
-                        var generated = ""
-                        for try await token in stream {
-                            generated += token
-                            let visible = Self.visibleAnswer(from: generated)
-                            // Keep the verified backend answer visible until the
-                            // local model produces user-facing text. Never stream
-                            // private <think> content into the chat bubble.
-                            if !visible.isEmpty,
-                               let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
-                                messages[index].text = visible
-                            }
+                // Show the verified FlyBrain reply immediately. Qwen refinement
+                // runs after the network request and never blocks the composer.
+                isSending = false
+
+                guard localModel.isModelAvailable,
+                      !Self.requiresExactServerReply(text),
+                      !isLocalGenerating else { return }
+
+                isLocalGenerating = true
+                defer { isLocalGenerating = false }
+
+                do {
+                    let contextMessages = Array(messages.dropLast(2).suffix(4))
+                    let stream = try await localModel.stream(
+                        userMessage: text,
+                        previousMessages: contextMessages,
+                        brainContext: result.brainContext,
+                        serverReply: result.reply
+                    )
+                    var generated = ""
+                    for try await token in stream {
+                        generated += token
+                        let visible = Self.visibleAnswer(from: generated)
+                        if !visible.isEmpty,
+                           let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
+                            messages[index].text = visible
                         }
-                        let cleaned = Self.visibleAnswer(from: generated)
-                        if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
-                            messages[index].text = cleaned.isEmpty ? result.reply : cleaned
-                        }
-                    } catch {
-                        if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
-                            messages[index].text = result.reply
-                        }
-                        errorMessage = "A resposta do FlyBrain foi mantida; a IA local não concluiu: \(error.localizedDescription)"
                     }
+                    let cleaned = Self.visibleAnswer(from: generated)
+                    if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
+                        messages[index].text = cleaned.isEmpty ? result.reply : cleaned
+                    }
+                } catch {
+                    if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
+                        messages[index].text = result.reply
+                    }
+                    errorMessage = "A resposta do FlyBrain foi mantida; o refinamento local não concluiu: \\(error.localizedDescription)"
                 }
             } catch {
                 serverOnline = false
                 checkingServer = false
                 failedMessage = text
                 errorMessage = error.localizedDescription
+                isSending = false
             }
-            isSending = false
         }
     }
 }
