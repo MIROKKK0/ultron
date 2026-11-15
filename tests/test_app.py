@@ -23,6 +23,30 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("ULTRON", response.json()["reply"])
 
+    def test_root_post_is_a_normal_chat_alias(self):
+        response = client.post("/", json={"message": "oi"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ULTRON", response.json()["reply"])
+
+    def test_natural_language_research_does_not_need_slash_command(self):
+        fixture = {"summary": "Fontes atuais: https://example.org"}
+        with patch("backend.app.search_web", return_value=fixture) as search:
+            response = client.post("/chat", json={"message": "Pesquise na internet sobre FlyWire"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("https://example.org", response.json()["reply"])
+        search.assert_called_once_with("FlyWire")
+
+    def test_natural_language_calculation_does_not_need_slash_command(self):
+        response = client.post("/chat", json={"message": "Quanto é 12 vezes (3+4)?"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("84", response.json()["reply"])
+
+    def test_research_outage_does_not_return_server_error(self):
+        with patch("backend.app.search_web", side_effect=RuntimeError("network down")):
+            response = client.post("/chat", json={"message": "Pesquise sobre FlyWire"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("pesquisa na internet", response.json()["reply"])
+
     def test_health(self):
         response = client.get("/health")
         self.assertEqual(response.status_code, 200)
