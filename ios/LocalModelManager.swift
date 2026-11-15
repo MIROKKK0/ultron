@@ -82,12 +82,12 @@ final class LocalModelManager: ObservableObject {
         }
     }
 
-    func generate(
+    func stream(
         userMessage: String,
         previousMessages: [ChatMessage],
         brainContext: BrainContext?,
         serverReply: String
-    ) async throws -> String {
+    ) async throws -> AsyncThrowingStream<String, Error> {
         refreshAvailability()
         guard isModelAvailable else { throw LocalModelError.modelMissing }
 
@@ -118,35 +118,34 @@ final class LocalModelManager: ObservableObject {
             : "microcircuito LIF local; conectoma completo não carregado"
 
         let systemPrompt = """
-        Você é o módulo de linguagem local do ULTRON. O núcleo central obrigatório é o FlyBrain, que já processou a mensagem no servidor antes desta geração. Você não substitui, ignora nem simula o FlyBrain. Use os sinais abaixo como controle de prioridade, não como fatos sobre o mundo.
-        Estado neural: \(brainContext?.core ?? "FlyBrain") / \(brainContext?.runtime ?? "runtime local").
-        Estado do conectoma: \(connectome).
-        Novidade: \(brainContext?.novelty ?? 0).
-        Atividade dos grupos: \(groupActivity).
-        Prioridades neurais: \(roleScores).
-        Resposta e contexto verificados pelo servidor: \(serverReply)
-        Responda em português brasileiro natural, direto e útil. Preserve URLs e fatos do contexto do servidor. Não invente fontes, resultados de pesquisa, execução de ações, memória ou capacidades. Se o contexto não contiver a resposta, diga o que falta. Não afirme consciência, AGI ou autoevolução geral. Mantenha comandos matemáticos exatos e não contradiga o resultado do servidor.
+        Você é o módulo de linguagem local do ULTRON. O FlyBrain já processou a mensagem no servidor e continua sendo o núcleo central obrigatório. Você apenas formula a resposta; não substitui nem simula o cérebro.
+        Estado: \(brainContext?.core ?? "FlyBrain") / \(brainContext?.runtime ?? "runtime local").
+        Conectoma: \(connectome). Novidade: \(brainContext?.novelty ?? 0).
+        Atividade: \(groupActivity). Prioridades: \(roleScores).
+        Contexto verificado pelo servidor: \(serverReply)
+        Responda em português brasileiro, direto e conciso. Preserve fontes, URLs e fatos do servidor. Não invente pesquisas, fontes, ações, memórias ou capacidades. Não afirme consciência, AGI ou autoevolução geral. Não contradiga o servidor. Evite explicações longas quando uma resposta curta resolver.
         """
 
         var conversation: [LlamaChatMessage] = [
             LlamaChatMessage(role: .system, content: systemPrompt)
         ]
-        for item in previousMessages.suffix(8) {
+        for item in previousMessages.suffix(4) {
             let role: LlamaChatMessage.Role = item.role == .user ? .user : .assistant
             conversation.append(LlamaChatMessage(role: role, content: item.text))
         }
-        conversation.append(LlamaChatMessage(role: .user, content: userMessage))
+        conversation.append(LlamaChatMessage(role: .user, content: userMessage + "\n/no_think"))
 
         guard let service else { throw LocalModelError.modelMissing }
-        let output = try await service.respond(
-            to: conversation,
-            samplingConfig: LlamaSamplingConfig(temperature: 0.55, seed: UInt32.random(in: 1...UInt32.max), topP: 0.9)
+        // Stream tokens as they are generated instead of waiting for the full answer.
+        return try await service.streamCompletion(
+            of: conversation,
+            samplingConfig: LlamaSamplingConfig(
+                temperature: 0.7,
+                seed: UInt32.random(in: 1...UInt32.max),
+                topP: 0.8,
+                topK: 20
+            )
         )
-        let cleaned = output
-            .replacingOccurrences(of: "<think>[\\s\\S]*?</think>", with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleaned.isEmpty else { throw LocalModelError.emptyResponse }
-        return cleaned
     }
 
     private static func sha256(of url: URL) throws -> String {
@@ -167,7 +166,6 @@ private enum LocalModelError: LocalizedError {
     case invalidSize
     case checksumMismatch
     case modelMissing
-    case emptyResponse
 
     var errorDescription: String? {
         switch self {
@@ -175,7 +173,6 @@ private enum LocalModelError: LocalizedError {
         case .invalidSize: return "O arquivo do modelo está incompleto ou tem tamanho inesperado."
         case .checksumMismatch: return "A verificação SHA-256 do modelo falhou; o arquivo foi rejeitado."
         case .modelMissing: return "Baixe o modelo local antes de gerar respostas no iPhone."
-        case .emptyResponse: return "O modelo local não produziu uma resposta válida."
         }
     }
 }
