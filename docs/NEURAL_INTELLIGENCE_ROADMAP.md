@@ -74,7 +74,7 @@ O iPhone 11 Pro deve ser tratado inicialmente como cliente SwiftUI. Executar o c
 ### 8. Segurança do acesso sem token (bloqueador antes de publicar)
 Não colocar um segredo estático dentro do IPA. Para endpoints públicos, usar limites compartilhados no banco, quotas por instalação, proteção contra abuso e isolamento de memória/conversas por instalação. A opção nativa de integridade é Apple App Attest, com desafio de uso único, atestado validado no servidor e assertions assinadas. Até concluir isso, não abrir endpoints que leiam/escrevam memória privada ou alterem aprendizagem global sem autenticação.
 
-## Ordem recomendada
+Nota de implementação: a rota pública do chat está deliberadamente sem memória persistente até existir isolamento de dados por instalação. Não remover essa proteção para 'fazer memória funcionar' sem concluir App Attest/identidade e testes de privacidade.\n\n## Ordem recomendada
 
 1. Fechar privacidade, identidade de instalação, rate limits compartilhados e testes de API.
 2. Ativar pesquisa web com fontes, timeout, cache e validação dos links.
