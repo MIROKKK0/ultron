@@ -130,7 +130,7 @@ struct ContentView: View {
                             serverReply: result.reply
                         )
                     } catch {
-                        errorMessage = "IA local indisponível nesta resposta; usei o resultado seguro do FlyBrain. \\(error.localizedDescription)"
+                        errorMessage = "IA local indisponível nesta resposta; usei o resultado seguro do FlyBrain. \(error.localizedDescription)"
                     }
                 }
                 messages.append(ChatMessage(role: .assistant, text: finalReply, strategy: result.strategy))
