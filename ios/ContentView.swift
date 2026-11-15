@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var isSending = false
     @State private var showSettings = false
     @State private var errorMessage: String?
+    @StateObject private var localModel = LocalModelManager()
 
     private let client = ChatClient()
 
@@ -248,7 +249,7 @@ private struct SettingsView: View {
                         Label("Modelo disponível", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                         Button("Remover modelo deste iPhone", role: .destructive) {
-                            localModel.removeModel()
+                            Task { await localModel.removeModel() }
                         }
                     } else {
                         Button("Baixar modelo local (~462 MiB)") {
