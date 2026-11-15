@@ -41,8 +41,21 @@ struct ContentView: View {
                     ScrollView {
                         LazyVStack(spacing: 14) {
                             ForEach(messages) { message in
-                                MessageBubble(message: message)
-                                    .id(message.id)
+                                MessageBubble(message: message) { rating, strategy in
+                                    Task {
+                                        do {
+                                            try await client.sendFeedback(
+                                                rating,
+                                                strategy: strategy,
+                                                serverURL: serverURL,
+                                                apiToken: apiToken
+                                            )
+                                        } catch {
+                                            errorMessage = "Feedback não enviado: \(error.localizedDescription)"
+                                        }
+                                    }
+                                }
+                                .id(message.id)
                             }
                             if isSending {
                                 HStack {
@@ -110,8 +123,8 @@ struct ContentView: View {
 
         Task {
             do {
-                let reply = try await client.send(text, serverURL: serverURL, apiToken: apiToken)
-                messages.append(ChatMessage(role: .assistant, text: reply))
+                let result = try await client.send(text, serverURL: serverURL, apiToken: apiToken)
+                messages.append(ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy))
             } catch {
                 errorMessage = error.localizedDescription
                 messages.append(ChatMessage(role: .assistant, text: "Não consegui concluir a solicitação. Confira servidor, token e conexão."))
@@ -123,19 +136,52 @@ struct ContentView: View {
 
 private struct MessageBubble: View {
     let message: ChatMessage
+    let onFeedback: (Int, String) -> Void
+    @State private var feedbackSent = false
 
     var body: some View {
         HStack {
             if message.role == .user { Spacer(minLength: 48) }
-            Text(message.text)
-                .font(.body)
-                .padding(.horizontal, 15)
-                .padding(.vertical, 12)
-                .foregroundStyle(message.role == .user ? .black : .primary)
-                .background(
-                    message.role == .user ? Color.cyan : Color(.secondarySystemBackground),
-                    in: RoundedRectangle(cornerRadius: 19)
-                )
+            VStack(alignment: .leading, spacing: 8) {
+                Text(message.text)
+                    .font(.body)
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 12)
+                    .foregroundStyle(message.role == .user ? .black : .primary)
+                    .background(
+                        message.role == .user ? Color.cyan : Color(.secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 19)
+                    )
+                if message.role == .assistant, let strategy = message.strategy {
+                    HStack(spacing: 12) {
+                        Text("Estratégia neural: \(strategy)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if feedbackSent {
+                            Text("Aprendizado registrado")
+                                .font(.caption2)
+                                .foregroundStyle(.green)
+                        } else {
+                            Button {
+                                onFeedback(5, strategy)
+                                feedbackSent = true
+                            } label: {
+                                Image(systemName: "hand.thumbsup")
+                            }
+                            .accessibilityLabel("Resposta útil")
+                            Button {
+                                onFeedback(1, strategy)
+                                feedbackSent = true
+                            } label: {
+                                Image(systemName: "hand.thumbsdown")
+                            }
+                            .accessibilityLabel("Resposta não útil")
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                }
+            }
             if message.role == .assistant { Spacer(minLength: 48) }
         }
         .padding(.horizontal)
