@@ -52,7 +52,7 @@ def main() -> int:
     print(rendered)
     output = Path(os.getenv("FLYWIRE_VALIDATION_OUTPUT", "artifacts/flywire-validation.json"))
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(rendered + "\\n", encoding="utf-8")
+    output.write_text(rendered + "\n", encoding="utf-8")
     return 0
 
 
