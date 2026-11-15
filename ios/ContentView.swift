@@ -2,8 +2,9 @@ import SwiftUI
 
 struct ContentView: View {
     @AppStorage("ultronServerURL") private var serverURL = ""
+    @AppStorage("ultronAPIToken") private var apiToken = ""
     @State private var messages: [ChatMessage] = [
-        ChatMessage(role: .assistant, text: "Olá. Eu sou o ULTRON. Configure meu servidor para começar.")
+        ChatMessage(role: .assistant, text: "Olá. Eu sou o ULTRON. Configure meu servidor e token para começar.")
     ]
     @State private var draft = ""
     @State private var isSending = false
@@ -26,7 +27,7 @@ struct ContentView: View {
                         Text(isSending ? "Pensando…" : "Assistente pessoal").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Circle().fill(serverURL.isEmpty ? .orange : .green).frame(width: 8, height: 8)
+                    Circle().fill(serverURL.isEmpty || apiToken.isEmpty ? .orange : .green).frame(width: 8, height: 8)
                     Button { showSettings = true } label: {
                         Image(systemName: "slider.horizontal.3").font(.title3).padding(10)
                     }
@@ -89,8 +90,8 @@ struct ContentView: View {
             .background(Color(.systemBackground))
             .navigationBarHidden(true)
             .sheet(isPresented: $showSettings) {
-                SettingsView(serverURL: $serverURL)
-                    .presentationDetents([.medium])
+                SettingsView(serverURL: $serverURL, apiToken: $apiToken)
+                    .presentationDetents([.medium, .large])
             }
         }
         .preferredColorScheme(.dark)
@@ -106,11 +107,11 @@ struct ContentView: View {
 
         Task {
             do {
-                let reply = try await client.send(text, serverURL: serverURL)
+                let reply = try await client.send(text, serverURL: serverURL, apiToken: apiToken)
                 messages.append(ChatMessage(role: .assistant, text: reply))
             } catch {
                 errorMessage = error.localizedDescription
-                messages.append(ChatMessage(role: .assistant, text: "Não consegui alcançar meu servidor. Confira a URL e a conexão."))
+                messages.append(ChatMessage(role: .assistant, text: "Não consegui concluir a solicitação. Confira servidor, token e conexão."))
             }
             isSending = false
         }
@@ -141,27 +142,33 @@ private struct MessageBubble: View {
 
 private struct SettingsView: View {
     @Binding var serverURL: String
+    @Binding var apiToken: String
     @Environment(\.dismiss) private var dismiss
     @State private var draftURL = ""
+    @State private var draftToken = ""
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Servidor do ULTRON") {
-                    TextField("https://seu-servidor.example", text: $draftURL)
+                    TextField("https://ultron-api.example.onrender.com", text: $draftURL)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    Text("Use o endereço HTTPS da API. Não coloque chaves de API aqui.")
+                    SecureField("Token de acesso", text: $draftToken)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Text("Use o endereço HTTPS e o token fornecidos na configuração do servidor. A chave do provedor de IA fica somente no servidor.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Section {
-                    Button("Salvar endereço") {
+                    Button("Salvar configuração") {
                         serverURL = draftURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                        apiToken = draftToken.trimmingCharacters(in: .whitespacesAndNewlines)
                         dismiss()
                     }
-                    .disabled(!draftURL.lowercased().hasPrefix("https://"))
+                    .disabled(!draftURL.lowercased().hasPrefix("https://") || draftToken.isEmpty)
                 }
             }
             .navigationTitle("Configurações")
@@ -171,7 +178,10 @@ private struct SettingsView: View {
                     Button("Fechar") { dismiss() }
                 }
             }
-            .onAppear { draftURL = serverURL }
+            .onAppear {
+                draftURL = serverURL
+                draftToken = apiToken
+            }
         }
         .preferredColorScheme(.dark)
     }
