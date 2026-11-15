@@ -84,6 +84,10 @@ struct ContentView: View {
                     }
                 }
 
+                if !localModel.isModelAvailable {
+                    languageModelSetup
+                }
+
                 if let errorMessage {
                     errorPanel(errorMessage)
                 }
@@ -207,6 +211,34 @@ struct ContentView: View {
             .background(Color(uiColor: .tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
+    }
+
+    private var languageModelSetup: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "text.bubble")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.red)
+                .frame(width: 38, height: 38)
+                .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Ative respostas completas")
+                    .font(.subheadline.weight(.semibold))
+                Text("O FlyBrain já processa suas mensagens. Instale o Qwen no iPhone para interpretar perguntas abertas e formular respostas naturais.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 4)
+            Button("Configurar") {
+                showSettings = true
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.red)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
     }
 
     private var composer: some View {
