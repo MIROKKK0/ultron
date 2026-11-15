@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_multitask
 from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
+from backend.hosted_language import configured_providers, generate_reply
 from backend.flywire_runtime import status as flywire_status, runtime_loaded as flywire_runtime_loaded
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
@@ -470,7 +471,8 @@ def brain_status(request: Request) -> dict[str, Any]:
         },
         "parallel_specialists": ["planner", "solver", "critic"],
         "parallel_task_limit": 5,
-        "language_decoder": "local_deterministic",
+        "language_decoder": "hosted_free_tier_with_local_fallback" if configured_providers() else "local_deterministic", 
+        "hosted_language_providers": configured_providers(), 
         "external_ai_tokens_required": False,
         "web_research_enabled": True,
         "memory_enabled": False,
@@ -598,7 +600,8 @@ def health() -> dict[str, Any]:
         "status": "online",
         "version": app.version,
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
-        "ai_configured": False,
+        "ai_configured": bool(configured_providers()),
+        "configured_language_providers": configured_providers(),
         "neural_core_configured": True,
         "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
@@ -641,6 +644,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     research_ms = 0.0
+    language_ms = 0.0
+    language_provider = "local"
     research_query = message[10:].strip() if message.casefold().startswith("/research ") else _extract_research_query(message)
     calculation = re.match(r"^(?:quanto é|quanto dá|calcule|calcular|resultado de)\s+(.+?)\s*[?.!]*$", message, re.I)
     if research_query:
@@ -679,7 +684,14 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
     elif message.casefold().startswith("/remember ") or re.match(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", message, re.I):
         response = "Ainda não vou gravar isso em uma memória compartilhada. A memória pessoal precisa de identificação segura por instalação; assim seus dados não ficam misturados com os de outros usuários."
     else:
-        response = answer_without_provider(message, [], [], neural_state)
+        language_started = time.perf_counter()
+        hosted = generate_reply(message, neural_state)
+        language_ms = (time.perf_counter() - language_started) * 1000.0
+        if hosted:
+            response = hosted["text"]
+            language_provider = hosted["provider"]
+        else:
+            response = answer_without_provider(message, [], [], neural_state)
     role_scores = neural_state.get("role_scores", {})
     feedback_strategies = {role: float(role_scores.get(role, 0.0)) for role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
@@ -708,11 +720,13 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
     return {
         "reply": response,
         "strategy": selected_strategy,
+        "language_provider": language_provider,
         "brain_context": brain_context,
         "timings_ms": {
             "flybrain": round(flybrain_ms, 2),
             "strategy_policy": round(policy_ms, 2),
             "research": round(research_ms, 2),
+            "language_generation": round(language_ms, 2),
             "server_total": round((time.perf_counter() - request_started) * 1000.0, 2),
         },
     }
