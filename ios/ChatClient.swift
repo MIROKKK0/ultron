@@ -3,7 +3,7 @@ import Foundation
 struct ChatMessage: Identifiable, Codable {
     let id: UUID
     let role: Role
-    let text: String
+    var text: String
     let strategy: String?
 
     enum Role: String, Codable { case user, assistant }
