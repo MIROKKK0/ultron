@@ -418,33 +418,59 @@ def execute_brain_cycle(
 
 @app.get("/brain/status")
 def brain_status(request: Request) -> dict[str, Any]:
+    """Expose truthful, non-sensitive brain readiness without leaking host paths."""
     enforce_public_limit(request, "brain-status", limit=60)
+    full_status = flywire_status()
+    loaded = flywire_runtime_loaded()
+    full_connectome_enabled = os.getenv("ULTRON_ENABLE_FULL_FLYWIRE", "0").strip().lower() in {"1", "true", "yes", "on"}
     return {
         "name": APP_NAME,
-        "brain_version": "3.0.0-local",
+        "brain_version": "4.1.0",
         "neural_core": {
-            "name": "flywire_v783" if flywire_runtime_loaded() else "drosophila_lif_microcircuit",
+            "name": "flywire_v783" if loaded else "drosophila_lif_microcircuit",
             "mandatory": True,
             "version": FLY_BRAIN_VERSION,
             "source": FLY_BRAIN_SOURCE,
-            "runtime": "upstream_pytorch_cpu" if flywire_runtime_loaded() else "local_cpu_lif",
-            "neurons": flywire_status().get("expected_neurons") if flywire_runtime_loaded() else FLY_BRAIN.neurons_per_group * 4,
-            "full_connectome_ready": flywire_status()["available"],
-            "full_connectome_loaded": flywire_runtime_loaded(),
-            "full_connectome": flywire_status(),
-            "full_connectome_enabled_for_chat": os.getenv("ULTRON_ENABLE_FULL_FLYWIRE", "0").lower() in {"1", "true", "yes", "on"},
-            "active_engine": "FlyWire v783" if flywire_runtime_loaded() else "48-neuron LIF microcircuit",
+            "runtime": "upstream_pytorch_cpu" if loaded else "local_cpu_lif",
+            "neurons": full_status["expected_neurons"] if loaded else FLY_BRAIN.neurons_per_group * 4,
+            "microcircuit_neurons": FLY_BRAIN.neurons_per_group * 4,
+            "simulation_steps": FLY_BRAIN.steps,
+            "full_connectome_ready": bool(full_status["available"]),
+            "full_connectome_loaded": loaded,
+            "full_connectome_enabled_for_chat": full_connectome_enabled,
+            "full_connectome": {
+                "name": full_status["connectome"],
+                "expected_neurons": full_status["expected_neurons"],
+                "available": bool(full_status["available"]),
+                "loaded_in_memory": loaded,
+                "upstream_code_present": bool(full_status["upstream_code_present"]),
+                "missing_files": full_status["missing_files"],
+                "missing_code_files": full_status["missing_code_files"],
+                "missing_dependencies": full_status["missing_dependencies"],
+                "backend": full_status["backend"],
+            },
+            "supported_full_connectome_stimuli": ["sugar", "p9"],
+            "active_engine": "FlyWire v783" if loaded else "48-neuron LIF microcircuit",
+            "language_generation": "separate_local_language_layer",
+        },
+        "learning": {
+            "associative_memory": "experimental_sparse_reward_modulated",
+            "persistence": "database_checkpointed",
+            "modifies_flywire_synapses": False,
+            "modifies_language_model_weights": False,
         },
         "parallel_specialists": ["planner", "solver", "critic"],
         "parallel_task_limit": 5,
-        "model_configured": False,
         "language_decoder": "local_deterministic",
         "external_ai_tokens_required": False,
         "web_research_enabled": True,
-        "experimental_associative_learning": True,
-        "associative_memory_persistence": "database_checkpointed",
         "memory_enabled": True,
         "autonomous_production_changes": False,
+        "limitations": [
+            "FlyWire v783 is a sensory/motor simulator, not a text-generating model.",
+            "Only documented sugar and p9 stimuli are mapped to the full connectome.",
+            "The lightweight 48-neuron LIF circuit remains active when the full runtime is not loaded.",
+        ],
     }
 
 
@@ -621,8 +647,13 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
         "core": neural_state.get("core", "drosophila_lif_microcircuit"),
         "runtime": neural_state.get("runtime", "local_cpu_lif"),
         "is_full_connectome": bool(neural_state.get("is_full_connectome", False)),
+        "neurons": int(neural_state.get("neurons", FLY_BRAIN.neurons_per_group * 4)),
+        "simulation_steps": int(neural_state.get("simulation_steps", FLY_BRAIN.steps)),
         "novelty": float(neural_state.get("novelty", 0.0)),
+        "memory_match": float(neural_state.get("memory_match", 0.0)),
+        "association_bias": float(neural_state.get("association_bias", 0.0)),
         "group_activity": neural_state.get("group_activity", {}),
+        "spikes": neural_state.get("spikes", {}),
         "role_scores": feedback_strategies,
     }
     return {
