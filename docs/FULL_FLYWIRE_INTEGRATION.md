@@ -25,6 +25,10 @@ automaticamente ULTRON em uma IA geral ou consciente.
   e `p9`). Ele não inventa uma tradução semântica para mensagens arbitrárias.
 - Se dados ou dependências estiverem ausentes, a execução falha explicitamente;
   não declara o microcircuito de 48 neurônios como cérebro completo.
+- Para permitir que mensagens de chat com os estímulos mapeados acionem a simulação,
+  configure `ULTRON_ENABLE_FULL_FLYWIRE=1` somente depois de instalar e validar
+  o conjunto completo no host. O mapeamento atual é intencionalmente limitado a
+  termos de alimento/açúcar (sugar) e movimento/caminhada (p9).
 
 ## Preparar e testar
 
