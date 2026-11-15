@@ -330,12 +330,21 @@ def benchmarks() -> dict[str, Any]:
 @app.post("/feedback", dependencies=[Depends(require_api_token)])
 def add_feedback(request: FeedbackRequest) -> dict[str, Any]:
     with connect_db() as db:
-        cursor = execute(
-            db,
-            "INSERT INTO feedback(conversation_id, rating, comment, created_at) VALUES (?, ?, ?, ?)",
-            (request.conversation_id, request.rating, request.comment.strip(), datetime.now(timezone.utc).isoformat()),
-        )
-        feedback_id = cursor.fetchone()["id"] if is_postgres(db) else cursor.lastrowid
+        values = (request.conversation_id, request.rating, request.comment.strip(), datetime.now(timezone.utc).isoformat())
+        if is_postgres(db):
+            cursor = execute(
+                db,
+                "INSERT INTO feedback(conversation_id, rating, comment, created_at) VALUES (?, ?, ?, ?) RETURNING id",
+                values,
+            )
+            feedback_id = cursor.fetchone()["id"]
+        else:
+            cursor = execute(
+                db,
+                "INSERT INTO feedback(conversation_id, rating, comment, created_at) VALUES (?, ?, ?, ?)",
+                values,
+            )
+            feedback_id = cursor.lastrowid
     return {"id": feedback_id, "stored": True, "used_for_model_training": False}
 
 
