@@ -48,7 +48,7 @@ struct ContentView: View {
 
                             if isSending {
                                 HStack(spacing: 10) {
-                                    ProgressView().tint(.cyan)
+                                    ProgressView().tint(.red)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("ULTRON está trabalhando")
                                             .font(.subheadline.weight(.medium))
@@ -107,10 +107,10 @@ struct ContentView: View {
     private var header: some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(Color.cyan.opacity(0.14))
-                Image(systemName: "sparkles")
+                Circle().fill(Color.red.opacity(0.14))
+                Image(systemName: "brain.head.profile")
                     .font(.system(size: 23, weight: .semibold))
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(.red)
             }
             .frame(width: 46, height: 46)
 
@@ -191,7 +191,7 @@ struct ContentView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(.red)
                     .frame(width: 22)
                 Text(title)
                     .font(.subheadline)
@@ -225,7 +225,7 @@ struct ContentView: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(.black)
                     .frame(width: 48, height: 48)
-                    .background(Color.cyan, in: Circle())
+                    .background(Color.red, in: Circle())
             }
             .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
             .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending ? 0.45 : 1)
@@ -251,7 +251,7 @@ struct ContentView: View {
             if failedMessage != nil {
                 Button("Tentar novamente") { retryFailedMessage() }
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(.red)
             }
             Button {
                 errorMessage = nil
@@ -366,7 +366,7 @@ private struct MessageBubble: View {
                     .padding(.vertical, 13)
                     .foregroundStyle(isUser ? Color.black : Color.primary)
                     .background(
-                        isUser ? Color.cyan : Color(.secondarySystemBackground),
+                        isUser ? Color.red : Color(.secondarySystemBackground),
                         in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                     )
 
