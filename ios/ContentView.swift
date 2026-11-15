@@ -4,7 +4,7 @@ struct ContentView: View {
     @AppStorage("ultronServerURL") private var serverURL = ""
     @AppStorage("ultronAPIToken") private var apiToken = ""
     @State private var messages: [ChatMessage] = [
-        ChatMessage(role: .assistant, text: "Olá. Eu sou o ULTRON. Configure servidor e token para começar. Comandos: /self, /brain seu objetivo complexo, /multi tarefa 1 || tarefa 2, /plan seu objetivo, /remember sua nota e /calc 12*(3+4).")
+        ChatMessage(role: .assistant, text: "Olá. Eu sou o ULTRON. Configure servidor e token para começar. Comandos: /self, /brain seu objetivo complexo, /research sua pergunta, /multi tarefa 1 || tarefa 2, /plan seu objetivo, /remember sua nota e /calc 12*(3+4).")
     ]
     @State private var draft = ""
     @State private var isSending = false
