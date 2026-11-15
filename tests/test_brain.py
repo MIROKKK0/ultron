@@ -24,6 +24,19 @@ class BrainTests(unittest.TestCase):
         self.assertEqual(result["completed"], 1)
         self.assertEqual(result["failed"], 1)
 
+    def test_cognitive_cycle_adds_grounded_researcher_when_enabled(self):
+        calls = []
+        def execute(prompt):
+            calls.append(prompt)
+            return "análise com fonte"
+        result = run_cognitive_cycle(
+            "Pesquisar uma arquitetura", [], execute, include_researcher=True
+        )
+        self.assertEqual(len(result["agents"]), 4)
+        self.assertIn("researcher", [item["role"] for item in result["agents"]])
+        self.assertTrue(any(prompt.startswith("PESQUISA_WEB::") for prompt in calls))
+        self.assertEqual(len(calls), 5)
+
     def test_cognitive_cycle_uses_three_roles_and_synthesis(self):
         calls = []
         def execute(prompt):
