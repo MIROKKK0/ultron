@@ -387,7 +387,7 @@ struct ContentView: View {
                     let contextMessages = Array(
                         messages.dropLast(2)
                             .filter { !Self.isGenericFallback($0.text) }
-                            .suffix(4)
+                            .suffix(6)
                     )
                     let qwenStartedAt = Date()
                     let stream = try await localModel.stream(
