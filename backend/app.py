@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_multitask
 from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
+from backend.flywire_runtime import status as flywire_status, runtime_loaded as flywire_runtime_loaded
 from backend.local_decoder import decode_local
 
 APP_NAME = "ULTRON"
@@ -260,8 +261,10 @@ def brain_status() -> dict[str, Any]:
             "source": FLY_BRAIN_SOURCE,
             "runtime": "local_cpu_lif",
             "neurons": FLY_BRAIN.neurons_per_group * 4,
-            "full_connectome_loaded": __import__("backend.flywire_runtime", fromlist=["status"]).status()["available"],
-        "full_connectome": __import__("backend.flywire_runtime", fromlist=["status"]).status(),
+            "full_connectome_ready": flywire_status()["available"],
+        "full_connectome_loaded": flywire_runtime_loaded(),
+        "full_connectome": flywire_status(),
+        "full_connectome_enabled_for_chat": os.getenv("ULTRON_ENABLE_FULL_FLYWIRE", "0").lower() in {"1", "true", "yes", "on"},
         },
         "parallel_specialists": ["planner", "solver", "critic"],
         "parallel_task_limit": 5,
