@@ -275,11 +275,39 @@ def answer_with_provider(
             from google import genai
 
             client = genai.Client(api_key=google_key)
+            generation_config = None
+            if grounded_search:
+                from google.genai import types
+
+                generation_config = types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())]
+                )
             response = client.models.generate_content(
                 model=os.getenv("ULTRON_GEMINI_MODEL", "gemini-2.5-flash"),
                 contents=f"{instructions}\n\nSolicitação do usuário:\n{message}",
+                config=generation_config,
             )
-            return response.text or "Não consegui gerar uma resposta agora."
+            answer = response.text or "Não consegui gerar uma resposta agora."
+            if grounded_search:
+                try:
+                    metadata = response.candidates[0].grounding_metadata
+                    sources = []
+                    for chunk in (metadata.grounding_chunks or []):
+                        web_source = getattr(chunk, "web", None)
+                        uri = getattr(web_source, "uri", None)
+                        title = getattr(web_source, "title", None) or uri
+                        if uri and uri not in [item[1] for item in sources]:
+                            sources.append((title, uri))
+                    if sources:
+                        answer += "\n\nFontes consultadas:\n" + "\n".join(
+                            f"- {title}: {uri}" for title, uri in sources
+                        )
+                except Exception:
+                    pass
+            return answer
+
+        if grounded_search:
+            raise HTTPException(status_code=503, detail="Pesquisa web com fontes exige Gemini e GOOGLE_API_KEY.")
 
         if openai_key:
             from openai import OpenAI
