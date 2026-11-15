@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass
 from typing import Iterable
 
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
+from backend.perception_bridge import perceive
 
 FLY_BRAIN_SOURCE = "https://github.com/eonsystemspbc/fly-brain"
 FLY_BRAIN_VERSION = "0.1.0"
@@ -75,12 +76,9 @@ class FlyBrainCore:
         """Use the real upstream brain only for its documented sensory experiments."""
         if os.getenv("ULTRON_ENABLE_FULL_FLYWIRE", "0").strip().lower() not in {"1", "true", "yes", "on"}:
             return None
-        normalized = goal.casefold()
-        if any(word in normalized for word in ("açúcar", "comida", "alimento", "food", "sugar")):
-            stimulus = "sugar"
-        elif any(word in normalized for word in ("andar", "caminhar", "locomoção", "movimento", "walk", "p9")):
-            stimulus = "p9"
-        else:
+        perception = perceive(goal)
+        stimulus = perception.get("stimulus")
+        if stimulus is None:
             return None
         from backend.flywire_runtime import simulate
         # Explicit full-brain mode must fail closed; never silently downgrade
@@ -173,6 +171,7 @@ class FlyBrainCore:
                 role_scores["critic"] += activity * 0.10
             self._last_tokens = tokens
             return {
+                "perception": perception,
                 "core": "flywire_v783_with_local_control_circuit" if full_connectome and full_connectome.get("full_connectome_loaded") else "drosophila_lif_microcircuit",
                 "version": FLY_BRAIN_VERSION,
                 "source": FLY_BRAIN_SOURCE,
