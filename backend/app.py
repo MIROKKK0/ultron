@@ -239,6 +239,8 @@ def answer_with_provider(message: str, memories: list[str] | None = None) -> str
         result = execute_brain_cycle(normalized[7:].strip())
         return result["synthesis"]
     if lower.startswith("/multi "):
+        if not (os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")):
+            return "Configure GOOGLE_API_KEY ou OPENAI_API_KEY no servidor para executar tarefas com IA."
         tasks = [item.strip() for item in normalized[7:].split("||") if item.strip()]
         if not tasks:
             return "Informe tarefas separadas por ||."
