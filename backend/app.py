@@ -322,7 +322,10 @@ def brain_status() -> dict[str, Any]:
 
 @app.post("/brain/run", dependencies=[Depends(require_api_token)])
 def brain_run(request: BrainRequest) -> dict[str, Any]:
-    result = execute_brain_cycle(request.goal.strip())
+    try:
+        result = execute_brain_cycle(request.goal.strip())
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     save_conversation("user", request.goal.strip())
     save_conversation("assistant", result["synthesis"])
     return result
@@ -400,7 +403,10 @@ def chat(request: ChatRequest) -> dict[str, str]:
         f"{row['role']}: {row['content']}" for row in reversed(history_rows)
     ]
     # Every normal chat turn passes through the mandatory spiking control center.
-    neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, memory_items))
+    try:
+        neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, memory_items))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     save_conversation("user", message)
     response = answer_without_provider(
         message, memory_items, history_items, neural_state
