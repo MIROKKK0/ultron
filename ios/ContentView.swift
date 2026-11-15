@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @AppStorage("ultronServerURL") private var serverURL = "https://ultron-api-c5ae.onrender.com"
+    @AppStorage("ultronChatHistory") private var storedChatHistory = ""
     @State private var messages: [ChatMessage] = [
         ChatMessage(role: .assistant, text: "Olá! Sou o ULTRON. O FlyBrain coordena minhas respostas e posso pesquisar na web quando você pedir. Como posso ajudar?")
     ]
@@ -102,11 +103,26 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear { restoreConversation() }
+        .onChange(of: messages) { _ in persistConversation() }
         .task(id: serverURL) {
             checkingServer = true
             serverOnline = await client.warmUp(serverURL: serverURL)
             checkingServer = false
         }
+    }
+
+    private func restoreConversation() {
+        guard let data = Data(base64Encoded: storedChatHistory),
+              let saved = try? JSONDecoder().decode([ChatMessage].self, from: data),
+              !saved.isEmpty else { return }
+        messages = saved
+    }
+
+    private func persistConversation() {
+        let recent = Array(messages.suffix(100))
+        guard let data = try? JSONEncoder().encode(recent) else { return }
+        storedChatHistory = data.base64EncodedString()
     }
 
     private var header: some View {
