@@ -3,7 +3,7 @@
 ## O que a pesquisa confirmou
 
 O projeto upstream `eonsystemspbc/fly-brain` implementa o modelo LIF de
-Drosophila baseado no FlyWire FAFB v783. O snapshot FlyWire FAFB v783 lista 139.255 neurônios e aproximadamente 3,7 milhões de pares conectados; o modelo Shiu usado pelo runner cobre 138.639 neurônios (não os 616 restantes) e milhões de conexões dirigidas. O runner PyTorch usa uma
+Drosophila baseado no FlyWire FAFB v783. O snapshot FlyWire FAFB v783 lista 139.255 neurônios e aproximadamente 3,7 milhões de pares conectados; o modelo Shiu usado pelo runner cobre 138.639 (99,56%) e não inclui 616 neurônios do snapshot. O runtime agora expõe essa cobertura explicitamente; não inventa pesos ou atividade para os 616 ausentes. O runner PyTorch usa uma
 matriz esparsa CSR e o passo temporal de 0,1 ms. Os dados de conectividade e
 completude são arquivos separados do código.
 
@@ -22,15 +22,14 @@ automaticamente ULTRON em uma IA geral ou consciente.
   expor caminhos internos do host.
 - `scripts/bootstrap_flywire.sh` faz clone raso do repositório upstream, que contém os arquivos de dados usados por esse runner; os dados grandes não são versionados no Git do ULTRON.
 - `requirements-flywire.txt` mantém PyTorch/Arrow isolados do servidor leve.
-- `backend/perception_bridge.py` adiciona uma ponte conservadora: termos explícitos de alimentação são mapeados para `sugar`, termos explícitos de locomoção para `p9`; linguagem não coberta é marcada como não mapeada.
+- `backend/perception_bridge.py` adiciona uma ponte conservadora v2: intenções positivas e inequívocas de alimentação são mapeadas para `sugar`, intenções positivas e inequívocas de locomoção para `p9`; negações e pedidos mistos são rejeitados como ambíguos, e linguagem não coberta é marcada como não mapeada.
 - `POST /brain/perception` permite testar essa classificação sem salvar a mensagem. A ponte é roteamento de intenção, não percepção geral nem codificação neural treinada.
 - O runtime aceita somente os estímulos documentados pelo upstream (`sugar` e `p9`). Ele não inventa uma tradução semântica para mensagens arbitrárias.
 - Se dados ou dependências estiverem ausentes, a execução falha explicitamente;
   não declara o microcircuito de 48 neurônios como cérebro completo.
 - Para permitir que mensagens de chat com os estímulos mapeados acionem a simulação,
   configure `ULTRON_ENABLE_FULL_FLYWIRE=1` somente depois de instalar e validar
-  o conjunto completo no host. O mapeamento atual é intencionalmente limitado a
-  termos de alimento/açúcar (sugar) e movimento/caminhada (p9).
+  o conjunto completo no host. O mapeamento atual é intencionalmente limitado a intenções positivas de alimento/açúcar (sugar) e movimento/caminhada (p9).
 
 ## Preparar e testar
 
@@ -58,7 +57,7 @@ dados LFS ou tempo de execução suficientes. A API mantém o microcircuito leve
 como núcleo operacional e só declara FlyWire completo quando o runtime real
 está carregado na memória.
 
-1. A ponte atual cobre somente duas classes explícitas. Para ampliar a linguagem natural, é necessário treinar e validar um mapeador para populações sensoriais usando IDs, anotações, regiões e protocolos experimentais corretos; não basta adicionar sinônimos.
+1. A ponte atual cobre somente duas classes explícitas e rejeita intenções negadas/mistas. O aprendizado associativo valida entradas finitas, índices e limites de atividade, mantém pesos limitados e persiste checkpoints no banco. Para ampliar a linguagem natural, é necessário treinar e validar um mapeador para populações sensoriais usando IDs, anotações, regiões e protocolos experimentais corretos; não basta adicionar sinônimos.
 2. Os experimentos upstream `sugar` e `p9` são estímulos de laboratório, não
    um vocabulário geral.
 3. A simulação não produz texto; uma camada linguística local independente
