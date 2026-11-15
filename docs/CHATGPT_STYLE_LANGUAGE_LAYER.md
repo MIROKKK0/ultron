@@ -13,18 +13,30 @@ language model. The app supports two paths:
 
 ## Backend environment
 
-Configure these server-side environment variables (for example, in the Render
-service environment settings):
+The default online provider is Gemini 3.8 Flash through Google's documented
+OpenAI-compatible endpoint. Only one server-side secret is required to enable
+that default:
+
+- `ULTRON_LLM_API_KEY`: private Gemini API key from Google AI Studio.
+
+Optional overrides for another compatible provider:
 
 - `ULTRON_LLM_BASE_URL`: provider API base URL, ending before
-  `/chat/completions`.
-- `ULTRON_LLM_API_KEY`: private provider API key.
-- `ULTRON_LLM_MODEL`: exact model identifier offered by the provider.
-- `ULTRON_LLM_NAME` (optional): short display name for diagnostics.
+  `/chat/completions`. Default:
+  `https://generativelanguage.googleapis.com/v1beta/openai`.
+- `ULTRON_LLM_MODEL`: exact model identifier. Default: `gemini-3.8-flash`.
+- `ULTRON_LLM_NAME`: short display name for diagnostics. Default:
+  `Gemini 3.8 Flash`.
 
-If the three required values are absent, ULTRON stays on the local FlyBrain/Qwen
-path. If the online provider fails, the backend falls back to the existing
-local response path; it does not fabricate an online answer.
+Set the key in the Render service environment settings, not in GitHub or the
+iPhone app. Gemini currently lists free input/output tokens for this model in
+its Free tier, subject to model access and usage limits. Google's Free tier
+terms state that submitted content may be used to improve its products; do not
+send sensitive information through that tier.
+
+If no API key is configured, ULTRON stays on the local FlyBrain/Qwen path. If
+the online provider fails, the backend falls back to the existing local
+response path; it does not fabricate an online answer.
 
 ## Safety and privacy
 
