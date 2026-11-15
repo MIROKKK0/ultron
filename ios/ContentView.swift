@@ -354,7 +354,7 @@ struct ContentView: View {
                 serverOnline = true
                 checkingServer = false
 
-                let assistantMessage = ChatMessage(
+                var assistantMessage = ChatMessage(
                     role: .assistant,
                     text: result.reply,
                     strategy: result.strategy
