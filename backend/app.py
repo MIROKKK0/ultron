@@ -472,7 +472,9 @@ def brain_status(request: Request) -> dict[str, Any]:
         "language_decoder": "local_deterministic",
         "external_ai_tokens_required": False,
         "web_research_enabled": True,
-        "memory_enabled": True,
+        "memory_enabled": False,
+        "memory_api_requires_bearer_auth": True,
+        "public_chat_memory_enabled": False,
         "autonomous_production_changes": False,
         "limitations": [
             "FlyWire v783 is a sensory/motor simulator, not a text-generating model.",

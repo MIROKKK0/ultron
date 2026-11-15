@@ -96,6 +96,20 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(mocked.call_args.args[1], [])
         self.assertEqual(mocked.call_args.args[2], [])
 
+    def test_public_chat_does_not_persist_shared_conversations(self):
+        with patch("backend.app.save_conversation") as save:
+            response = client.post("/chat", json={"message": "conversa privada"})
+        self.assertEqual(response.status_code, 200)
+        save.assert_not_called()
+
+    def test_public_remember_request_does_not_write_shared_memory(self):
+        with patch("backend.app.apply_learned_strategy_policy", side_effect=lambda state: state):
+            with patch("backend.app.connect_db") as connect:
+                response = client.post("/chat", json={"message": "lembre que gosto de respostas curtas"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("identificação segura por instalação", response.json()["reply"])
+        connect.assert_not_called()
+
     def test_every_chat_turn_passes_through_mandatory_neural_core(self):
         neural_state = {"core": "drosophila_lif_microcircuit", "mandatory": True}
         with patch("backend.app.FLY_BRAIN.process", return_value=neural_state) as neural:
@@ -178,6 +192,9 @@ class UltronTests(unittest.TestCase):
         self.assertFalse(payload["neural_core"]["full_connectome_ready"])
         self.assertFalse(payload["neural_core"]["full_connectome"]["memory_budget"]["ready"])
         self.assertFalse(payload["learning"]["modifies_flywire_synapses"])
+        self.assertFalse(payload["memory_enabled"])
+        self.assertTrue(payload["memory_api_requires_bearer_auth"])
+        self.assertFalse(payload["public_chat_memory_enabled"])
 
     def test_brain_run_uses_parallel_specialists(self):
         with patch.dict(os.environ, {"GOOGLE_API_KEY": "", "OPENAI_API_KEY": ""}):
@@ -269,6 +286,14 @@ class UltronTests(unittest.TestCase):
                 )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["completed"], 2)
+
+    def test_private_memory_endpoints_reject_missing_authentication(self):
+        created = client.post("/memory", json={"content": "não deve ser público"})
+        self.assertEqual(created.status_code, 401)
+        listed = client.get("/memory")
+        self.assertEqual(listed.status_code, 401)
+        deleted = client.delete("/memory/1")
+        self.assertEqual(deleted.status_code, 401)
 
     def test_memory_crud(self):
         created = client.post(
