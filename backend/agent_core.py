@@ -26,7 +26,8 @@ class SelfModel:
         "executa até cinco tarefas locais independentes em paralelo",
     )
     limitations: tuple[str, ...] = (
-        "o decodificador atual é determinístico e não equivale a um LLM treinado",\n        "o microcircuito atual não é o conectoma FlyWire completo",
+        "o decodificador atual é determinístico e não equivale a um LLM treinado",
+        "o microcircuito atual não é o conectoma FlyWire completo",
         "não altera o próprio código em produção",
         "não acessa serviços externos sem integração e autorização",
         "não pesquisa a internet por conta própria sem uma ferramenta de pesquisa conectada",
