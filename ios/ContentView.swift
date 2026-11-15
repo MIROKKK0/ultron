@@ -301,6 +301,13 @@ struct ContentView: View {
         .padding(.bottom, 4)
     }
 
+    private static func isGenericFallback(_ text: String) -> Bool {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.hasPrefix("recebi sua solicitação e processei a entrada pelo núcleo neural") ||
+            normalized.contains("ainda falta um decodificador semântico local treinado") ||
+            normalized.contains("não consegui interpretar essa pergunta com o decodificador local")
+    }
+
     private static func requiresExactServerReply(_ text: String) -> Bool {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return normalized.hasPrefix("/calc ") || normalized == "/self" ||
@@ -376,7 +383,12 @@ struct ContentView: View {
                 defer { isLocalGenerating = false }
 
                 do {
-                    let contextMessages = Array(messages.dropLast(2).suffix(4))
+                    // Do not let earlier generic fallback bubbles become context for Qwen.
+                    let contextMessages = Array(
+                        messages.dropLast(2)
+                            .filter { !Self.isGenericFallback($0.text) }
+                            .suffix(4)
+                    )
                     let qwenStartedAt = Date()
                     let stream = try await localModel.stream(
                         userMessage: text,
