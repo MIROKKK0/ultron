@@ -7,6 +7,7 @@ import operator
 import os
 import re
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -627,20 +628,30 @@ def _extract_research_query(message: str) -> str | None:
 @app.post("/chat")
 def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
     enforce_public_limit(request, "chat", limit=20)
+    request_started = time.perf_counter()
     message = payload.message.strip()
     # Public chat must not read or write shared private memories/conversations.
     try:
-        neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, []))
+        brain_started = time.perf_counter()
+        neural_state = FLY_BRAIN.process(message, [])
+        flybrain_ms = (time.perf_counter() - brain_started) * 1000.0
+        policy_started = time.perf_counter()
+        neural_state = apply_learned_strategy_policy(neural_state)
+        policy_ms = (time.perf_counter() - policy_started) * 1000.0
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    research_ms = 0.0
     research_query = message[10:].strip() if message.casefold().startswith("/research ") else _extract_research_query(message)
     calculation = re.match(r"^(?:quanto é|quanto dá|calcule|calcular|resultado de)\s+(.+?)\s*[?.!]*$", message, re.I)
     if research_query:
+        research_started = time.perf_counter()
         try:
             research = search_web(research_query)
             response = research["summary"]
         except Exception:
             response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; o núcleo FlyBrain continua ativo."
+        finally:
+            research_ms = (time.perf_counter() - research_started) * 1000.0
     elif message.casefold() == "/brain" or message.casefold().startswith("/brain "):
         goal = message[6:].strip()
         if not goal:
@@ -698,6 +709,12 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
         "reply": response,
         "strategy": selected_strategy,
         "brain_context": brain_context,
+        "timings_ms": {
+            "flybrain": round(flybrain_ms, 2),
+            "strategy_policy": round(policy_ms, 2),
+            "research": round(research_ms, 2),
+            "server_total": round((time.perf_counter() - request_started) * 1000.0, 2),
+        },
     }
 
 
