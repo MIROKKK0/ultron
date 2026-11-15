@@ -11,7 +11,7 @@ Assistente pessoal em português com app nativo para iPhone, API HTTPS, memória
 - Núcleo de controle obrigatório FlyBrain no backend; após o servidor processar cada mensagem, o app pode usar Qwen3 0.6B Q4_K_M local via llama.cpp/Metal para geração de linguagem, sem tokens de provedor. Se o modelo não estiver instalado, usa a resposta segura do servidor.
 - Pesquisa web sem chave via metabusca DDGS, com links para as fontes; testes Python e GitHub Actions para CI, simulador e IPA.
 - Núcleo neural obrigatório (`backend/fly_brain.py`): microcircuito LIF local inspirado em dinâmica de neurônios da mosca, com atividade recorrente, estado curto e sinais de prioridade para planner/solver/critic; o ciclo cognitivo sempre passa por ele antes do decodificador linguístico local.
-- O microcircuito atual é uma implementação reduzida (48 neurônios por padrão), NÃO o conectoma FlyWire completo de ~138 mil neurônios. A integração do simulador completo `eonsystemspbc/fly-brain` e seus dados de conectividade ainda está pendente; o projeto não declara o conectoma completo como ativo.
+- O microcircuito LIF reduzido (48 neurônios por padrão) é o núcleo de controle leve. A ponte real para o conectoma FlyWire FAFB v783 (~138.639 neurônios) já existe em `backend/flywire_runtime.py`, com testes e execução dos experimentos documentados; ela só fica ativa após instalar código, dados e dependências e habilitar `ULTRON_ENABLE_FULL_FLYWIRE=1` em um host com recursos suficientes. Não está habilitada no Render Free.
 - Feedback persistido para medir satisfação ao longo do tempo (não treina pesos do modelo).
 
 ## Backend local
@@ -34,8 +34,8 @@ Com Bearer token, o backend oferece:
 - `POST /reflect`: checklist heurístico de uma resposta.
 - `POST /improvement-proposals`: proposta testável, sem aplicar alterações automaticamente.
 - `GET /benchmarks`: casos internos de fumaça.
-- `GET /brain/status`: estado e limites do cérebro neural obrigatório, incluindo versão, runtime e indicação se o conectoma completo está carregado.
-- `POST /brain/research`: retorna 503 até existir uma implementação de pesquisa local sem serviços externos.
+- `GET /brain/status`: diagnóstico sem caminhos internos do host, com disponibilidade real, arquivos/dependências ausentes, runtime carregado, estímulos suportados e limites da aprendizagem.
+- `POST /brain/research`: pesquisa web sem chave, com limite público por IP e resultados com URLs.
 - `POST /brain/run` com `{"goal":"..."}`: ciclo cognitivo com planejador, solucionador, crítico e síntese.
 - `POST /brain/multitask` com `{"tasks":["...","..."]}`: até cinco tarefas independentes em paralelo.
 - `POST /feedback` com avaliação de 1 a 5 e comentário opcional.
