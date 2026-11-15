@@ -22,21 +22,24 @@ class SelfModel:
         "cálculos aritméticos restritos",
         "autoavaliação estruturada de respostas",
         "propostas de melhoria verificáveis",
+        "calibração limitada de prioridades com feedback explícito do usuário",
         "prioriza estratégias cognitivas pela atividade neural FlyBrain",
         "executa até cinco tarefas locais independentes em paralelo",
     )
     limitations: tuple[str, ...] = (
         "o decodificador atual é determinístico e não equivale a um LLM treinado",
         "o microcircuito atual não é o conectoma FlyWire completo",
-        "não treina pesos do decodificador automaticamente",
+        "não treina pesos do decodificador nem sinapses do FlyWire automaticamente",
+        "o aprendizado atual calibra apenas prioridades de estratégia com feedback explícito",
         "não altera o próprio código em produção",
         "não acessa serviços externos sem integração e autorização",
         "não pesquisa a internet por conta própria sem uma ferramenta de pesquisa conectada",
         "não pode garantir superioridade sobre outros modelos sem benchmarks",
     )
     evolution_policy: str = (
-        "Aprender por feedback e avaliações; propor mudanças em branch isolada; "
-        "executar testes; exigir revisão humana antes de produção."
+        "Calibrar prioridades de estratégia apenas com feedback explícito e limites fixos; "
+        "propor mudanças em branch isolada; executar testes; exigir revisão humana antes "
+        "de produção. Não alterar sinapses ou código automaticamente."
     )
 
     def public_dict(self) -> dict:

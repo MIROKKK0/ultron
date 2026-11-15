@@ -7,7 +7,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_multitask
 from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
+from backend.flywire_runtime import status as flywire_status, runtime_loaded as flywire_runtime_loaded
 from backend.local_decoder import decode_local
 
 APP_NAME = "ULTRON"
@@ -88,6 +89,10 @@ def init_db() -> None:
                 id BIGSERIAL PRIMARY KEY, conversation_id BIGINT, rating INTEGER NOT NULL,
                 comment TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
             )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS strategy_feedback (
+                id BIGSERIAL PRIMARY KEY, role TEXT NOT NULL,
+                reward DOUBLE PRECISION NOT NULL, created_at TEXT NOT NULL
+            )""")
         else:
             execute(db, """
                 CREATE TABLE IF NOT EXISTS memories (
@@ -107,6 +112,10 @@ def init_db() -> None:
             execute(db, """CREATE TABLE IF NOT EXISTS feedback (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER, rating INTEGER NOT NULL,
                 comment TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+            )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS strategy_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT NOT NULL,
+                reward REAL NOT NULL, created_at TEXT NOT NULL
             )""")
 
 
@@ -138,10 +147,16 @@ class FeedbackRequest(BaseModel):
     rating: int = Field(ge=1, le=5)
     comment: str = Field(default="", max_length=2000)
     conversation_id: int | None = None
+    strategy: Literal["planner", "solver", "critic"] | None = None
 
 
 class BrainRequest(BaseModel):
     goal: str = Field(min_length=1, max_length=4000)
+
+
+class FlyWireSimulationRequest(BaseModel):
+    stimulus: Literal["sugar", "p9"]
+    duration_sec: float = Field(default=0.1, ge=0.01, le=0.1)
 
 
 class MultiTaskRequest(BaseModel):
@@ -216,6 +231,39 @@ def answer_with_provider(message: str, memories: list[str] | None = None,
     return answer_without_provider(message, memories, history, neural_state)
 
 
+def apply_learned_strategy_policy(neural_state: dict[str, Any]) -> dict[str, Any]:
+    """Calibrate strategy priorities from explicit user ratings, within safe bounds.
+
+    This never changes FlyWire synapses, model weights, security rules, or code.
+    """
+    with connect_db() as db:
+        rows = execute(
+            db,
+            "SELECT role, AVG(reward) AS average_reward, COUNT(*) AS samples "
+            "FROM strategy_feedback GROUP BY role",
+        ).fetchall()
+    adjustments: dict[str, float] = {}
+    scores = neural_state.get("role_scores", {})
+    for row in rows:
+        role = str(row["role"])
+        if role not in scores:
+            continue
+        samples = int(row["samples"])
+        average_reward = float(row["average_reward"])
+        confidence = samples / (samples + 5.0)
+        adjustment = max(-0.15, min(0.15, average_reward * 0.15 * confidence))
+        scores[role] = round(max(0.0, float(scores[role]) * (1.0 + adjustment)), 4)
+        adjustments[role] = round(adjustment, 4)
+    neural_state["policy_learning"] = {
+        "method": "bounded_explicit_feedback_calibration",
+        "samples_by_strategy": {str(row["role"]): int(row["samples"]) for row in rows},
+        "applied_adjustments": adjustments,
+        "synaptic_weights_changed": False,
+        "self_modifying_code": False,
+    }
+    return neural_state
+
+
 def execute_task_with_memory(task: str) -> str:
     with connect_db() as db:
         rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
@@ -228,7 +276,7 @@ def execute_brain_cycle(goal: str, history: list[str] | None = None) -> dict[str
     with connect_db() as db:
         rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
     memories = rank_memories(goal, rows, limit=8)
-    neural_state = FLY_BRAIN.process(goal, memories)
+    neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(goal, memories))
     answer = answer_without_provider(goal, memories, history, neural_state)
     scores = neural_state["role_scores"]
     roles = sorted(("planner", "solver", "critic"),
@@ -249,13 +297,17 @@ def brain_status() -> dict[str, Any]:
         "name": APP_NAME,
         "brain_version": "3.0.0-local",
         "neural_core": {
-            "name": "drosophila_lif_microcircuit",
+            "name": "flywire_v783" if flywire_runtime_loaded() else "drosophila_lif_microcircuit",
             "mandatory": True,
             "version": FLY_BRAIN_VERSION,
             "source": FLY_BRAIN_SOURCE,
-            "runtime": "local_cpu_lif",
-            "neurons": FLY_BRAIN.neurons_per_group * 4,
-            "full_connectome_loaded": False,
+            "runtime": "upstream_pytorch_cpu" if flywire_runtime_loaded() else "local_cpu_lif",
+            "neurons": flywire_status().get("expected_neurons") if flywire_runtime_loaded() else FLY_BRAIN.neurons_per_group * 4,
+            "full_connectome_ready": flywire_status()["available"],
+            "full_connectome_loaded": flywire_runtime_loaded(),
+            "full_connectome": flywire_status(),
+            "full_connectome_enabled_for_chat": os.getenv("ULTRON_ENABLE_FULL_FLYWIRE", "0").lower() in {"1", "true", "yes", "on"},
+            "active_engine": "FlyWire v783" if flywire_runtime_loaded() else "48-neuron LIF microcircuit",
         },
         "parallel_specialists": ["planner", "solver", "critic"],
         "parallel_task_limit": 5,
@@ -270,10 +322,25 @@ def brain_status() -> dict[str, Any]:
 
 @app.post("/brain/run", dependencies=[Depends(require_api_token)])
 def brain_run(request: BrainRequest) -> dict[str, Any]:
-    result = execute_brain_cycle(request.goal.strip())
+    try:
+        result = execute_brain_cycle(request.goal.strip())
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     save_conversation("user", request.goal.strip())
     save_conversation("assistant", result["synthesis"])
     return result
+
+
+@app.post("/brain/flywire/simulate", dependencies=[Depends(require_api_token)])
+def brain_flywire_simulate(request: FlyWireSimulationRequest) -> dict[str, Any]:
+    """Run a documented sensory experiment on the real FlyWire v783 connectome."""
+    from backend.flywire_runtime import simulate
+    try:
+        return simulate(request.stimulus, request.duration_sec)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/brain/research", dependencies=[Depends(require_api_token)])
@@ -336,13 +403,22 @@ def chat(request: ChatRequest) -> dict[str, str]:
         f"{row['role']}: {row['content']}" for row in reversed(history_rows)
     ]
     # Every normal chat turn passes through the mandatory spiking control center.
-    neural_state = FLY_BRAIN.process(message, memory_items)
+    try:
+        neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, memory_items))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     save_conversation("user", message)
     response = answer_without_provider(
         message, memory_items, history_items, neural_state
     )
     save_conversation("assistant", response)
-    return {"reply": response}
+    role_scores = neural_state.get("role_scores", {})
+    feedback_strategies = {
+        role: float(role_scores.get(role, 0.0))
+        for role in ("planner", "solver", "critic")
+    }
+    selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
+    return {"reply": response, "strategy": selected_strategy}
 
 
 @app.post("/memory", dependencies=[Depends(require_api_token)])
@@ -421,7 +497,8 @@ def benchmarks() -> dict[str, Any]:
 @app.post("/feedback", dependencies=[Depends(require_api_token)])
 def add_feedback(request: FeedbackRequest) -> dict[str, Any]:
     with connect_db() as db:
-        values = (request.conversation_id, request.rating, request.comment.strip(), datetime.now(timezone.utc).isoformat())
+        created_at = datetime.now(timezone.utc).isoformat()
+        values = (request.conversation_id, request.rating, request.comment.strip(), created_at)
         if is_postgres(db):
             cursor = execute(
                 db,
@@ -436,7 +513,20 @@ def add_feedback(request: FeedbackRequest) -> dict[str, Any]:
                 values,
             )
             feedback_id = cursor.lastrowid
-    return {"id": feedback_id, "stored": True, "used_for_model_training": False}
+        if request.strategy:
+            reward = (request.rating - 3) / 2.0
+            execute(
+                db,
+                "INSERT INTO strategy_feedback(role, reward, created_at) VALUES (?, ?, ?)",
+                (request.strategy, reward, created_at),
+            )
+    return {
+        "id": feedback_id,
+        "stored": True,
+        "used_for_model_training": False,
+        "used_for_policy_calibration": bool(request.strategy),
+        "strategy": request.strategy,
+    }
 
 
 @app.get("/feedback/summary", dependencies=[Depends(require_api_token)])

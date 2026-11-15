@@ -1,0 +1,7 @@
+# Optional, isolated environment for the real FlyWire v783 simulator.
+# CPU wheels keep this independent from the CUDA-oriented upstream environment.
+--extra-index-url https://download.pytorch.org/whl/cpu
+numpy>=1.26,<2
+torch>=2.5,<3
+pandas>=2.2,<3
+pyarrow>=18,<24
