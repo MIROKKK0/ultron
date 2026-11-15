@@ -2,9 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @AppStorage("ultronServerURL") private var serverURL = "https://ultron-api-c5ae.onrender.com"
-    @State private var apiToken = KeychainStore.load() ?? ""
     @State private var messages: [ChatMessage] = [
-        ChatMessage(role: .assistant, text: "Olá. Eu sou o ULTRON. Configure servidor e token para começar. Comandos: /self, /brain seu objetivo complexo, /multi tarefa 1 || tarefa 2, /plan seu objetivo, /remember sua nota e /calc 12*(3+4).")
+        ChatMessage(role: .assistant, text: "Olá. Eu sou o ULTRON. Estou pronta. Não precisa configurar token. Comandos: /self, /plan seu objetivo, /research sua pergunta e /calc 12*(3+4). A memória privada será ativada após autenticação segura por instalação.")
     ]
     @State private var draft = ""
     @State private var isSending = false
@@ -27,7 +26,7 @@ struct ContentView: View {
                         Text(isSending ? "Pensando…" : "Assistente pessoal").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Circle().fill(serverURL.isEmpty || apiToken.isEmpty ? .orange : .green).frame(width: 8, height: 8)
+                    Circle().fill(serverURL.isEmpty ? .orange : .green).frame(width: 8, height: 8)
                     Button { showSettings = true } label: {
                         Image(systemName: "slider.horizontal.3").font(.title3).padding(10)
                     }
@@ -46,7 +45,6 @@ struct ContentView: View {
                                         rating,
                                         strategy: strategy,
                                         serverURL: serverURL,
-                                        apiToken: apiToken
                                     )
                                 }
                                 .id(message.id)
@@ -97,14 +95,11 @@ struct ContentView: View {
             .background(Color(.systemBackground))
             .navigationBarHidden(true)
             .sheet(isPresented: $showSettings) {
-                SettingsView(serverURL: $serverURL, apiToken: $apiToken)
+                SettingsView(serverURL: $serverURL)
                     .presentationDetents([.medium, .large])
             }
         }
         .preferredColorScheme(.dark)
-        .onChange(of: apiToken) { newValue in
-            KeychainStore.save(newValue)
-        }
     }
 
     private func send() {
@@ -117,11 +112,11 @@ struct ContentView: View {
 
         Task {
             do {
-                let result = try await client.send(text, serverURL: serverURL, apiToken: apiToken)
+                let result = try await client.send(text, serverURL: serverURL)
                 messages.append(ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy))
             } catch {
                 errorMessage = error.localizedDescription
-                messages.append(ChatMessage(role: .assistant, text: "Não consegui concluir a solicitação. Confira servidor, token e conexão."))
+                messages.append(ChatMessage(role: .assistant, text: "Não consegui concluir a solicitação. Confira o servidor e a conexão."))
             }
             isSending = false
         }
@@ -206,10 +201,8 @@ private struct MessageBubble: View {
 
 private struct SettingsView: View {
     @Binding var serverURL: String
-    @Binding var apiToken: String
     @Environment(\.dismiss) private var dismiss
     @State private var draftURL = ""
-    @State private var draftToken = ""
 
     var body: some View {
         NavigationStack {
@@ -219,20 +212,16 @@ private struct SettingsView: View {
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    SecureField("Token de acesso", text: $draftToken)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Text("Use o endereço HTTPS e o token fornecidos na configuração do servidor. Este token só autentica a API; não é uma chave de IA. Configure ULTRON_API_TOKEN no painel do Render e use o mesmo valor aqui.")
+                    Text("Use o endereço HTTPS do servidor. O chat público usa limite de requisições e não pede token manual.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Section {
                     Button("Salvar configuração") {
                         serverURL = draftURL.trimmingCharacters(in: .whitespacesAndNewlines)
-                        apiToken = draftToken.trimmingCharacters(in: .whitespacesAndNewlines)
                         dismiss()
                     }
-                    .disabled(!draftURL.lowercased().hasPrefix("https://") || draftToken.isEmpty)
+                    .disabled(!draftURL.lowercased().hasPrefix("https://"))
                 }
             }
             .navigationTitle("Configurações")
@@ -244,7 +233,6 @@ private struct SettingsView: View {
             }
             .onAppear {
                 draftURL = serverURL
-                draftToken = apiToken
             }
         }
         .preferredColorScheme(.dark)

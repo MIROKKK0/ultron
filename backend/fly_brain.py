@@ -14,6 +14,8 @@ import threading
 from dataclasses import asdict, dataclass
 from typing import Iterable
 
+from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
+
 FLY_BRAIN_SOURCE = "https://github.com/eonsystemspbc/fly-brain"
 FLY_BRAIN_VERSION = "0.1.0"
 GROUPS = ("sensory", "memory", "attention", "action")
@@ -89,6 +91,9 @@ class FlyBrainCore:
         memory_text = " ".join(str(item)[:400] for item in list(memories)[:8])
         tokens = self._tokens(goal)
         memory_tokens = self._tokens(memory_text)
+        encoded_input = LEXICAL_ENCODER.encode(goal)
+        associative_recall = ASSOCIATIVE_MEMORY.recall(encoded_input, limit=8)
+        association_bias = min(0.2, sum(item["activation"] for item in associative_recall) / 8.0)
         with self._lock:
             novelty = 1.0 if not self._last_tokens else (
                 len(tokens - self._last_tokens) / max(1, len(tokens | self._last_tokens))
@@ -96,7 +101,7 @@ class FlyBrainCore:
             memory_match = len(tokens & memory_tokens) / max(1, len(tokens))
             sensory = [0.0] * len(GROUPS)
             sensory[0] = min(1.0, 0.2 + 0.8 * len(tokens) / 24.0)
-            sensory[1] = min(1.0, memory_match + 0.15 * (1.0 - novelty))
+            sensory[1] = min(1.0, memory_match + 0.15 * (1.0 - novelty) + association_bias)
             sensory[2] = min(1.0, 0.25 + 0.65 * novelty)
             sensory[3] = min(1.0, 0.15 + 0.5 * (len(tokens) > 3))
 
@@ -159,6 +164,9 @@ class FlyBrainCore:
                 "simulation_steps": self.steps,
                 "novelty": round(novelty, 4),
                 "memory_match": round(memory_match, 4),
+                "encoded_input_features": len(encoded_input),
+                "associative_recall": associative_recall,
+                "association_bias": round(association_bias, 4),
                 "group_activity": {key: round(value, 4) for key, value in rates.items()},
                 "role_scores": {key: round(value, 4) for key, value in role_scores.items()},
                 "spikes": dict(zip(GROUPS, spikes_by_group)),

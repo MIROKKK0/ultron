@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import hmac
+import json
 import operator
 import os
 import sqlite3
@@ -9,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
@@ -17,6 +18,9 @@ from backend.brain import run_multitask
 from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
 from backend.flywire_runtime import status as flywire_status, runtime_loaded as flywire_runtime_loaded
 from backend.local_decoder import decode_local
+from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
+from backend.public_access import enforce_public_limit
+from backend.web_research import search_web
 
 APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -93,6 +97,11 @@ def init_db() -> None:
                 id BIGSERIAL PRIMARY KEY, role TEXT NOT NULL,
                 reward DOUBLE PRECISION NOT NULL, created_at TEXT NOT NULL
             )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS neural_learning_state (
+                id INTEGER PRIMARY KEY,
+                state_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )""")
         else:
             execute(db, """
                 CREATE TABLE IF NOT EXISTS memories (
@@ -117,9 +126,40 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT NOT NULL,
                 reward REAL NOT NULL, created_at TEXT NOT NULL
             )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS neural_learning_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                state_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )""")
+
+
+def load_associative_memory() -> None:
+    """Restore the bounded plasticity state from the server database."""
+    with connect_db() as db:
+        row = execute(db, "SELECT state_json FROM neural_learning_state WHERE id = 1").fetchone()
+    if row:
+        try:
+            ASSOCIATIVE_MEMORY.load_state_dict(json.loads(row["state_json"]))
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return
+
+
+def persist_associative_memory() -> None:
+    state_json = json.dumps(ASSOCIATIVE_MEMORY.state_dict(), separators=(",", ":"), sort_keys=True)
+    updated_at = datetime.now(timezone.utc).isoformat()
+    with connect_db() as db:
+        existing = execute(db, "SELECT id FROM neural_learning_state WHERE id = 1").fetchone()
+        if existing:
+            execute(db, "UPDATE neural_learning_state SET state_json = ?, updated_at = ? WHERE id = 1",
+                    (state_json, updated_at))
+        else:
+            execute(db, "INSERT INTO neural_learning_state(id, state_json, updated_at) VALUES (1, ?, ?)",
+                    (state_json, updated_at))
+
 
 
 init_db()
+load_associative_memory()
 
 
 class ChatRequest(BaseModel):
@@ -161,6 +201,16 @@ class FlyWireSimulationRequest(BaseModel):
 
 class MultiTaskRequest(BaseModel):
     tasks: list[str] = Field(min_length=1, max_length=5)
+
+
+class NeuralLearningRequest(BaseModel):
+    context: str = Field(min_length=1, max_length=2000)
+    outcome: str = Field(min_length=1, max_length=2000)
+    reward: float = Field(ge=-1.0, le=1.0)
+
+
+class NeuralRecallRequest(BaseModel):
+    context: str = Field(min_length=1, max_length=2000)
 
 
 def _safe_math(node: ast.AST) -> float:
@@ -291,8 +341,9 @@ def execute_brain_cycle(goal: str, history: list[str] | None = None) -> dict[str
         "execution_policy": "FlyBrain é o núcleo obrigatório; decodificador local sem APIs ou tokens externos."}
 
 
-@app.get("/brain/status", dependencies=[Depends(require_api_token)])
-def brain_status() -> dict[str, Any]:
+@app.get("/brain/status")
+def brain_status(request: Request) -> dict[str, Any]:
+    enforce_public_limit(request, "brain-status", limit=60)
     return {
         "name": APP_NAME,
         "brain_version": "3.0.0-local",
@@ -314,21 +365,47 @@ def brain_status() -> dict[str, Any]:
         "model_configured": False,
         "language_decoder": "local_deterministic",
         "external_ai_tokens_required": False,
-        "web_research_enabled": False,
+        "web_research_enabled": True,
+        "experimental_associative_learning": True,
+        "associative_memory_persistence": "database_checkpointed",
         "memory_enabled": True,
         "autonomous_production_changes": False,
     }
 
 
 @app.post("/brain/run", dependencies=[Depends(require_api_token)])
-def brain_run(request: BrainRequest) -> dict[str, Any]:
+def brain_run(payload: BrainRequest) -> dict[str, Any]:
     try:
-        result = execute_brain_cycle(request.goal.strip())
+        result = execute_brain_cycle(payload.goal.strip())
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    save_conversation("user", request.goal.strip())
+    save_conversation("user", payload.goal.strip())
     save_conversation("assistant", result["synthesis"])
     return result
+
+
+
+@app.post("/brain/learn", dependencies=[Depends(require_api_token)])
+def brain_learn(payload: NeuralLearningRequest) -> dict[str, Any]:
+    """Apply a bounded experimental reward-modulated association update."""
+    context = LEXICAL_ENCODER.encode(payload.context)
+    outcome = LEXICAL_ENCODER.encode(payload.outcome)
+    try:
+        result = ASSOCIATIVE_MEMORY.observe(context, outcome, payload.reward)
+        persist_associative_memory()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"learning": result, "method": "three_factor_reward_modulated_association",
+            "flywire_synapses_modified": False, "language_model_weights_modified": False,
+            "persistence": "database_checkpointed"}
+
+
+@app.post("/brain/recall", dependencies=[Depends(require_api_token)])
+def brain_recall(payload: NeuralRecallRequest) -> dict[str, Any]:
+    context = LEXICAL_ENCODER.encode(payload.context)
+    return {"encoded_features": len(context),
+            "associations": ASSOCIATIVE_MEMORY.recall(context),
+            "persistence": "database_checkpointed"}
 
 
 @app.post("/brain/flywire/simulate", dependencies=[Depends(require_api_token)])
@@ -343,9 +420,15 @@ def brain_flywire_simulate(request: FlyWireSimulationRequest) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@app.post("/brain/research", dependencies=[Depends(require_api_token)])
-def brain_research(request: BrainRequest) -> dict[str, Any]:
-    raise HTTPException(status_code=503, detail="Pesquisa web não está implementada no modo local sem tokens.")
+@app.post("/brain/research")
+def brain_research(payload: BrainRequest, request: Request) -> dict[str, Any]:
+    enforce_public_limit(request, "web-research", limit=8)
+    try:
+        return search_web(payload.goal)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Pesquisa web indisponível no momento; tente novamente.") from exc
 
 
 @app.post("/brain/multitask", dependencies=[Depends(require_api_token)])
@@ -390,33 +473,29 @@ def health() -> dict[str, Any]:
     }
 
 
-@app.post("/chat", dependencies=[Depends(require_api_token)])
-def chat(request: ChatRequest) -> dict[str, str]:
-    message = request.message.strip()
-    with connect_db() as db:
-        memory_rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
-        history_rows = execute(
-            db, "SELECT role, content FROM conversations ORDER BY id DESC LIMIT 12"
-        ).fetchall()
-    memory_items = rank_memories(message, memory_rows, limit=8)
-    history_items = [
-        f"{row['role']}: {row['content']}" for row in reversed(history_rows)
-    ]
-    # Every normal chat turn passes through the mandatory spiking control center.
+@app.post("/chat")
+def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
+    enforce_public_limit(request, "chat", limit=20)
+    message = payload.message.strip()
+    # Public chat must not read or write shared private memories/conversations.
     try:
-        neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, memory_items))
+        neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, []))
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    save_conversation("user", message)
-    response = answer_without_provider(
-        message, memory_items, history_items, neural_state
-    )
-    save_conversation("assistant", response)
+    if message.casefold().startswith("/research "):
+        try:
+            research = search_web(message[10:].strip())
+            response = research["summary"]
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Pesquisa web indisponível no momento; tente novamente.") from exc
+    elif message.casefold().startswith("/remember "):
+        response = "A memória pessoal ficará disponível quando a identificação segura por instalação estiver concluída. Nenhum dado foi gravado."
+    else:
+        response = answer_without_provider(message, [], [], neural_state)
     role_scores = neural_state.get("role_scores", {})
-    feedback_strategies = {
-        role: float(role_scores.get(role, 0.0))
-        for role in ("planner", "solver", "critic")
-    }
+    feedback_strategies = {role: float(role_scores.get(role, 0.0)) for role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
     return {"reply": response, "strategy": selected_strategy}
 
@@ -494,11 +573,13 @@ def benchmarks() -> dict[str, Any]:
             "warning": "Casos internos; não comparam inteligência entre modelos."}
 
 
-@app.post("/feedback", dependencies=[Depends(require_api_token)])
-def add_feedback(request: FeedbackRequest) -> dict[str, Any]:
+@app.post("/feedback")
+def add_feedback(payload: FeedbackRequest, request: Request) -> dict[str, Any]:
+    # Explicit user ratings are the only public learning signal; throttle heavily.
+    enforce_public_limit(request, "feedback", limit=10, window_seconds=3600)
     with connect_db() as db:
         created_at = datetime.now(timezone.utc).isoformat()
-        values = (request.conversation_id, request.rating, request.comment.strip(), created_at)
+        values = (payload.conversation_id, payload.rating, payload.comment.strip(), created_at)
         if is_postgres(db):
             cursor = execute(
                 db,
@@ -513,19 +594,21 @@ def add_feedback(request: FeedbackRequest) -> dict[str, Any]:
                 values,
             )
             feedback_id = cursor.lastrowid
-        if request.strategy:
-            reward = (request.rating - 3) / 2.0
+        if payload.strategy:
+            reward = (payload.rating - 3) / 2.0
             execute(
                 db,
                 "INSERT INTO strategy_feedback(role, reward, created_at) VALUES (?, ?, ?)",
-                (request.strategy, reward, created_at),
+                (payload.strategy, reward, created_at),
             )
+
     return {
         "id": feedback_id,
         "stored": True,
         "used_for_model_training": False,
-        "used_for_policy_calibration": bool(request.strategy),
-        "strategy": request.strategy,
+        "used_for_policy_calibration": bool(payload.strategy),
+        "learning_scope": "bounded_strategy_priority_only",
+        "strategy": payload.strategy,
     }
 
 

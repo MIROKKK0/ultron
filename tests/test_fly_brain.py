@@ -26,6 +26,13 @@ class FlyBrainCoreTests(unittest.TestCase):
         self.assertIn("role_scores", second)
         self.assertGreaterEqual(second["memory_match"], 0.0)
 
+
+    def test_core_uses_sparse_encoder_and_associative_memory(self):
+        state = FlyBrainCore().process("aprendizado por recompensa", [])
+        self.assertGreater(state["encoded_input_features"], 0)
+        self.assertIn("associative_recall", state)
+        self.assertGreaterEqual(state["association_bias"], 0.0)
+
     def test_global_core_is_shared(self):
         self.assertIsNotNone(FLY_BRAIN)
 

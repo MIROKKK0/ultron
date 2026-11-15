@@ -35,9 +35,9 @@ class UltronTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             calculate("__import__('os').system('echo unsafe')")
 
-    def test_api_requires_token(self):
+    def test_chat_is_available_without_manual_server_token(self):
         response = client.post("/chat", json={"message": "oi"})
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 200)
 
     def test_agent_self_and_planner(self):
         identity = client.get("/self", headers=AUTH)
@@ -53,52 +53,24 @@ class UltronTests(unittest.TestCase):
         summary = client.get("/feedback/summary", headers=AUTH)
         self.assertGreaterEqual(summary.json()["total"], 1)
 
-    def test_explicit_feedback_calibrates_only_the_selected_strategy(self):
+    def test_public_feedback_is_stored_and_calibrates_only_bounded_strategy_priority(self):
         feedback = client.post(
             "/feedback",
             json={"rating": 5, "strategy": "solver", "comment": "A solução ajudou"},
             headers=AUTH,
         )
         self.assertEqual(feedback.status_code, 200)
+        self.assertTrue(feedback.json()["stored"])
         self.assertTrue(feedback.json()["used_for_policy_calibration"])
-        neural_state = {
-            "role_scores": {"planner": 1.0, "solver": 1.0, "critic": 1.0},
-            "core": "drosophila_lif_microcircuit",
-        }
-        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state):
-            with patch("backend.app.answer_without_provider", return_value="resposta"):
-                response = client.post("/chat", json={"message": "resolver tarefa"}, headers=AUTH)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["strategy"], "solver")
-        self.assertGreater(neural_state["role_scores"]["solver"], 1.0)
-        self.assertEqual(neural_state["policy_learning"]["synaptic_weights_changed"], False)
+        self.assertEqual(feedback.json()["learning_scope"], "bounded_strategy_priority_only")
 
-    def test_explicit_feedback_calibrates_only_the_selected_strategy(self):
-        feedback = client.post(
-            "/feedback",
-            json={"rating": 5, "strategy": "solver", "comment": "A solução ajudou"},
-            headers=AUTH,
-        )
-        self.assertEqual(feedback.status_code, 200)
-        self.assertTrue(feedback.json()["used_for_policy_calibration"])
-        neural_state = {
-            "role_scores": {"planner": 1.0, "solver": 1.0, "critic": 1.0},
-            "core": "drosophila_lif_microcircuit",
-        }
-        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state):
-            with patch("backend.app.answer_without_provider", return_value="resposta"):
-                response = client.post("/chat", json={"message": "resolver tarefa"}, headers=AUTH)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["strategy"], "solver")
-        self.assertGreater(neural_state["role_scores"]["solver"], 1.0)
-        self.assertFalse(neural_state["policy_learning"]["synaptic_weights_changed"])
-
-    def test_chat_includes_recent_conversation_context(self):
-        save_conversation("user", "Contexto anterior de teste")
+    def test_public_chat_does_not_read_shared_private_conversation_context(self):
+        save_conversation("user", "Contexto privado de teste")
         with patch("backend.app.answer_without_provider", return_value="resposta") as mocked:
-            response = client.post("/chat", json={"message": "continue"}, headers=AUTH)
+            response = client.post("/chat", json={"message": "continue"})
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(any("Contexto anterior de teste" in item for item in mocked.call_args.args[2]))
+        self.assertEqual(mocked.call_args.args[1], [])
+        self.assertEqual(mocked.call_args.args[2], [])
 
     def test_every_chat_turn_passes_through_mandatory_neural_core(self):
         neural_state = {"core": "drosophila_lif_microcircuit", "mandatory": True}
@@ -126,6 +98,29 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(response.json()["strategy"], {"planner", "solver", "critic"})
 
+
+    def test_reward_learning_and_recall_endpoints_are_protected_and_functional(self):
+        learned = client.post(
+            "/brain/learn",
+            json={"context": "gostei de respostas úteis", "outcome": "resposta útil", "reward": 1.0},
+            headers=AUTH,
+        )
+        self.assertEqual(learned.status_code, 200)
+        self.assertEqual(learned.json()["method"], "three_factor_reward_modulated_association")
+        self.assertFalse(learned.json()["flywire_synapses_modified"])
+        recalled = client.post(
+            "/brain/recall", json={"context": "gostei de respostas úteis"}, headers=AUTH
+        )
+        self.assertEqual(recalled.status_code, 200)
+        self.assertTrue(recalled.json()["associations"])
+
+    def test_reward_learning_rejects_missing_authentication(self):
+        response = client.post(
+            "/brain/learn",
+            json={"context": "entrada", "outcome": "saída", "reward": 1.0},
+        )
+        self.assertEqual(response.status_code, 401)
+
     def test_brain_status(self):
         response = client.get("/brain/status", headers=AUTH)
         self.assertEqual(response.status_code, 200)
@@ -141,17 +136,19 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(len(response.json()["agents"]), 3)
         self.assertEqual(response.json()["synthesis"], "perspectiva")
 
-    def test_research_endpoint_requires_opt_in(self):
-        response = client.post(
-            "/brain/research", json={"goal": "Pesquisar memória de agentes"}, headers=AUTH
-        )
-        self.assertEqual(response.status_code, 503)
+    def test_research_endpoint_returns_source_linked_results(self):
+        fixture = {"query": "memória de agentes", "count": 1, "results": [{"title": "Paper", "url": "https://example.org/paper", "snippet": "Resumo"}], "summary": "Fontes"}
+        with patch("backend.app.search_web", return_value=fixture):
+            response = client.post("/brain/research", json={"goal": "Pesquisar memória de agentes"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["url"], "https://example.org/paper")
 
-    def test_research_endpoint_is_explicitly_unavailable_without_external_services(self):
-        response = client.post(
-            "/brain/research", json={"goal": "Pesquisar agentes"}, headers=AUTH
-        )
-        self.assertEqual(response.status_code, 503)
+    def test_chat_research_command_uses_web_search(self):
+        fixture = {"summary": "Resultados com fontes: https://example.org"}
+        with patch("backend.app.search_web", return_value=fixture):
+            response = client.post("/chat", json={"message": "/research FlyWire connectome"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("https://example.org", response.json()["reply"])
 
 
     def test_brain_multitask(self):
