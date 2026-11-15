@@ -273,6 +273,14 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["completed"], 2)
 
+    def test_private_memory_endpoints_reject_missing_authentication(self):
+        created = client.post("/memory", json={"content": "não deve ser público"})
+        self.assertEqual(created.status_code, 401)
+        listed = client.get("/memory")
+        self.assertEqual(listed.status_code, 401)
+        deleted = client.delete("/memory/1")
+        self.assertEqual(deleted.status_code, 401)
+
     def test_memory_crud(self):
         created = client.post(
             "/memory",
