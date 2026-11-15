@@ -22,11 +22,13 @@ private struct ChatRequest: Encodable { let message: String }
 private struct ChatResponse: Decodable {
     let reply: String
     let strategy: String?
+    let languageProvider: String?
     let brainContext: BrainContext?
     let timingsMS: [String: Double]?
 
     enum CodingKeys: String, CodingKey {
         case reply, strategy
+        case languageProvider = "language_provider"
         case brainContext = "brain_context"
         case timingsMS = "timings_ms"
     }
@@ -56,6 +58,7 @@ struct BrainContext: Decodable {
 struct ChatResult {
     let reply: String
     let strategy: String?
+    let languageProvider: String
     let brainContext: BrainContext?
     let timingsMS: [String: Double]
     let networkRoundTripMS: Double
@@ -151,6 +154,7 @@ struct ChatClient {
                 return ChatResult(
                     reply: result.reply,
                     strategy: result.strategy,
+                    languageProvider: result.languageProvider ?? "local",
                     brainContext: result.brainContext,
                     timingsMS: result.timingsMS ?? [:],
                     networkRoundTripMS: networkRoundTripMS
