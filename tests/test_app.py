@@ -75,6 +75,28 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(len(response.json()["agents"]), 3)
         self.assertEqual(response.json()["synthesis"], "perspectiva")
 
+    def test_research_endpoint_requires_opt_in(self):
+        with patch.dict(os.environ, {"ULTRON_ENABLE_WEB_SEARCH": "false"}):
+            response = client.post(
+                "/brain/research", json={"goal": "Pesquisar memória de agentes"}, headers=AUTH
+            )
+        self.assertEqual(response.status_code, 503)
+
+    def test_research_endpoint_returns_grounded_answer(self):
+        with patch.dict(os.environ, {
+            "GOOGLE_API_KEY": "test-key",
+            "ULTRON_ENABLE_WEB_SEARCH": "true",
+        }):
+            with patch("backend.app.answer_with_provider", return_value="Resposta\\nFontes consultadas: https://example.com"):
+                response = client.post(
+                    "/brain/research",
+                    json={"goal": "Pesquisar agentes"},
+                    headers=AUTH,
+                )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["grounded"])
+        self.assertIn("https://example.com", response.json()["answer"])
+
     def test_brain_multitask(self):
         with patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"}):
             with patch("backend.app.answer_with_provider", side_effect=lambda prompt, memories=None: "feito: " + prompt):
