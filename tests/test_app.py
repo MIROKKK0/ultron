@@ -97,6 +97,29 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(response.json()["strategy"], {"planner", "solver", "critic"})
 
+
+    def test_reward_learning_and_recall_endpoints_are_protected_and_functional(self):
+        learned = client.post(
+            "/brain/learn",
+            json={"context": "gostei de respostas úteis", "outcome": "resposta útil", "reward": 1.0},
+            headers=AUTH,
+        )
+        self.assertEqual(learned.status_code, 200)
+        self.assertEqual(learned.json()["method"], "three_factor_reward_modulated_association")
+        self.assertFalse(learned.json()["flywire_synapses_modified"])
+        recalled = client.post(
+            "/brain/recall", json={"context": "gostei de respostas úteis"}, headers=AUTH
+        )
+        self.assertEqual(recalled.status_code, 200)
+        self.assertTrue(recalled.json()["associations"])
+
+    def test_reward_learning_rejects_missing_authentication(self):
+        response = client.post(
+            "/brain/learn",
+            json={"context": "entrada", "outcome": "saída", "reward": 1.0},
+        )
+        self.assertEqual(response.status_code, 401)
+
     def test_brain_status(self):
         response = client.get("/brain/status", headers=AUTH)
         self.assertEqual(response.status_code, 200)
