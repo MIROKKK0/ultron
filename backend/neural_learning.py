@@ -108,6 +108,8 @@ class RewardModulatedAssociativeMemory:
                     "features_context": len(context), "features_outcome": len(outcome)}
 
     def recall(self, context: dict[int, float], limit: int = 8) -> list[dict]:
+        if not context:
+            return []
         context = self._validated_activity(context, "Contexto", self.max_features_per_observation)
         scores: dict[int, float] = defaultdict(float)
         with self._lock:
