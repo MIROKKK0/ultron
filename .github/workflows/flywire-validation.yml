@@ -11,7 +11,7 @@ on:
       - "requirements-flywire.txt"
       - ".github/workflows/flywire-validation.yml"
   push:
-    branches: ["feat/full-flywire-runtime-integration"]
+    branches: ["feat/ultron-core-assistant"]
     paths:
       - "backend/flywire_runtime.py"
       - "backend/fly_brain.py"
@@ -29,10 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout ULTRON
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
@@ -41,7 +39,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install -r requirements-flywire.txt
-      - name: Fetch upstream code and FlyWire v783 dataset
+      - name: Fetch upstream FlyWire source and v783 data
         run: bash scripts/bootstrap_flywire.sh
       - name: Run real 138k-neuron connectome smoke simulations
         env:
