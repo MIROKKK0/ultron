@@ -20,6 +20,7 @@ from backend.brain import run_multitask
 from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
 from backend.flywire_runtime import status as flywire_status, runtime_loaded as flywire_runtime_loaded
 from backend.local_decoder import decode_local
+from backend.llm_provider import ProviderError, generate_chat_reply, provider_name
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
 from backend.perception_bridge import perceive
 from backend.public_access import enforce_public_limit
@@ -165,8 +166,14 @@ init_db()
 load_associative_memory()
 
 
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=8000)
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
+    history: list[ChatTurn] = Field(default_factory=list, max_length=12)
 
 
 class MemoryRequest(BaseModel):
@@ -641,6 +648,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     research_ms = 0.0
+    provider_used = False
+    provider_label: str | None = None
     research_query = message[10:].strip() if message.casefold().startswith("/research ") else _extract_research_query(message)
     calculation = re.match(r"^(?:quanto é|quanto dá|calcule|calcular|resultado de)\s+(.+?)\s*[?.!]*$", message, re.I)
     if research_query:
@@ -679,7 +688,35 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
     elif message.casefold().startswith("/remember ") or re.match(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", message, re.I):
         response = "Ainda não vou gravar isso em uma memória compartilhada. A memória pessoal precisa de identificação segura por instalação; assim seus dados não ficam misturados com os de outros usuários."
     else:
-        response = answer_without_provider(message, [], [], neural_state)
+        # A configured online language model handles open-ended conversation.
+        # Secrets remain in backend environment variables; the iOS app never sees them.
+        provider_messages = [{
+            "role": "system",
+            "content": (
+                "Você é ULTRON, um assistente útil, direto e conversacional. "
+                "Responda em português brasileiro salvo pedido diferente. Entenda o contexto, "
+                "responda à pergunta real e evite frases genéricas ou repetitivas. "
+                "Seja honesto sobre incertezas e não afirme que executou ações que não executou. "
+                "Não invente fontes, pesquisas, memórias ou capacidades. O FlyBrain é um "
+                "subsistema experimental de processamento neural, não prova de consciência."
+            ),
+        }]
+        provider_messages.extend(
+            {"role": turn.role, "content": turn.content}
+            for turn in payload.history[-10:]
+        )
+        provider_messages.append({"role": "user", "content": message})
+        try:
+            online_reply = generate_chat_reply(provider_messages)
+            if online_reply:
+                response = online_reply
+                provider_used = True
+                provider_label = provider_name()
+            else:
+                response = answer_without_provider(message, [], [], neural_state)
+        except ProviderError:
+            # Keep chat available if the optional provider has a temporary outage.
+            response = answer_without_provider(message, [], [], neural_state)
     role_scores = neural_state.get("role_scores", {})
     feedback_strategies = {role: float(role_scores.get(role, 0.0)) for role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
@@ -708,6 +745,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
     return {
         "reply": response,
         "strategy": selected_strategy,
+        "provider_used": provider_used,
+        "provider_name": provider_label,
         "brain_context": brain_context,
         "timings_ms": {
             "flybrain": round(flybrain_ms, 2),
