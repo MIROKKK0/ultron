@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_cognitive_cycle, run_multitask
+from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
 
 APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -218,6 +219,7 @@ def answer_with_provider(
     memories: list[str] | None = None,
     history: list[str] | None = None,
     grounded_search: bool = False,
+    neural_state: dict[str, Any] | None = None,
 ) -> str:
     normalized = message.strip()
     lower = normalized.lower()
@@ -261,6 +263,12 @@ def answer_with_provider(
             for index, item in enumerate(result["results"], start=1)
         )
     instructions = system_instructions(memories or [])
+    if neural_state is not None:
+        instructions += (
+            "\n\nSinais do núcleo neural obrigatório (telemetria, não fatos):\n"
+            + str(neural_state)
+            + "\nUse esses sinais para ajustar atenção e prioridade; não os trate como conhecimento factual."
+        )
     if history:
         history_block = "\n".join(f"- {item[:800]}" for item in history[-12:])
         instructions += (
@@ -362,7 +370,16 @@ def execute_brain_cycle(goal: str, history: list[str] | None = None) -> dict[str
 def brain_status() -> dict[str, Any]:
     return {
         "name": APP_NAME,
-        "brain_version": "1.0.0",
+        "brain_version": "2.0.0",
+        "neural_core": {
+            "name": "drosophila_lif_microcircuit",
+            "mandatory": True,
+            "version": FLY_BRAIN_VERSION,
+            "source": FLY_BRAIN_SOURCE,
+            "runtime": "local_cpu_lif",
+            "neurons": FLY_BRAIN.neurons_per_group * 4,
+            "full_connectome_loaded": False,
+        },
         "parallel_specialists": ["planner", "solver", "critic"] + (
             ["researcher"] if os.getenv("ULTRON_ENABLE_WEB_SEARCH", "false").lower() == "true"
             and os.getenv("GOOGLE_API_KEY") else []
@@ -450,8 +467,12 @@ def chat(request: ChatRequest) -> dict[str, str]:
     history_items = [
         f"{row['role']}: {row['content']}" for row in reversed(history_rows)
     ]
+    # Every normal chat turn passes through the mandatory spiking control center.
+    neural_state = FLY_BRAIN.process(message, memory_items)
     save_conversation("user", message)
-    response = answer_with_provider(message, memory_items, history_items)
+    response = answer_with_provider(
+        message, memory_items, history_items, neural_state=neural_state
+    )
     save_conversation("assistant", response)
     return {"reply": response}
 

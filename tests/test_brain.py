@@ -46,7 +46,9 @@ class BrainTests(unittest.TestCase):
         self.assertEqual(len(result["agents"]), 3)
         self.assertEqual(result["synthesis_status"], "completed")
         self.assertEqual(len(calls), 4)
-        self.assertIn("nenhuma ação externa", result["execution_policy"].lower())
+        self.assertIn("núcleo neural lif é obrigatório", result["execution_policy"].lower())
+        self.assertEqual(result["neural_core"]["core"], "drosophila_lif_microcircuit")
+        self.assertFalse(result["neural_core"]["is_full_connectome"])
 
 
 if __name__ == "__main__":
