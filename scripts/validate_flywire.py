@@ -3,6 +3,7 @@
 from __future__ import annotations
 import json
 import os
+from pathlib import Path
 from backend.flywire_runtime import simulate, status
 
 def main() -> int:
@@ -11,8 +12,12 @@ def main() -> int:
         raise SystemExit("FlyWire data/code unavailable: " + json.dumps(current, ensure_ascii=False))
     os.environ["ULTRON_FLYWIRE_ROOT"] = current["root"]
     results = [simulate("sugar", 0.01), simulate("p9", 0.01)]
-    print(json.dumps({"status": "passed", "connectome": current, "simulations": results},
-                     ensure_ascii=False, indent=2))
+    evidence = {"status": "passed", "connectome": current, "simulations": results}
+    rendered = json.dumps(evidence, ensure_ascii=False, indent=2)
+    print(rendered)
+    output = Path(os.getenv("FLYWIRE_VALIDATION_OUTPUT", "artifacts/flywire-validation.json"))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(rendered + "\\n", encoding="utf-8")
     if any(item["neurons"] < 130_000 or item["steps"] != 100 for item in results):
         raise SystemExit("Unexpected connectome size or simulation step count.")
     return 0
