@@ -199,6 +199,27 @@ def answer_without_provider(message: str) -> str:
 
 
 def answer_with_provider(message: str, memories: list[str] | None = None) -> str:
+    normalized = message.strip()
+    lower = normalized.lower()
+    if lower.startswith("/calc "):
+        return f"Resultado: {calculate(normalized[6:].strip())}"
+    if lower.startswith("/remember "):
+        content = normalized[10:].strip()
+        if not content:
+            return "Escreva o que devo guardar depois de /remember."
+        with connect_db() as db:
+            execute(db, "INSERT INTO memories(content, created_at) VALUES (?, ?)",
+                    (content, datetime.now(timezone.utc).isoformat()))
+        return "Anotado na memória do ULTRON."
+    if lower.startswith("/plan "):
+        plan = plan_task(normalized[6:].strip())
+        steps = "\\n".join(f"{item['step']}. {item['action']}" for item in plan["steps"])
+        return f"Plano: {plan['goal']}\\nRisco: {plan['risk']}\\nAprovação humana: {'sim' if plan['human_approval_required'] else 'não'}\\n{steps}"
+    if lower == "/self":
+        return str(SELF_MODEL.public_dict())
+    if lower.startswith("/propose "):
+        proposal = improvement_proposal(normalized[9:].strip())
+        return str(proposal)
     instructions = system_instructions(memories or [])
     google_key = os.getenv("GOOGLE_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
