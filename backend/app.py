@@ -264,7 +264,11 @@ def answer_with_provider(
         )
     instructions = system_instructions(memories or [])
     if neural_state is not None:
-        instructions += (\n            "\\n\\nSinais do núcleo neural obrigatório (telemetria, não fatos):\\n"\n            + str(neural_state)\n            + "\\nUse esses sinais para ajustar atenção e prioridade; não os trate como conhecimento factual."\n        )
+        instructions += (
+            "\n\nSinais do núcleo neural obrigatório (telemetria, não fatos):\n"
+            + str(neural_state)
+            + "\nUse esses sinais para ajustar atenção e prioridade; não os trate como conhecimento factual."
+        )
     if history:
         history_block = "\n".join(f"- {item[:800]}" for item in history[-12:])
         instructions += (
@@ -463,7 +467,12 @@ def chat(request: ChatRequest) -> dict[str, str]:
     history_items = [
         f"{row['role']}: {row['content']}" for row in reversed(history_rows)
     ]
-    # Every normal chat turn passes through the mandatory spiking control center.\n    neural_state = FLY_BRAIN.process(message, memory_items)\n    save_conversation("user", message)\n    response = answer_with_provider(\n        message, memory_items, history_items, neural_state=neural_state\n    )\n    save_conversation("assistant", response)
+    # Every normal chat turn passes through the mandatory spiking control center.
+    neural_state = FLY_BRAIN.process(message, memory_items)
+    save_conversation("user", message)
+    response = answer_with_provider(
+        message, memory_items, history_items, neural_state=neural_state
+    )
     return {"reply": response}
 
 
