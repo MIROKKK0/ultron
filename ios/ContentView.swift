@@ -301,6 +301,13 @@ struct ContentView: View {
         .padding(.bottom, 4)
     }
 
+    private static func isGenericFallback(_ text: String) -> Bool {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.hasPrefix("recebi sua solicitação e processei a entrada pelo núcleo neural") ||
+            normalized.contains("ainda falta um decodificador semântico local treinado") ||
+            normalized.contains("não vou simular inteligência que este circuito ainda não possui")
+    }
+
     private static func requiresExactServerReply(_ text: String) -> Bool {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return normalized.hasPrefix("/calc ") || normalized == "/self" ||
@@ -376,13 +383,18 @@ struct ContentView: View {
                 defer { isLocalGenerating = false }
 
                 do {
-                    let contextMessages = Array(messages.dropLast(2).suffix(4))
+                    // Ignore old generic fallback bubbles so Qwen cannot echo them as conversation context.
+                    let contextMessages = Array(
+                        messages.dropLast(2)
+                            .filter { !Self.isGenericFallback($0.text) }
+                            .suffix(4)
+                    )
                     let qwenStartedAt = Date()
                     let stream = try await localModel.stream(
                         userMessage: text,
                         previousMessages: contextMessages,
                         brainContext: result.brainContext,
-                        serverReply: result.reply
+                        serverReply: Self.isGenericFallback(result.reply) ? "" : result.reply
                     )
                     var generated = ""
                     var firstTokenMS: Int?
@@ -399,16 +411,23 @@ struct ContentView: View {
                     }
                     let cleaned = Self.visibleAnswer(from: generated)
                     if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
-                        messages[index].text = cleaned.isEmpty ? result.reply : cleaned
+                        let generatedIsUseful = !cleaned.isEmpty && !Self.isGenericFallback(cleaned)
+                        messages[index].text = generatedIsUseful
+                            ? cleaned
+                            : (Self.isGenericFallback(result.reply)
+                                ? "Não consegui gerar uma resposta natural. Tente novamente ou confira o modelo Qwen."
+                                : result.reply)
                         let totalQwenMS = Int(Date().timeIntervalSince(qwenStartedAt) * 1000)
                         let firstToken = firstTokenMS.map { "\($0) ms até o primeiro token" } ?? "sem tokens"
                         messages[index].diagnostics = (messages[index].diagnostics ?? "") + " · Qwen: \(totalQwenMS) ms (\(firstToken))"
                     }
                 } catch {
                     if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
-                        messages[index].text = result.reply
+                        messages[index].text = Self.isGenericFallback(result.reply)
+                            ? "Não consegui gerar uma resposta natural agora. Confira se o Qwen está instalado e tente novamente."
+                            : result.reply
                     }
-                    errorMessage = "A resposta do FlyBrain foi mantida; o refinamento local não concluiu: \(error.localizedDescription)"
+                    errorMessage = "O refinamento do Qwen não concluiu: \(error.localizedDescription)"
                 }
             } catch {
                 serverOnline = false
