@@ -17,3 +17,5 @@ O IPA é sem assinatura. Para instalar no iPhone, assine com um certificado/perf
 ## Próximo passo do porte real
 
 Adicionar o código-fonte original e suas dependências, ou especificar/reimplementar as funções necessárias em Swift. O EXE isolado não contém os fontes necessários para essa etapa.
+
+Build workflow: `.github/workflows/build-openhop-ipa.yml`.
