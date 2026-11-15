@@ -5,6 +5,8 @@ from backend.agent_core import (
     improvement_proposal,
     review_response,
     system_instructions,
+    rank_memories,
+    plan_task,
 )
 
 
@@ -17,7 +19,7 @@ class AgentCoreTests(unittest.TestCase):
     def test_system_instructions_include_relevant_memory(self):
         prompt = system_instructions(["Prefere respostas em português"])
         self.assertIn("Prefere respostas em português", prompt)
-        self.assertIn("Não modifique o próprio código de produção", prompt)
+        self.assertIn("Nunca modifique o próprio código de produção", prompt)
 
     def test_review_is_explicitly_heuristic(self):
         result = review_response("resolver bug", "A solução é esta.")
@@ -33,6 +35,18 @@ class AgentCoreTests(unittest.TestCase):
     def test_empty_improvement_problem_is_rejected(self):
         with self.assertRaises(ValueError):
             improvement_proposal(" ")
+
+    def test_memory_ranking_prefers_relevant_content(self):
+        memories = [
+            {"content": "Projeto ULTRON usa Gemini"},
+            {"content": "Receita de bolo de cenoura"},
+        ]
+        self.assertEqual(rank_memories("configurar Gemini no ULTRON", memories)[0], "Projeto ULTRON usa Gemini")
+
+    def test_planner_marks_destructive_actions_for_approval(self):
+        plan = plan_task("Apagar todos os dados antigos")
+        self.assertEqual(plan["risk"], "high")
+        self.assertTrue(plan["human_approval_required"])
 
 
 if __name__ == "__main__":
