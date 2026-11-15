@@ -190,7 +190,7 @@ class FlyWireRuntime:
             for _ in range(steps):
                 state = model(*((rates,) + tuple(state)), generator=generator)
                 spikes = state[2]
-                total_spikes += spikes.sum()
+                total_spikes += spikes.sum(dtype=self.torch.int64)
                 active_mask.logical_or_(spikes[0].to(dtype=self.torch.bool))
         total_spikes_count = int(total_spikes.item())
         active_neuron_count = int(active_mask.sum().item())
