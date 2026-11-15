@@ -5,6 +5,7 @@ import hmac
 import json
 import operator
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -459,8 +460,7 @@ def root() -> dict[str, str]:
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    with connect_db() as db:
-        execute(db, "SELECT 1")
+    # Liveness must not fail because a dependency is temporarily unavailable.
     return {
         "name": APP_NAME,
         "status": "online",
@@ -470,9 +470,29 @@ def health() -> dict[str, Any]:
         "neural_core_configured": True,
         "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
+        "health_check": "process_liveness_only",
     }
 
 
+def _extract_research_query(message: str) -> str | None:
+    """Recognize ordinary Portuguese research requests without slash commands."""
+    text = message.strip()
+    patterns = (
+        r"^(?:por favor[, ]*)?(?:pesquise|pesquisar|pesquisa|procure|buscar|busque|busca)(?: na internet| na web| online)?(?: sobre| por| para)?\s+(.+)$",
+        r"^(?:me diga|me conte|quero saber)\s+(?:mais\s+)?sobre\s+(.+)$",
+    )
+    for pattern in patterns:
+        match = re.match(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip(" \t?.!")
+    if re.match(r"^(quem é|o que é|como funciona|qual é|quais são|quando foi|onde fica)\b", text, re.I) and len(text) >= 14:
+        return text
+    if re.search(r"\b(hoje|atualmente|últimas notícias|mais recente|preço atual|cotação)\b", text, re.I):
+        return text
+    return None
+
+
+@app.post("/", include_in_schema=False)
 @app.post("/chat")
 def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     enforce_public_limit(request, "chat", limit=20)
@@ -482,16 +502,22 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
         neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, []))
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    if message.casefold().startswith("/research "):
+    research_query = message[10:].strip() if message.casefold().startswith("/research ") else _extract_research_query(message)
+    calculation = re.match(r"^(?:quanto é|quanto dá|calcule|calcular|resultado de)\s+(.+?)\s*[?.!]*$", message, re.I)
+    if research_query:
         try:
-            research = search_web(message[10:].strip())
+            research = search_web(research_query)
             response = research["summary"]
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except Exception as exc:
-            raise HTTPException(status_code=503, detail="Pesquisa web indisponível no momento; tente novamente.") from exc
-    elif message.casefold().startswith("/remember "):
-        response = "A memória pessoal ficará disponível quando a identificação segura por instalação estiver concluída. Nenhum dado foi gravado."
+        except Exception:
+            response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; o núcleo FlyBrain continua ativo."
+    elif calculation:
+        expression = calculation.group(1).replace(",", ".")
+        try:
+            response = f"O resultado é {calculate(expression)}."
+        except ValueError:
+            response = "Não consegui interpretar essa conta com segurança. Envie apenas a expressão matemática."
+    elif message.casefold().startswith("/remember ") or re.match(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", message, re.I):
+        response = "Ainda não vou gravar isso em uma memória compartilhada. A memória pessoal precisa de identificação segura por instalação; assim seus dados não ficam misturados com os de outros usuários."
     else:
         response = answer_without_provider(message, [], [], neural_state)
     role_scores = neural_state.get("role_scores", {})
