@@ -57,7 +57,10 @@ final class LocalModelManager: ObservableObject {
                 try FileManager.default.removeItem(at: modelFileURL)
             }
             try FileManager.default.moveItem(at: temporaryURL, to: modelFileURL)
-            try? modelFileURL.setResourceValue(true, forKey: .isExcludedFromBackupKey)
+            var backupValues = URLResourceValues()
+            backupValues.isExcludedFromBackup = true
+            var storedModelURL = modelFileURL
+            try? storedModelURL.setResourceValues(backupValues)
             refreshAvailability()
             guard isModelAvailable else { throw LocalModelError.invalidSize }
         } catch {
