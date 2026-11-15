@@ -94,7 +94,7 @@ struct ChatClient {
         request.httpMethod = "POST"
         request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \\(apiToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(apiToken)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(
             FeedbackRequest(rating: rating, strategy: strategy, comment: "")
         )
