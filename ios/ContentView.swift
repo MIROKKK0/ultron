@@ -410,16 +410,18 @@ struct ContentView: View {
                     }
                     let cleaned = Self.visibleAnswer(from: generated)
                     if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
-                        messages[index].text = cleaned.isEmpty ? result.reply : cleaned
+                        messages[index].text = cleaned.isEmpty
+                            ? "Não consegui gerar uma resposta desta vez. Tente novamente; não vou repetir a resposta genérica do servidor."
+                            : cleaned
                         let totalQwenMS = Int(Date().timeIntervalSince(qwenStartedAt) * 1000)
                         let firstToken = firstTokenMS.map { "\($0) ms até o primeiro token" } ?? "sem tokens"
                         messages[index].diagnostics = (messages[index].diagnostics ?? "") + " · Qwen: \(totalQwenMS) ms (\(firstToken))"
                     }
                 } catch {
                     if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
-                        messages[index].text = result.reply
+                        messages[index].text = "A camada de linguagem não conseguiu concluir esta resposta. O FlyBrain continua preservado; tente novamente ou verifique o modelo local."
                     }
-                    errorMessage = "A resposta do FlyBrain foi mantida; o refinamento local não concluiu: \(error.localizedDescription)"
+                    errorMessage = "Falha na geração local: \(error.localizedDescription)"
                 }
             } catch {
                 serverOnline = false
