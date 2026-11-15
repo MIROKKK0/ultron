@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_cognitive_cycle, run_multitask
+from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
 
 APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -362,7 +363,16 @@ def execute_brain_cycle(goal: str, history: list[str] | None = None) -> dict[str
 def brain_status() -> dict[str, Any]:
     return {
         "name": APP_NAME,
-        "brain_version": "1.0.0",
+        "brain_version": "2.0.0",
+        "neural_core": {
+            "name": "drosophila_lif_microcircuit",
+            "mandatory": True,
+            "version": FLY_BRAIN_VERSION,
+            "source": FLY_BRAIN_SOURCE,
+            "runtime": "local_cpu_lif",
+            "neurons": FLY_BRAIN.neurons_per_group * 4,
+            "full_connectome_loaded": False,
+        },
         "parallel_specialists": ["planner", "solver", "critic"] + (
             ["researcher"] if os.getenv("ULTRON_ENABLE_WEB_SEARCH", "false").lower() == "true"
             and os.getenv("GOOGLE_API_KEY") else []
