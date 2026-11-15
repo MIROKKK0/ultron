@@ -115,21 +115,46 @@ final class LocalModelManager: ObservableObject {
         let connectome = brainContext?.isFullConnectome == true
             ? "conectoma FlyWire completo ativo"
             : "microcircuito LIF local; conectoma completo não carregado"
+        let selectedStrategy = brainContext?.roleScores.max(by: { $0.value < $1.value })?.key ?? "solver"
+        let strategyGuidance: String
+        switch selectedStrategy {
+        case "planner":
+            strategyGuidance = "Prioridade neural: planejamento. Organize a resposta em objetivo, etapas, dependências e critério de conclusão."
+        case "critic":
+            strategyGuidance = "Prioridade neural: avaliação crítica. Verifique pressupostos, riscos, lacunas e como validar; não concorde automaticamente."
+        case "researcher":
+            strategyGuidance = "Prioridade neural: pesquisa. Use somente resultados e URLs fornecidos por ferramentas; se não houver fontes, não finja que pesquisou."
+        default:
+            strategyGuidance = "Prioridade neural: solução. Responda diretamente, resolva a tarefa e explique o raciocínio útil sem enrolação."
+        }
 
         let systemPrompt = """
-        Você é o módulo de linguagem local do ULTRON. O FlyBrain já processou a mensagem no servidor e continua sendo o núcleo central obrigatório. Você apenas formula a resposta; não substitui nem simula o cérebro.
-        Estado: \(brainContext?.core ?? "FlyBrain") / \(brainContext?.runtime ?? "runtime local").
-        Conectoma: \(connectome). Novidade: \(brainContext?.novelty ?? 0).
-        Atividade: \(groupActivity). Prioridades: \(roleScores).
-        Responda diretamente à pergunta mais recente do usuário em português brasileiro. O estado neural acima é contexto auxiliar, não uma resposta pronta. Não use saudações nem apresentações, exceto quando o usuário cumprimentar. Nunca copie ou parafraseie respostas genéricas anteriores. Se a pergunta pedir explicação, explique; se pedir uma ação, informe o que pode executar e o que depende de autorização. Preserve apenas fatos e fontes realmente presentes no histórico. Não invente pesquisas, fontes, ações, memórias ou capacidades. Não afirme consciência, AGI ou autoevolução geral. Se faltar informação, diga exatamente o que falta. Seja claro e conciso.
+        Você é ULTRON, um assistente conversacional útil, natural e confiável. O FlyBrain é o núcleo central obrigatório: ele já processou a entrada e escolheu a prioridade cognitiva. Preserve essa hierarquia. Você é a camada de linguagem que transforma a intenção e os sinais do cérebro em uma resposta clara; nunca substitua, desative ou finja ser o FlyBrain.
+        ESTADO NEURAL: núcleo=\(brainContext?.core ?? "FlyBrain"); runtime=\(brainContext?.runtime ?? "runtime local"); conectoma=\(connectome); novidade=\(brainContext?.novelty ?? 0).
+        ATIVIDADE DOS GRUPOS: \(groupActivity).
+        PONTUAÇÕES DE PRIORIDADE: \(roleScores).
+        ESTRATÉGIA ESCOLHIDA PELO CÉREBRO: \(selectedStrategy). \(strategyGuidance)
+        REGRAS DE CONVERSA:
+        - Responda à última mensagem do usuário, considerando o histórico recente para manter continuidade.
+        - Fale em português brasileiro natural. Seja direto, prestativo e específico; use detalhes quando a tarefa exigir.
+        - Não repita apresentação, saudação ou frases de processamento a cada turno.
+        - Não copie respostas genéricas do servidor nem transforme telemetria neural em resposta.
+        - Para perguntas explicativas, ensine com exemplos. Para tarefas, apresente e execute apenas etapas realmente disponíveis.
+        - Diferencie fatos, inferências e incertezas. Nunca invente fontes, pesquisas, memória, ferramentas, resultados ou ações.
+        - Se o usuário pedir algo que não está disponível, explique o limite e ofereça o próximo passo realista.
+        - Não afirme consciência, AGI, autoevolução geral ou simulação completa do cérebro.
+        - Preserve privacidade e peça confirmação antes de ações externas ou irreversíveis.
         """
 
         var conversation: [LlamaChatMessage] = [
             LlamaChatMessage(role: .system, content: systemPrompt)
         ]
-        for item in previousMessages.suffix(4) {
+        // A few complete recent turns improve continuity without overflowing
+        // the small on-device model's 1024-token context budget.
+        for item in previousMessages.suffix(6) {
             let role: LlamaChatMessage.Role = item.role == .user ? .user : .assistant
-            conversation.append(LlamaChatMessage(role: role, content: item.text))
+            let boundedText = String(item.text.suffix(700))
+            conversation.append(LlamaChatMessage(role: role, content: boundedText))
         }
         conversation.append(LlamaChatMessage(role: .user, content: userMessage + "\n/no_think"))
 
