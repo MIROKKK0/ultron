@@ -107,6 +107,8 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.json()["reply"], "resposta")
         self.assertEqual(response.json()["brain_context"]["core"], "drosophila_lif_microcircuit")
         self.assertEqual(response.json()["brain_context"]["is_full_connectome"], False)
+        self.assertEqual(response.json()["brain_context"]["neurons"], 48)
+        self.assertEqual(response.json()["brain_context"]["simulation_steps"], 40)
         self.assertEqual(response.json()["brain_context"]["role_scores"], {"planner": 0.0, "solver": 0.0, "critic": 0.0})
 
     def test_chat_fails_closed_when_full_brain_is_enabled_but_unavailable(self):
@@ -148,10 +150,29 @@ class UltronTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 401)
 
-    def test_brain_status(self):
-        response = client.get("/brain/status", headers=AUTH)
+    def test_brain_status_reports_real_readiness_without_host_paths(self):
+        with patch("backend.app.flywire_status", return_value={
+            "available": False,
+            "connectome": "FlyWire FAFB v783",
+            "expected_neurons": 138639,
+            "upstream_code_present": False,
+            "missing_files": ["data/2025_Completeness_783.csv"],
+            "missing_code_files": ["code/run_pytorch.py"],
+            "missing_dependencies": ["torch"],
+            "backend": "PyTorch CPU",
+            "root": "/private/host/path",
+        }):
+            with patch("backend.app.flywire_runtime_loaded", return_value=False):
+                response = client.get("/brain/status", headers=AUTH)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["parallel_task_limit"], 5)
+        payload = response.json()
+        self.assertEqual(payload["parallel_task_limit"], 5)
+        self.assertEqual(payload["neural_core"]["microcircuit_neurons"], 48)
+        self.assertEqual(payload["neural_core"]["full_connectome"]["expected_neurons"], 138639)
+        self.assertEqual(payload["neural_core"]["full_connectome"]["missing_dependencies"], ["torch"])
+        self.assertNotIn("/private/host/path", response.text)
+        self.assertFalse(payload["neural_core"]["full_connectome_loaded"])
+        self.assertFalse(payload["learning"]["modifies_flywire_synapses"])
 
     def test_brain_run_uses_parallel_specialists(self):
         with patch.dict(os.environ, {"GOOGLE_API_KEY": "", "OPENAI_API_KEY": ""}):
