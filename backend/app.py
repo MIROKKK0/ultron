@@ -228,7 +228,7 @@ def answer_with_provider(message: str, memories: list[str] | None = None) -> str
         return "Anotado na memória do ULTRON."
     if lower.startswith("/plan "):
         plan = plan_task(normalized[6:].strip())
-        steps = "\\n".join(f"{item['step']}. {item['action']}" for item in plan["steps"])
+        steps = "\n".join(f"{item['step']}. {item['action']}" for item in plan["steps"])
         return f"Plano: {plan['goal']}\\nRisco: {plan['risk']}\\nAprovação humana: {'sim' if plan['human_approval_required'] else 'não'}\\n{steps}"
     if lower == "/self":
         return str(SELF_MODEL.public_dict())
@@ -245,7 +245,7 @@ def answer_with_provider(message: str, memories: list[str] | None = None) -> str
         if len(tasks) > 5:
             return "O limite é de cinco tarefas paralelas por vez."
         result = run_multitask(tasks, execute_task_with_memory)
-        return "\\n".join(
+        return "\n".join(
             f"{index}. [{item['status']}] {item['task']}: {item.get('result', item.get('error', ''))}"
             for index, item in enumerate(result["results"], start=1)
         )
