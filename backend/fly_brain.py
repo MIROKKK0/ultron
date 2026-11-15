@@ -150,13 +150,13 @@ class FlyBrainCore:
                 role_scores["critic"] += activity * 0.10
             self._last_tokens = tokens
             return {
-                "core": "drosophila_lif_microcircuit",
+                "core": "flywire_v783_with_local_control_circuit" if full_connectome and full_connectome.get("full_connectome_loaded") else "drosophila_lif_microcircuit",
                 "version": FLY_BRAIN_VERSION,
                 "source": FLY_BRAIN_SOURCE,
-                "runtime": "local_cpu_lif",
+                "runtime": "upstream_pytorch_cpu" if full_connectome and full_connectome.get("full_connectome_loaded") else "local_cpu_lif",
                 "is_full_connectome": bool(full_connectome and full_connectome.get("full_connectome_loaded")),
                 "full_connectome": full_connectome,
-                "neurons": self.neurons_per_group * len(GROUPS),
+                "neurons": full_connectome["neurons"] if full_connectome and full_connectome.get("full_connectome_loaded") else self.neurons_per_group * len(GROUPS),
                 "simulation_steps": self.steps,
                 "novelty": round(novelty, 4),
                 "memory_match": round(memory_match, 4),
