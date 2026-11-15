@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.agent_core import SELF_MODEL, improvement_proposal, review_response, system_instructions
+from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 
 APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -81,6 +81,10 @@ def init_db() -> None:
                     created_at TEXT NOT NULL
                 )
             """)
+            execute(db, """CREATE TABLE IF NOT EXISTS feedback (
+                id BIGSERIAL PRIMARY KEY, conversation_id BIGINT, rating INTEGER NOT NULL,
+                comment TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+            )""")
         else:
             execute(db, """
                 CREATE TABLE IF NOT EXISTS memories (
@@ -97,6 +101,10 @@ def init_db() -> None:
                     created_at TEXT NOT NULL
                 )
             """)
+            execute(db, """CREATE TABLE IF NOT EXISTS feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER, rating INTEGER NOT NULL,
+                comment TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+            )""")
 
 
 init_db()
@@ -117,6 +125,16 @@ class ReviewRequest(BaseModel):
 
 class ImprovementRequest(BaseModel):
     problem: str = Field(min_length=1, max_length=2000)
+
+
+class PlanRequest(BaseModel):
+    goal: str = Field(min_length=1, max_length=2000)
+
+
+class FeedbackRequest(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: str = Field(default="", max_length=2000)
+    conversation_id: int | None = None
 
 
 def _safe_math(node: ast.AST) -> float:
@@ -231,8 +249,8 @@ def chat(request: ChatRequest) -> dict[str, str]:
     message = request.message.strip()
     save_conversation("user", message)
     with connect_db() as db:
-        memory_rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 12").fetchall()
-    memory_items = [row["content"] for row in memory_rows]
+        memory_rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
+    memory_items = rank_memories(message, memory_rows, limit=8)
     response = answer_with_provider(message, memory_items)
     save_conversation("assistant", response)
     return {"reply": response}
@@ -296,3 +314,33 @@ def reflect(request: ReviewRequest) -> dict[str, Any]:
 @app.post("/improvement-proposals", dependencies=[Depends(require_api_token)])
 def propose_improvement(request: ImprovementRequest) -> dict[str, Any]:
     return improvement_proposal(request.problem)
+
+
+@app.post("/agent/plan", dependencies=[Depends(require_api_token)])
+def agent_plan(request: PlanRequest) -> dict[str, Any]:
+    return plan_task(request.goal)
+
+
+@app.get("/benchmarks", dependencies=[Depends(require_api_token)])
+def benchmarks() -> dict[str, Any]:
+    return {"suite": "ultron-smoke-v1", "cases": benchmark_cases(),
+            "warning": "Casos internos; não comparam inteligência entre modelos."}
+
+
+@app.post("/feedback", dependencies=[Depends(require_api_token)])
+def add_feedback(request: FeedbackRequest) -> dict[str, Any]:
+    with connect_db() as db:
+        cursor = execute(
+            db,
+            "INSERT INTO feedback(conversation_id, rating, comment, created_at) VALUES (?, ?, ?, ?)",
+            (request.conversation_id, request.rating, request.comment.strip(), datetime.now(timezone.utc).isoformat()),
+        )
+        feedback_id = cursor.fetchone()["id"] if is_postgres(db) else cursor.lastrowid
+    return {"id": feedback_id, "stored": True, "used_for_model_training": False}
+
+
+@app.get("/feedback/summary", dependencies=[Depends(require_api_token)])
+def feedback_summary() -> dict[str, Any]:
+    with connect_db() as db:
+        row = execute(db, "SELECT COUNT(*) AS total, AVG(rating) AS average_rating FROM feedback").fetchone()
+    return {"total": row["total"], "average_rating": float(row["average_rating"]) if row["average_rating"] is not None else None}
