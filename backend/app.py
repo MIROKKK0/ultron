@@ -609,6 +609,22 @@ def health() -> dict[str, Any]:
     }
 
 
+@app.get("/ai/status")
+def ai_status(request: Request) -> dict[str, Any]:
+    """Expose provider readiness without revealing keys, prompts or account data."""
+    enforce_public_limit(request, "ai-status", limit=60)
+    providers = configured_providers()
+    return {
+        "configured": bool(providers),
+        "providers": providers,
+        "primary": providers[0] if providers else None,
+        "fallback": "local_decoder",
+        "secrets_exposed": False,
+        "free_tier_defaults": True,
+        "note": "Free-tier quotas still apply; no provider is unlimited.",
+    }
+
+
 def _extract_research_query(message: str) -> str | None:
     """Recognize ordinary Portuguese research requests without slash commands."""
     text = message.strip()
@@ -776,7 +792,8 @@ def delete_memory(memory_id: int) -> dict[str, bool]:
 def self_knowledge() -> dict[str, Any]:
     health = {
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
-        "ai_configured": False,
+        "ai_configured": bool(configured_providers()),
+        "configured_language_providers": configured_providers(),
         "neural_core_configured": True,
         "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
