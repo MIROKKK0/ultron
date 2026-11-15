@@ -584,8 +584,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
             response = research["summary"]
         except Exception:
             response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; o núcleo FlyBrain continua ativo."
-    elif message.casefold().startswith("/brain "):
-        goal = message[7:].strip()
+    elif message.casefold() == "/brain" or message.casefold().startswith("/brain "):
+        goal = message[6:].strip()
         if not goal:
             response = "Informe o objetivo depois de /brain."
         else:
