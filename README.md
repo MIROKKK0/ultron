@@ -10,7 +10,7 @@ Assistente pessoal em português, com app nativo para iPhone, API HTTPS, autenti
 - Autenticação Bearer por `ULTRON_API_TOKEN`.
 - Google Gemini (`GOOGLE_API_KEY`) ou OpenAI (`OPENAI_API_KEY`).
 - Testes Python e GitHub Actions para CI, simulador e IPA.
-- Núcleo próprio de agente com planejamento, recuperação lexical de memórias, autoavaliação e propostas de melhoria supervisionadas.
+- Núcleo cognitivo próprio (`backend/brain.py`) com três especialistas paralelos (planejador, solucionador e crítico), síntese final, execução de até cinco tarefas independentes em paralelo, recuperação de memórias e melhoria supervisionada.
 - Feedback persistido para medir satisfação ao longo do tempo (não treina pesos do modelo).
 
 ## Backend local
@@ -33,10 +33,13 @@ Com Bearer token, o backend oferece:
 - `POST /reflect`: checklist heurístico de uma resposta.
 - `POST /improvement-proposals`: proposta testável, sem aplicar alterações automaticamente.
 - `GET /benchmarks`: casos internos de fumaça.
+- `GET /brain/status`: estado e limites do cérebro.
+- `POST /brain/run` com `{"goal":"..."}`: ciclo cognitivo com planejador, solucionador, crítico e síntese.
+- `POST /brain/multitask` com `{"tasks":["...","..."]}`: até cinco tarefas independentes em paralelo.
 - `POST /feedback` com avaliação de 1 a 5 e comentário opcional.
 - `GET /feedback/summary`: média de avaliações armazenadas.
 
-A memória do chat prioriza itens com maior correspondência lexical. No próprio chat do iPhone, use `/self`, `/plan seu objetivo`, `/remember sua nota` e `/calc 12*(3+4)`. Feedback fica registrado para avaliação do produto, mas não atualiza automaticamente os pesos do Gemini/OpenAI.
+A memória do chat prioriza itens com maior correspondência lexical. No próprio chat do iPhone, use `/self`, `/plan seu objetivo`, `/brain seu objetivo complexo`, `/multi tarefa 1 || tarefa 2`, `/remember sua nota` e `/calc 12*(3+4)`. O endpoint `/brain/run` coordena três perspectivas em paralelo e uma síntese; `/brain/multitask` aceita até cinco tarefas. Feedback fica registrado para avaliação do produto, mas não atualiza automaticamente os pesos do Gemini/OpenAI.
 
 Para PostgreSQL, defina `DATABASE_URL`. Para ativar respostas inteligentes, defina `GOOGLE_API_KEY` (Gemini) ou `OPENAI_API_KEY`. O Gemini é a opção prevista para começar com o nível gratuito disponível na conta Google AI Studio; limites e disponibilidade dependem da conta e do modelo.
 
