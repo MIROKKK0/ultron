@@ -178,6 +178,9 @@ class UltronTests(unittest.TestCase):
         self.assertFalse(payload["neural_core"]["full_connectome_ready"])
         self.assertFalse(payload["neural_core"]["full_connectome"]["memory_budget"]["ready"])
         self.assertFalse(payload["learning"]["modifies_flywire_synapses"])
+        self.assertFalse(payload["memory_enabled"])
+        self.assertTrue(payload["memory_api_requires_bearer_auth"])
+        self.assertFalse(payload["public_chat_memory_enabled"])
 
     def test_brain_run_uses_parallel_specialists(self):
         with patch.dict(os.environ, {"GOOGLE_API_KEY": "", "OPENAI_API_KEY": ""}):
