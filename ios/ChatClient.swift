@@ -5,14 +5,16 @@ struct ChatMessage: Identifiable, Codable {
     let role: Role
     var text: String
     let strategy: String?
+    var diagnostics: String?
 
     enum Role: String, Codable { case user, assistant }
 
-    init(role: Role, text: String, strategy: String? = nil) {
+    init(role: Role, text: String, strategy: String? = nil, diagnostics: String? = nil) {
         self.id = UUID()
         self.role = role
         self.text = text
         self.strategy = strategy
+        self.diagnostics = diagnostics
     }
 }
 
@@ -21,10 +23,12 @@ private struct ChatResponse: Decodable {
     let reply: String
     let strategy: String?
     let brainContext: BrainContext?
+    let timingsMS: [String: Double]?
 
     enum CodingKeys: String, CodingKey {
         case reply, strategy
         case brainContext = "brain_context"
+        case timingsMS = "timings_ms"
     }
 }
 private struct FeedbackRequest: Encodable {
@@ -53,6 +57,8 @@ struct ChatResult {
     let reply: String
     let strategy: String?
     let brainContext: BrainContext?
+    let timingsMS: [String: Double]
+    let networkRoundTripMS: Double
 }
 
 enum ChatClientError: LocalizedError {
@@ -130,7 +136,9 @@ struct ChatClient {
         var lastError: Error?
         for attempt in 0..<3 {
             do {
+                let requestStartedAt = Date()
                 let (data, response) = try await URLSession.shared.data(for: request)
+                let networkRoundTripMS = Date().timeIntervalSince(requestStartedAt) * 1000
                 guard let http = response as? HTTPURLResponse else {
                     throw ChatClientError.invalidResponse
                 }
@@ -140,7 +148,13 @@ struct ChatClient {
                     throw ChatClientError.serverError(http.statusCode, message)
                 }
                 let result = try JSONDecoder().decode(ChatResponse.self, from: data)
-                return ChatResult(reply: result.reply, strategy: result.strategy, brainContext: result.brainContext)
+                return ChatResult(
+                    reply: result.reply,
+                    strategy: result.strategy,
+                    brainContext: result.brainContext,
+                    timingsMS: result.timingsMS ?? [:],
+                    networkRoundTripMS: networkRoundTripMS
+                )
             } catch {
                 lastError = error
                 guard Self.isTransient(error), attempt < 2 else { throw Self.presentable(error) }
