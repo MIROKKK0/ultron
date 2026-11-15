@@ -75,3 +75,29 @@ está carregado na memória.
 - https://github.com/eonsystemspbc/fly-brain/blob/main/code/run_pytorch.py
 - Shiu et al., modelo LIF baseado no conectoma adulto de Drosophila.
 - Dorkenwald et al. (2024), FlyWire whole-brain connectome, Nature.
+
+
+## Investigação da lacuna de 616 neurônios — 2026-11-15
+
+A pesquisa encontrou uma implementação pública independente, dawsonamf/siliconfly, que declara avançar os 139.255 neurônios e 15.091.983 arestas do FAFB v783 em um simulador LIF Metal. Ela usa um pacote binário próprio (neurons.bin e synapses.bin) e pesos assinados derivados de tabelas Codex/Princeton e regras de modelagem documentadas. O autor informa teste em macOS com Apple Silicon M4 Pro; isso não demonstra compatibilidade nem desempenho no iPhone 11 Pro.
+
+Também foi encontrada a implementação kornel77777/fly-brain-sim, que mantém separadas as tabelas shiu_connections e connections do Codex. Ela alerta que os pesos/tabelas de sinapses são de fontes diferentes e não podem ser misturados. A análise independente descreve os 616 excluídos do modelo Shiu como predominantemente aferentes sensoriais, mas a razão exata da exclusão ainda não foi confirmada.
+
+Fontes consultadas:
+- https://github.com/dawsonamf/siliconfly
+- https://github.com/kornel77777/fly-brain-sim
+- https://github.com/eonsystemspbc/fly-brain
+
+### Decisão técnica segura
+
+Não copiar os 616 IDs para dentro da matriz Shiu nem completar pesos por zero, média, aleatoriedade ou interpolação. Isso produziria uma rede numericamente maior, mas não o conectoma validado. O caminho correto é um segundo backend experimental, isolado do runner Shiu, que consuma o pacote completo v783 e preserve a proveniência/licença CC BY-NC 4.0 dos dados FlyWire. Antes de ativá-lo no ULTRON, exigir:
+
+1. Manifesto e SHA-256 verificados para cada binário e versão do dataset.
+2. Correspondência exata de 139.255 IDs únicos, incluindo os 616 ausentes no modelo Shiu, sem IDs duplicados ou truncados.
+3. Auditoria das 15.091.983 arestas, índices CSR, pesos com sinal e contagens contra os arquivos-fonte publicados.
+4. Testes CPU de referência reproduzíveis e comparação bit a bit/por tolerância com o kernel Metal.
+5. Testes de estímulos e circuitos anotados; documentar explicitamente as escolhas de LIF, ruído, delays, normalização e sinapses sem neurotransmissor.
+6. Benchmark real no iPhone 11 Pro (RAM, temperatura, bateria e tempo por passo).
+7. Manter o modelo Shiu atual como trilha científica separada; não fundir pesos incompatíveis nem chamar as duas parametrizações de uma só simulação.
+
+Até esses gates passarem, o status correto continua sendo 138.639/139.255 neurônios no modelo Shiu (99,56%) e 616 fora dele. A implementação Metal citada é uma rota de pesquisa promissora, não uma integração já validada no ULTRON.
