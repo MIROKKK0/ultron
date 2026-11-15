@@ -461,7 +461,7 @@ private struct SettingsView: View {
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    Text("O ULTRON verifica a conexão antes de cada mensagem e tenta recuperar falhas temporárias.")
+                    Text("O ULTRON verifica a conexão ao abrir e envia mensagens diretamente para reduzir a espera.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
