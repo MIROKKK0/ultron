@@ -12,9 +12,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 APP_NAME = "ULTRON"
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 DB_PATH = Path(os.getenv("ULTRON_DB_PATH", "ultron.db"))
 
-app = FastAPI(title=APP_NAME, version="0.2.0", description="Assistente pessoal com memória local e ações seguras.")
+app = FastAPI(title=APP_NAME, version="0.3.0", description="Assistente pessoal com memória persistente e ações seguras.")
 
 _ALLOWED_OPERATORS = {
     ast.Add: operator.add,
@@ -28,30 +29,61 @@ _ALLOWED_OPERATORS = {
 }
 
 
-def connect_db() -> sqlite3.Connection:
+def connect_db():
+    if DATABASE_URL.startswith(("postgres://", "postgresql://")):
+        import psycopg
+        from psycopg.rows import dict_row
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     return db
 
 
+def is_postgres(db: Any) -> bool:
+    return db.__class__.__module__.startswith("psycopg")
+
+
+def execute(db: Any, query: str, params: tuple = ()):
+    if is_postgres(db):
+        query = query.replace("?", "%s")
+    return db.execute(query, params)
+
+
 def init_db() -> None:
     with connect_db() as db:
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS memories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                content TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-        """)
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-        """)
+        if is_postgres(db):
+            execute(db, """
+                CREATE TABLE IF NOT EXISTS memories (
+                    id BIGSERIAL PRIMARY KEY,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            execute(db, """
+                CREATE TABLE IF NOT EXISTS conversations (
+                    id BIGSERIAL PRIMARY KEY,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+        else:
+            execute(db, """
+                CREATE TABLE IF NOT EXISTS memories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            execute(db, """
+                CREATE TABLE IF NOT EXISTS conversations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
 
 
 init_db()
@@ -90,7 +122,8 @@ def calculate(expression: str) -> str:
 
 def save_conversation(role: str, content: str) -> None:
     with connect_db() as db:
-        db.execute(
+        execute(
+            db,
             "INSERT INTO conversations(role, content, created_at) VALUES (?, ?, ?)",
             (role, content, datetime.now(timezone.utc).isoformat()),
         )
@@ -107,11 +140,12 @@ def answer_without_provider(message: str) -> str:
         if not content:
             return "Escreva o que devo guardar depois de /remember."
         with connect_db() as db:
-            db.execute(
+            execute(
+                db,
                 "INSERT INTO memories(content, created_at) VALUES (?, ?)",
                 (content, datetime.now(timezone.utc).isoformat()),
             )
-        return "Anotado na memória local do ULTRON."
+        return "Anotado na memória do ULTRON."
     if lower in {"/help", "ajuda", "o que você faz?"}:
         return (
             "Sou o ULTRON. Posso conversar, guardar notas com /remember texto, "
@@ -119,9 +153,8 @@ def answer_without_provider(message: str) -> str:
             "Ações externas exigem integração explícita e confirmação."
         )
     return (
-        "ULTRON está online. Para respostas inteligentes, configure OPENAI_API_KEY "
-        "nos Secrets do ambiente. Também posso guardar notas com /remember e "
-        "calcular com /calc."
+        "Estou online, mas a IA ainda não foi configurada. "
+        "O administrador precisa definir OPENAI_API_KEY no servidor."
     )
 
 
@@ -147,13 +180,20 @@ def answer_with_provider(message: str) -> str:
         )
         return response.output_text
     except Exception as exc:
-        # Do not expose credentials or raw provider errors to clients.
         raise HTTPException(status_code=502, detail="O provedor de IA não respondeu.") from exc
 
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    return {"name": APP_NAME, "status": "online", "version": app.version}
+    with connect_db() as db:
+        execute(db, "SELECT 1")
+    return {
+        "name": APP_NAME,
+        "status": "online",
+        "version": app.version,
+        "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
+        "ai_configured": bool(os.getenv("OPENAI_API_KEY")),
+    }
 
 
 @app.post("/chat")
@@ -169,18 +209,29 @@ def chat(request: ChatRequest) -> dict[str, str]:
 def add_memory(request: MemoryRequest) -> dict[str, Any]:
     content = request.content.strip()
     with connect_db() as db:
-        cursor = db.execute(
-            "INSERT INTO memories(content, created_at) VALUES (?, ?)",
-            (content, datetime.now(timezone.utc).isoformat()),
-        )
-    return {"id": cursor.lastrowid, "content": content}
+        if is_postgres(db):
+            cursor = execute(
+                db,
+                "INSERT INTO memories(content, created_at) VALUES (?, ?) RETURNING id",
+                (content, datetime.now(timezone.utc).isoformat()),
+            )
+            memory_id = cursor.fetchone()["id"]
+        else:
+            cursor = execute(
+                db,
+                "INSERT INTO memories(content, created_at) VALUES (?, ?)",
+                (content, datetime.now(timezone.utc).isoformat()),
+            )
+            memory_id = cursor.lastrowid
+    return {"id": memory_id, "content": content}
 
 
 @app.get("/memory")
 def list_memory() -> dict[str, Any]:
     with connect_db() as db:
-        rows = db.execute(
-            "SELECT id, content, created_at FROM memories ORDER BY id DESC LIMIT 100"
+        rows = execute(
+            db,
+            "SELECT id, content, created_at FROM memories ORDER BY id DESC LIMIT 100",
         ).fetchall()
     return {"items": [dict(row) for row in rows]}
 
@@ -188,7 +239,7 @@ def list_memory() -> dict[str, Any]:
 @app.delete("/memory/{memory_id}")
 def delete_memory(memory_id: int) -> dict[str, bool]:
     with connect_db() as db:
-        cursor = db.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+        cursor = execute(db, "DELETE FROM memories WHERE id = ?", (memory_id,))
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail="Memória não encontrada.")
     return {"deleted": True}
