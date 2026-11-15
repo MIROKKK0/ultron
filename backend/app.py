@@ -655,6 +655,13 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
         "group_activity": neural_state.get("group_activity", {}),
         "spikes": neural_state.get("spikes", {}),
         "role_scores": feedback_strategies,
+        "full_connectome_activity": ({
+            "engine": neural_state["full_connectome"].get("engine"),
+            "stimulus": neural_state["full_connectome"].get("stimulus"),
+            "active_neurons": int(neural_state["full_connectome"].get("active_neurons", 0)),
+            "spikes": int(neural_state["full_connectome"].get("spikes", 0)),
+            "simulation_seconds": float(neural_state["full_connectome"].get("simulation_seconds", 0.0)),
+        } if isinstance(neural_state.get("full_connectome"), dict) else None),
     }
     return {
         "reply": response,
