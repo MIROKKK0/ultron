@@ -127,7 +127,11 @@ def rank_memories(query: str, memories: Iterable[dict], limit: int = 8) -> list[
     query_terms = tokenize(query)
     scored = []
     for item in memories:
-        content = str(item.get("content", "")).strip()
+        try:
+            raw_content = item.get("content", "")
+        except AttributeError:
+            raw_content = item["content"] if "content" in item.keys() else ""
+        content = str(raw_content).strip()
         if not content:
             continue
         terms = tokenize(content)
