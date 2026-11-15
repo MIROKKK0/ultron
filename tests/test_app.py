@@ -60,6 +60,16 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(any("Contexto anterior de teste" in item for item in mocked.call_args.args[2]))
 
+    def test_every_chat_turn_passes_through_mandatory_neural_core(self):
+        neural_state = {"core": "drosophila_lif_microcircuit", "mandatory": True}
+        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state) as neural:
+            with patch("backend.app.answer_with_provider", return_value="resposta") as provider:
+                response = client.post("/chat", json={"message": "oi"}, headers=AUTH)
+        self.assertEqual(response.status_code, 200)
+        neural.assert_called_once()
+        self.assertEqual(provider.call_args.kwargs["neural_state"], neural_state)
+        self.assertEqual(response.json()["reply"], "resposta")
+
     def test_brain_status(self):
         response = client.get("/brain/status", headers=AUTH)
         self.assertEqual(response.status_code, 200)
