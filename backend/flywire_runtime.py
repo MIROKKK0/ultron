@@ -1,0 +1,155 @@
+"""Optional, real FlyWire v783 simulator bridge.
+
+This adapter loads the upstream eonsystemspbc/fly-brain PyTorch implementation
+and its published connectome files. It never substitutes the 48-neuron demo
+circuit when the full dataset is missing: callers receive an explicit error.
+The FlyWire model is a sensory/motor neural simulator, not a text-generating LLM.
+"""
+from __future__ import annotations
+
+import importlib
+import os
+import sys
+import threading
+from pathlib import Path
+from typing import Any
+
+UPSTREAM = "https://github.com/eonsystemspbc/fly-brain"
+EXPECTED_NEURONS = 138_639
+DATA_FILES = (
+    Path("data/2025_Completeness_783.csv"),
+    Path("data/2025_Connectivity_783.parquet"),
+)
+_lock = threading.RLock()
+_runtime: "FlyWireRuntime | None" = None
+
+
+def _root() -> Path:
+    return Path(os.getenv("ULTRON_FLYWIRE_ROOT", "vendor/fly-brain")).expanduser()
+
+
+def status() -> dict[str, Any]:
+    root = _root()
+    missing = [str(path) for path in DATA_FILES if not (root / path).is_file()]
+    code_ready = (root / "code" / "run_pytorch.py").is_file()
+    return {
+        "available": not missing and code_ready,
+        "connectome": "FlyWire FAFB v783",
+        "expected_neurons": EXPECTED_NEURONS,
+        "upstream": UPSTREAM,
+        "root": str(root),
+        "missing_files": missing,
+        "upstream_code_present": code_ready,
+        "backend": "PyTorch CPU",
+        "license_note": "Upstream code GPL-2.0-or-later; FlyWire-derived data terms must be preserved.",
+    }
+
+
+def _select_experiment(stimulus: str) -> str:
+    value = stimulus.strip().casefold()
+    if value not in {"sugar", "p9"}:
+        raise ValueError("Estímulo permitido: sugar ou p9.")
+    return value
+
+
+class FlyWireRuntime:
+    """Persistent CPU session using the upstream sparse whole-brain model."""
+
+    def __init__(self) -> None:
+        self.root = _root().resolve()
+        missing = [str(path) for path in DATA_FILES if not (self.root / path).is_file()]
+        if missing or not (self.root / "code" / "run_pytorch.py").is_file():
+            raise RuntimeError(
+                "Conectoma FlyWire não instalado. Execute scripts/bootstrap_flywire.sh; "
+                f"arquivos ausentes: {', '.join(missing) or 'code/run_pytorch.py'}"
+            )
+
+        os.environ["FLY_BRAIN_DISABLE_SPIKE_IO"] = "1"
+        code_dir = str(self.root / "code")
+        if code_dir not in sys.path:
+            sys.path.insert(0, code_dir)
+
+        try:
+            importlib.invalidate_caches()
+            benchmark = importlib.import_module("benchmark")
+            runner = importlib.import_module("run_pytorch")
+            import torch
+        except Exception as exc:
+            raise RuntimeError(
+                "Dependências do simulador FlyWire ausentes. Instale requirements-flywire.txt."
+            ) from exc
+
+        self.torch = torch
+        self.runner = runner
+        self.benchmark = benchmark
+        self.device = torch.device("cpu")
+        self.flyid_to_index, _ = runner.get_hash_tables(str(benchmark.path_comp))
+        self.weights = runner.get_weights(
+            str(benchmark.path_con), str(benchmark.path_comp), str(benchmark.path_wt), csr=True
+        ).to(device=self.device)
+        self.neuron_count = int(self.weights.shape[0])
+        if self.neuron_count < 130_000:
+            raise RuntimeError(
+                f"Conectoma incompleto: {self.neuron_count} neurônios; esperado aproximadamente {EXPECTED_NEURONS}."
+            )
+        self.experiments = {}
+        self.sessions = {}
+
+    def simulate(self, stimulus: str, duration_sec: float = 0.1) -> dict[str, Any]:
+        key = _select_experiment(stimulus)
+        if not 0.01 <= float(duration_sec) <= 0.1:
+            raise ValueError("A duração por chamada deve ficar entre 0,01 e 0,1 segundo.")
+        experiment = self.benchmark.get_experiment(key)
+        if key not in self.sessions:
+            exc_indices = [self.flyid_to_index[n] for n in experiment["neu_exc"]]
+            model = self.runner.TorchModel(
+                1, self.neuron_count, self.runner.DT, self.runner.MODEL_PARAMS,
+                self.weights, exc_indices=exc_indices, device=str(self.device),
+            )
+            state = model.state_init()
+            rates = self.torch.zeros((1, self.neuron_count), device=self.device)
+            rates[:, exc_indices] = float(experiment["stim_rate"])
+            generator = self.torch.Generator(device="cpu").manual_seed(783)
+            self.sessions[key] = (model, state, rates, generator)
+
+        model, state, rates, generator = self.sessions[key]
+        steps = int(float(duration_sec) * 1000.0 / float(self.runner.DT))
+        total_spikes = 0
+        active_neurons: set[int] = set()
+        with self.torch.no_grad():
+            for _ in range(steps):
+                state = model(*((rates,) + tuple(state)), generator=generator)
+                spikes = state[2]
+                total_spikes += int(spikes.sum().item())
+                if bool(spikes.any()):
+                    active_neurons.update(
+                        int(index) for index in spikes[0].nonzero(as_tuple=False).flatten().tolist()
+                    )
+        self.sessions[key] = (model, state, rates, generator)
+        return {
+            "engine": "upstream_flywire_pytorch",
+            "connectome": "FlyWire FAFB v783",
+            "full_connectome_loaded": True,
+            "neurons": self.neuron_count,
+            "stimulus": key,
+            "stimulus_name": experiment["name"],
+            "simulation_seconds": float(duration_sec),
+            "timestep_ms": float(self.runner.DT),
+            "steps": steps,
+            "active_neurons": len(active_neurons),
+            "spikes": total_spikes,
+            "device": "cpu",
+            "language_generation": False,
+            "interpretation": (
+                "Atividade neural simulada do conectoma; não é uma resposta linguística "
+                "nem prova de raciocínio geral."
+            ),
+        }
+
+
+def simulate(stimulus: str, duration_sec: float = 0.1) -> dict[str, Any]:
+    global _runtime
+    with _lock:
+        if _runtime is None:
+            _runtime = FlyWireRuntime()
+        return _runtime.simulate(stimulus, duration_sec)
