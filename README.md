@@ -10,7 +10,8 @@ Assistente pessoal em português, com app nativo para iPhone, API HTTPS, autenti
 - Autenticação Bearer por `ULTRON_API_TOKEN`.
 - Google Gemini (`GOOGLE_API_KEY`) ou OpenAI (`OPENAI_API_KEY`).
 - Testes Python e GitHub Actions para CI, simulador e IPA.
-- Núcleo cognitivo próprio (`backend/brain.py`) com três especialistas paralelos (planejador, solucionador e crítico), síntese final, execução de até cinco tarefas independentes em paralelo, recuperação de memórias e melhoria supervisionada.
+- Núcleo neural obrigatório (`backend/fly_brain.py`): microcircuito LIF local inspirado em dinâmica de neurônios da mosca, com atividade recorrente, estado curto e sinais de prioridade para planner/solver/critic; o ciclo cognitivo sempre passa por ele antes dos especialistas de linguagem.
+- O microcircuito atual é uma implementação reduzida (48 neurônios por padrão), NÃO o conectoma FlyWire completo de ~138 mil neurônios. A integração do simulador completo `eonsystemspbc/fly-brain` e seus dados de conectividade requer uma etapa separada de infraestrutura/recursos e não é declarada como concluída.
 - Feedback persistido para medir satisfação ao longo do tempo (não treina pesos do modelo).
 
 ## Backend local
@@ -33,7 +34,7 @@ Com Bearer token, o backend oferece:
 - `POST /reflect`: checklist heurístico de uma resposta.
 - `POST /improvement-proposals`: proposta testável, sem aplicar alterações automaticamente.
 - `GET /benchmarks`: casos internos de fumaça.
-- `GET /brain/status`: estado e limites do cérebro.
+- `GET /brain/status`: estado e limites do cérebro neural obrigatório, incluindo versão, runtime e indicação se o conectoma completo está carregado.
 - `POST /brain/research` com `{"goal":"..."}`: pesquisa com fontes via Gemini Google Search grounding (requer `ULTRON_ENABLE_WEB_SEARCH=true`).
 - `POST /brain/run` com `{"goal":"..."}`: ciclo cognitivo com planejador, solucionador, crítico e síntese.
 - `POST /brain/multitask` com `{"tasks":["...","..."]}`: até cinco tarefas independentes em paralelo.
