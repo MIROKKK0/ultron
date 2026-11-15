@@ -58,60 +58,145 @@ struct ChatResult {
 enum ChatClientError: LocalizedError {
     case invalidServerURL
     case invalidResponse
-    case serverError(Int)
+    case serverError(Int, String?)
+    case connectionFailed(String)
 
     var errorDescription: String? {
         switch self {
-        case .invalidServerURL: return "Configure o endereço HTTPS do servidor."
-        case .invalidResponse: return "Resposta inválida do servidor."
-        case .serverError(let code): return "O servidor respondeu com erro (\(code))."
+        case .invalidServerURL:
+            return "Endereço do servidor inválido. Abra as configurações e confira a URL HTTPS."
+        case .invalidResponse:
+            return "O servidor respondeu em um formato inesperado."
+        case .serverError(let code, let detail):
+            return detail ?? "O servidor respondeu com erro HTTP \(code)."
+        case .connectionFailed(let detail):
+            return detail
         }
     }
 }
 
 struct ChatClient {
-    /// Wake a sleeping free-tier Render instance before the user sends a message.
-    func warmUp(serverURL: String) async {
-        guard let base = URL(string: serverURL), base.scheme == "https",
-              let url = URL(string: "/health", relativeTo: base) else { return }
+    private func endpoint(_ path: String, serverURL: String) throws -> URL {
+        guard let base = URL(string: serverURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              base.scheme == "https", base.host != nil,
+              let url = URL(string: path, relativeTo: base)?.absoluteURL else {
+            throw ChatClientError.invalidServerURL
+        }
+        return url
+    }
+
+    /// Render Free can sleep. Wake it immediately before the chat request,
+    /// rather than only once when the app launches.
+    @discardableResult
+    func warmUp(serverURL: String) async -> Bool {
+        guard let url = try? endpoint("/health", serverURL: serverURL) else { return false }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 25
+        request.timeoutInterval = 90
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        _ = try? await URLSession.shared.data(for: request)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        for attempt in 0..<3 {
+            do {
+                let (_, response) = try await URLSession.shared.data(for: request)
+                if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
+                    return true
+                }
+            } catch {
+                if !Self.isTransient(error) { return false }
+            }
+            if attempt < 2 {
+                try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 1_000_000_000)
+            }
+        }
+        return false
     }
 
     func send(_ message: String, serverURL: String) async throws -> ChatResult {
-        guard let base = URL(string: serverURL), base.scheme == "https",
-              let url = URL(string: "/chat", relativeTo: base) else {
-            throw ChatClientError.invalidServerURL
+        let url = try endpoint("/chat", serverURL: serverURL)
+
+        // A successful liveness check ensures the first POST is not sent
+        // to a sleeping Render instance.
+        guard await warmUp(serverURL: serverURL) else {
+            throw ChatClientError.connectionFailed(
+                "Não consegui acordar o servidor. Verifique a internet e toque em Tentar novamente."
+            )
         }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 60
+        request.timeoutInterval = 120
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Request-ID")
         request.httpBody = try JSONEncoder().encode(ChatRequest(message: message))
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw ChatClientError.serverError(http.statusCode) }
-        let result = try JSONDecoder().decode(ChatResponse.self, from: data)
-        return ChatResult(reply: result.reply, strategy: result.strategy, brainContext: result.brainContext)
+
+        var lastError: Error?
+        for attempt in 0..<3 {
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else {
+                    throw ChatClientError.invalidResponse
+                }
+                guard (200..<300).contains(http.statusCode) else {
+                    let detail = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                    let message = detail?["detail"] as? String
+                    throw ChatClientError.serverError(http.statusCode, message)
+                }
+                let result = try JSONDecoder().decode(ChatResponse.self, from: data)
+                return ChatResult(reply: result.reply, strategy: result.strategy, brainContext: result.brainContext)
+            } catch {
+                lastError = error
+                guard Self.isTransient(error), attempt < 2 else { throw Self.presentable(error) }
+                try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 1_000_000_000)
+            }
+        }
+        throw Self.presentable(lastError ?? ChatClientError.invalidResponse)
     }
 
     func sendFeedback(_ rating: Int, strategy: String, serverURL: String) async throws {
-        guard let base = URL(string: serverURL), base.scheme == "https",
-              let url = URL(string: "/feedback", relativeTo: base) else {
-            throw ChatClientError.invalidServerURL
-        }
+        let url = try endpoint("/feedback", serverURL: serverURL)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 20
+        request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(
             FeedbackRequest(rating: rating, strategy: strategy, comment: "")
         )
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw ChatClientError.serverError(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else {
+            throw ChatClientError.serverError(http.statusCode, nil)
+        }
+    }
+
+    private static func isTransient(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain else { return false }
+        let code = URLError.Code(rawValue: nsError.code)
+        return [
+            .timedOut, .cannotFindHost, .cannotConnectToHost,
+            .networkConnectionLost, .notConnectedToInternet,
+            .dnsLookupFailed, .internationalRoamingOff,
+            .dataNotAllowed, .secureConnectionFailed
+        ].contains(code)
+    }
+
+    private static func presentable(_ error: Error) -> Error {
+        if let known = error as? ChatClientError { return known }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            switch URLError.Code(rawValue: nsError.code) {
+            case .notConnectedToInternet:
+                return ChatClientError.connectionFailed("Seu iPhone está sem conexão com a internet.")
+            case .timedOut:
+                return ChatClientError.connectionFailed("O servidor demorou demais para responder. Tente novamente.")
+            case .networkConnectionLost:
+                return ChatClientError.connectionFailed("A conexão caiu durante o envio. Sua mensagem pode ser reenviada.")
+            default:
+                return ChatClientError.connectionFailed("Não consegui alcançar o servidor: \(nsError.localizedDescription)")
+            }
+        }
+        return error
     }
 }
