@@ -7,7 +7,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -144,6 +144,11 @@ class BrainRequest(BaseModel):
     goal: str = Field(min_length=1, max_length=4000)
 
 
+class FlyWireSimulationRequest(BaseModel):
+    stimulus: Literal["sugar", "p9"]
+    duration_sec: float = Field(default=0.1, ge=0.01, le=0.1)
+
+
 class MultiTaskRequest(BaseModel):
     tasks: list[str] = Field(min_length=1, max_length=5)
 
@@ -255,7 +260,8 @@ def brain_status() -> dict[str, Any]:
             "source": FLY_BRAIN_SOURCE,
             "runtime": "local_cpu_lif",
             "neurons": FLY_BRAIN.neurons_per_group * 4,
-            "full_connectome_loaded": False,
+            "full_connectome_loaded": __import__("backend.flywire_runtime", fromlist=["status"]).status()["available"],
+        "full_connectome": __import__("backend.flywire_runtime", fromlist=["status"]).status(),
         },
         "parallel_specialists": ["planner", "solver", "critic"],
         "parallel_task_limit": 5,
@@ -274,6 +280,18 @@ def brain_run(request: BrainRequest) -> dict[str, Any]:
     save_conversation("user", request.goal.strip())
     save_conversation("assistant", result["synthesis"])
     return result
+
+
+@app.post("/brain/flywire/simulate", dependencies=[Depends(require_api_token)])
+def brain_flywire_simulate(request: FlyWireSimulationRequest) -> dict[str, Any]:
+    """Run a documented sensory experiment on the real FlyWire v783 connectome."""
+    from backend.flywire_runtime import simulate
+    try:
+        return simulate(request.stimulus, request.duration_sec)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/brain/research", dependencies=[Depends(require_api_token)])
