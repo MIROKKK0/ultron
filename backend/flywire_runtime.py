@@ -29,6 +29,47 @@ def _root() -> Path:
     return Path(os.getenv("ULTRON_FLYWIRE_ROOT", "vendor/fly-brain")).expanduser()
 
 
+def _memory_budget() -> dict[str, Any]:
+    """Estimate safe memory headroom before importing PyTorch or allocating weights."""
+    required_mib = max(1024, int(os.getenv("ULTRON_FLYWIRE_MIN_FREE_MIB", "6144")))
+    available_bytes: int | None = None
+    source = "unknown"
+    # Respect container limits first; host MemAvailable can be misleading in Docker.
+    for limit_path, current_path in (
+        (Path("/sys/fs/cgroup/memory.max"), Path("/sys/fs/cgroup/memory.current")),
+        (Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"),
+         Path("/sys/fs/cgroup/memory/memory.usage_in_bytes")),
+    ):
+        try:
+            limit_raw = limit_path.read_text().strip()
+            current_raw = current_path.read_text().strip()
+            if limit_raw != "max":
+                limit = int(limit_raw)
+                current = int(current_raw)
+                if 0 < limit < (1 << 60):
+                    available_bytes = max(0, limit - current)
+                    source = "cgroup"
+                    break
+        except (OSError, ValueError):
+            continue
+    if available_bytes is None:
+        try:
+            for line in Path("/proc/meminfo").read_text().splitlines():
+                if line.startswith("MemAvailable:"):
+                    available_bytes = int(line.split()[1]) * 1024
+                    source = "memavailable"
+                    break
+        except (OSError, ValueError, IndexError):
+            pass
+    available_mib = round(available_bytes / (1024 * 1024), 1) if available_bytes is not None else None
+    return {
+        "available_mib": available_mib,
+        "required_free_mib": required_mib,
+        "source": source,
+        "ready": available_mib is not None and available_mib >= required_mib,
+    }
+
+
 def status() -> dict[str, Any]:
     root = _root()
     missing = [str(path) for path in DATA_FILES if not (root / path).is_file()]
@@ -49,6 +90,7 @@ def status() -> dict[str, Any]:
         "dependencies": dependencies,
         "missing_dependencies": missing_dependencies,
         "backend": "PyTorch CPU",
+        "memory_budget": _memory_budget(),
         "license_note": "Upstream code GPL-2.0-or-later; FlyWire-derived data terms must be preserved.",
     }
 
@@ -64,6 +106,14 @@ class FlyWireRuntime:
     """Persistent CPU session using the upstream sparse whole-brain model."""
 
     def __init__(self) -> None:
+        budget = _memory_budget()
+        if not budget["ready"]:
+            raise RuntimeError(
+                "Memória insuficiente para carregar o conectoma FlyWire com segurança: "
+                f"{budget['available_mib']} MiB disponíveis; "
+                f"{budget['required_free_mib']} MiB livres exigidos. "
+                "Use um host com mais RAM ou mantenha o modo leve."
+            )
         self.root = _root().resolve()
         missing = [str(path) for path in DATA_FILES if not (self.root / path).is_file()]
         if missing or not (self.root / "code" / "run_pytorch.py").is_file():
