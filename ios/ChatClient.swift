@@ -35,7 +35,7 @@ enum ChatClientError: LocalizedError {
         switch self {
         case .invalidServerURL: return "Configure o endereço HTTPS do servidor."
         case .invalidResponse: return "Resposta inválida do servidor."
-        case .serverError(let code): return "O servidor respondeu com erro (\\(code))."
+        case .serverError(let code): return "O servidor respondeu com erro (\(code))."
         }
     }
 }
