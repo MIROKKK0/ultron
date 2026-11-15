@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
-from backend.brain import run_cognitive_cycle, run_multitask
+from backend.brain import run_multitask
 from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
 from backend.local_decoder import decode_local
 
@@ -247,7 +247,7 @@ def execute_brain_cycle(goal: str, history: list[str] | None = None) -> dict[str
 def brain_status() -> dict[str, Any]:
     return {
         "name": APP_NAME,
-        "brain_version": "2.0.0",
+        "brain_version": "3.0.0-local",
         "neural_core": {
             "name": "drosophila_lif_microcircuit",
             "mandatory": True,
@@ -259,7 +259,9 @@ def brain_status() -> dict[str, Any]:
         },
         "parallel_specialists": ["planner", "solver", "critic"],
         "parallel_task_limit": 5,
-        "model_configured": False,\n        "language_decoder": "local_deterministic",\n        "external_ai_tokens_required": False,
+        "model_configured": False,
+        "language_decoder": "local_deterministic",
+        "external_ai_tokens_required": False,
         "web_research_enabled": False,
         "memory_enabled": True,
         "autonomous_production_changes": False,
@@ -314,7 +316,9 @@ def health() -> dict[str, Any]:
         "status": "online",
         "version": app.version,
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
-        "ai_configured": False,\n        "neural_core_configured": True,\n        "external_ai_tokens_required": False,
+        "ai_configured": False,
+        "neural_core_configured": True,
+        "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
     }
 
