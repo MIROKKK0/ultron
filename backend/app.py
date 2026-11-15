@@ -568,7 +568,7 @@ def _extract_research_query(message: str) -> str | None:
 
 @app.post("/", include_in_schema=False)
 @app.post("/chat")
-def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
+def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
     enforce_public_limit(request, "chat", limit=20)
     message = payload.message.strip()
     # Public chat must not read or write shared private memories/conversations.
@@ -615,7 +615,21 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     role_scores = neural_state.get("role_scores", {})
     feedback_strategies = {role: float(role_scores.get(role, 0.0)) for role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
-    return {"reply": response, "strategy": selected_strategy}
+    # Send only non-private FlyBrain control signals to the on-device language
+    # engine. The server has already run FlyBrain before this payload is built.
+    brain_context = {
+        "core": neural_state.get("core", "drosophila_lif_microcircuit"),
+        "runtime": neural_state.get("runtime", "local_cpu_lif"),
+        "is_full_connectome": bool(neural_state.get("is_full_connectome", False)),
+        "novelty": float(neural_state.get("novelty", 0.0)),
+        "group_activity": neural_state.get("group_activity", {}),
+        "role_scores": feedback_strategies,
+    }
+    return {
+        "reply": response,
+        "strategy": selected_strategy,
+        "brain_context": brain_context,
+    }
 
 
 @app.post("/memory", dependencies=[Depends(require_api_token)])
