@@ -160,6 +160,46 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(len(response.json()["agents"]), 3)
         self.assertEqual(response.json()["synthesis"], "perspectiva")
 
+
+    def test_brain_run_executes_real_specialists_and_web_research(self):
+        fixture = {
+            "query": "FlyWire connectome",
+            "count": 1,
+            "results": [{"title": "FlyWire paper", "url": "https://example.org/flywire", "snippet": "Connectome data"}],
+            "summary": "Fontes verificáveis sobre FlyWire: https://example.org/flywire",
+        }
+        with patch("backend.app.answer_without_provider", return_value="Resposta local"):
+            with patch("backend.app.search_web", return_value=fixture) as search:
+                response = client.post(
+                    "/brain/run",
+                    json={"goal": "Pesquise na internet sobre FlyWire connectome"},
+                    headers=AUTH,
+                )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["brain_version"], "4.0.0-local-tools")
+        self.assertEqual(payload["plan"]["goal"], "Pesquise na internet sobre FlyWire connectome")
+        self.assertEqual(payload["review"]["checks"]["has_answer"], True)
+        self.assertEqual(payload["synthesis"], fixture["summary"])
+        self.assertIn("researcher", [item["role"] for item in payload["agents"]])
+        researcher = next(item for item in payload["agents"] if item["role"] == "researcher")
+        self.assertEqual(researcher["status"], "completed")
+        search.assert_called_once_with("FlyWire connectome")
+
+    def test_brain_run_keeps_other_specialists_when_web_search_fails(self):
+        with patch("backend.app.answer_without_provider", return_value="Resposta local"):
+            with patch("backend.app.search_web", side_effect=RuntimeError("network down")):
+                response = client.post(
+                    "/brain/run",
+                    json={"goal": "Pesquise na internet sobre FlyWire"},
+                    headers=AUTH,
+                )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["synthesis"], "Resposta local")
+        self.assertEqual(next(item for item in payload["agents"] if item["role"] == "researcher")["status"], "failed")
+        self.assertEqual(len(payload["agents"]), 4)
+
     def test_research_endpoint_returns_source_linked_results(self):
         fixture = {"query": "memória de agentes", "count": 1, "results": [{"title": "Paper", "url": "https://example.org/paper", "snippet": "Resumo"}], "summary": "Fontes"}
         with patch("backend.app.search_web", return_value=fixture):
