@@ -53,7 +53,7 @@ class UltronTests(unittest.TestCase):
         summary = client.get("/feedback/summary", headers=AUTH)
         self.assertGreaterEqual(summary.json()["total"], 1)
 
-    def test_public_feedback_is_stored_without_changing_global_policy(self):
+    def test_public_feedback_is_stored_and_calibrates_only_bounded_strategy_priority(self):
         feedback = client.post(
             "/feedback",
             json={"rating": 5, "strategy": "solver", "comment": "A solução ajudou"},
@@ -61,7 +61,8 @@ class UltronTests(unittest.TestCase):
         )
         self.assertEqual(feedback.status_code, 200)
         self.assertTrue(feedback.json()["stored"])
-        self.assertFalse(feedback.json()["used_for_policy_calibration"])
+        self.assertTrue(feedback.json()["used_for_policy_calibration"])
+        self.assertEqual(feedback.json()["learning_scope"], "bounded_strategy_priority_only")
 
     def test_public_chat_does_not_read_shared_private_conversation_context(self):
         save_conversation("user", "Contexto privado de teste")
