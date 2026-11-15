@@ -17,16 +17,18 @@ class SelfModel:
     purpose: str = "Assistente pessoal que planeja, executa tarefas autorizadas e aprende com feedback."
     language: str = "Português brasileiro"
     capabilities: tuple[str, ...] = (
-        "conversa com provedor de IA configurado",
+        "decodificação linguística local sem tokens externos",
         "memória persistente quando o banco está disponível",
         "cálculos aritméticos restritos",
         "autoavaliação estruturada de respostas",
         "propostas de melhoria verificáveis",
-        "orquestra três perspectivas especializadas em paralelo",
-        "executa até cinco tarefas independentes em paralelo",
+        "prioriza estratégias cognitivas pela atividade neural FlyBrain",
+        "executa até cinco tarefas locais independentes em paralelo",
     )
     limitations: tuple[str, ...] = (
-        "não treina pesos de modelo sozinho",
+        "o decodificador atual é determinístico e não equivale a um LLM treinado",
+        "o microcircuito atual não é o conectoma FlyWire completo",
+        "não treina pesos do decodificador automaticamente",
         "não altera o próprio código em produção",
         "não acessa serviços externos sem integração e autorização",
         "não pesquisa a internet por conta própria sem uma ferramenta de pesquisa conectada",

@@ -1,8 +1,7 @@
-"""ULTRON cognitive kernel with a mandatory Drosophila-inspired neural core.
+"""ULTRON cognitive orchestration around the mandatory local FlyBrain core.
 
-The spiking circuit is the control center for attention, novelty and specialist
-prioritization. Language models remain language/reasoning providers; they do not
-replace the neural control core.
+Neural activity controls attention and priority. This module has no hosted
+language-model dependency; callers supply local deterministic execution.
 """
 from __future__ import annotations
 
@@ -59,7 +58,7 @@ def run_cognitive_cycle(
     execute: Callable[[str], str],
     include_researcher: bool = False,
 ) -> dict:
-    """Run the neural core first, then language specialists, then synthesis."""
+    """Run the neural core first, then local deterministic perspectives and synthesis."""
     goal = goal.strip()
     if not goal:
         raise ValueError("Informe o objetivo.")

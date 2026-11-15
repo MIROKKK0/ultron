@@ -55,7 +55,7 @@ class UltronTests(unittest.TestCase):
 
     def test_chat_includes_recent_conversation_context(self):
         save_conversation("user", "Contexto anterior de teste")
-        with patch("backend.app.answer_with_provider", return_value="resposta") as mocked:
+        with patch("backend.app.answer_without_provider", return_value="resposta") as mocked:
             response = client.post("/chat", json={"message": "continue"}, headers=AUTH)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(any("Contexto anterior de teste" in item for item in mocked.call_args.args[2]))
@@ -63,11 +63,11 @@ class UltronTests(unittest.TestCase):
     def test_every_chat_turn_passes_through_mandatory_neural_core(self):
         neural_state = {"core": "drosophila_lif_microcircuit", "mandatory": True}
         with patch("backend.app.FLY_BRAIN.process", return_value=neural_state) as neural:
-            with patch("backend.app.answer_with_provider", return_value="resposta") as provider:
+            with patch("backend.app.answer_without_provider", return_value="resposta") as provider:
                 response = client.post("/chat", json={"message": "oi"}, headers=AUTH)
         self.assertEqual(response.status_code, 200)
         neural.assert_called_once()
-        self.assertEqual(provider.call_args.kwargs["neural_state"], neural_state)
+        self.assertEqual(provider.call_args.args[3], neural_state)
         self.assertEqual(response.json()["reply"], "resposta")
 
     def test_brain_status(self):
@@ -76,8 +76,8 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.json()["parallel_task_limit"], 5)
 
     def test_brain_run_uses_parallel_specialists(self):
-        with patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"}):
-            with patch("backend.app.answer_with_provider", return_value="perspectiva"):
+        with patch.dict(os.environ, {"GOOGLE_API_KEY": "", "OPENAI_API_KEY": ""}):
+            with patch("backend.app.answer_without_provider", return_value="perspectiva"):
                 response = client.post(
                     "/brain/run", json={"goal": "Planejar uma melhoria"}, headers=AUTH
                 )
@@ -86,30 +86,21 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.json()["synthesis"], "perspectiva")
 
     def test_research_endpoint_requires_opt_in(self):
-        with patch.dict(os.environ, {"ULTRON_ENABLE_WEB_SEARCH": "false"}):
-            response = client.post(
-                "/brain/research", json={"goal": "Pesquisar memória de agentes"}, headers=AUTH
-            )
+        response = client.post(
+            "/brain/research", json={"goal": "Pesquisar memória de agentes"}, headers=AUTH
+        )
         self.assertEqual(response.status_code, 503)
 
-    def test_research_endpoint_returns_grounded_answer(self):
-        with patch.dict(os.environ, {
-            "GOOGLE_API_KEY": "test-key",
-            "ULTRON_ENABLE_WEB_SEARCH": "true",
-        }):
-            with patch("backend.app.answer_with_provider", return_value="Resposta\\nFontes consultadas: https://example.com"):
-                response = client.post(
-                    "/brain/research",
-                    json={"goal": "Pesquisar agentes"},
-                    headers=AUTH,
-                )
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json()["grounded"])
-        self.assertIn("https://example.com", response.json()["answer"])
+    def test_research_endpoint_is_explicitly_unavailable_without_external_services(self):
+        response = client.post(
+            "/brain/research", json={"goal": "Pesquisar agentes"}, headers=AUTH
+        )
+        self.assertEqual(response.status_code, 503)
+
 
     def test_brain_multitask(self):
-        with patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"}):
-            with patch("backend.app.answer_with_provider", side_effect=lambda prompt, memories=None: "feito: " + prompt):
+        with patch.dict(os.environ, {"GOOGLE_API_KEY": "", "OPENAI_API_KEY": ""}):
+            with patch("backend.app.answer_without_provider", side_effect=lambda prompt, memories=None, history=None, neural_state=None: "feito: " + prompt):
                 response = client.post(
                     "/brain/multitask",
                     json={"tasks": ["resumir projeto", "listar riscos"]},
@@ -130,6 +121,20 @@ class UltronTests(unittest.TestCase):
         self.assertTrue(any(item["id"] == memory_id for item in listed.json()["items"]))
         deleted = client.delete(f"/memory/{memory_id}", headers=AUTH)
         self.assertEqual(deleted.status_code, 200)
+
+    def test_normal_chat_works_without_any_ai_provider_token(self):
+        response = client.post("/chat", json={"message": "oi"}, headers=AUTH)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ULTRON", response.json()["reply"])
+
+    def test_neural_activity_changes_local_decoding_strategy(self):
+        from backend.local_decoder import decode_local
+        planner = {"role_scores": {"planner": 1.0, "solver": 0.1, "critic": 0.1}}
+        critic = {"role_scores": {"planner": 0.1, "solver": 0.1, "critic": 1.0}}
+        a = decode_local("planeje uma melhoria complexa", neural_state=planner)
+        b = decode_local("planeje uma melhoria complexa", neural_state=critic)
+        self.assertIn("planner", a)
+        self.assertIn("critic", b)
 
 
 if __name__ == "__main__":
