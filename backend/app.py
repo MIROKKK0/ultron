@@ -20,6 +20,7 @@ from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
 from backend.flywire_runtime import status as flywire_status, runtime_loaded as flywire_runtime_loaded
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
+from backend.perception_bridge import perceive
 from backend.public_access import enforce_public_limit
 from backend.web_research import search_web
 
@@ -451,6 +452,8 @@ def brain_status(request: Request) -> dict[str, Any]:
                 "memory_budget": full_status.get("memory_budget", {"ready": False, "source": "unknown"}),
             },
             "supported_full_connectome_stimuli": ["sugar", "p9"],
+            "perception_bridge": "ultron_conservative_perception_v1",
+            "perception_bridge_scope": ["feeding -> sugar", "locomotion -> p9"],
             "active_engine": "FlyWire v783" if loaded else "48-neuron LIF microcircuit",
             "language_generation": "separate_local_language_layer",
         },
@@ -469,10 +472,29 @@ def brain_status(request: Request) -> dict[str, Any]:
         "autonomous_production_changes": False,
         "limitations": [
             "FlyWire v783 is a sensory/motor simulator, not a text-generating model.",
-            "Only documented sugar and p9 stimuli are mapped to the full connectome.",
+            "Only explicit feeding and locomotion intents map to documented sugar and p9 stimuli; arbitrary language is not decoded by the full connectome.",
+            "The perception bridge is conservative intent routing, not a general language-to-neuron encoder.",
             "Full-connectome loading is blocked unless measured free memory meets the configured safety budget.",
             "The lightweight 48-neuron LIF circuit remains active when the full runtime is not loaded.",
         ],
+    }
+
+
+
+
+@app.post("/brain/perception")
+def brain_perception(payload: BrainRequest, request: Request) -> dict[str, Any]:
+    """Return the conservative, non-persistent language-to-connectome routing result."""
+    enforce_public_limit(request, "brain-perception", limit=30)
+    result = perceive(payload.goal)
+    return {
+        "bridge": result["bridge"],
+        "intent": result["intent"],
+        "connectome_stimulus": result["stimulus"],
+        "connectome_mapped": result["connectome_mapped"],
+        "confidence": result["confidence"],
+        "matched_terms": result["matched_terms"],
+        "limitation": result["limitation"],
     }
 
 
