@@ -172,6 +172,8 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(payload["neural_core"]["full_connectome"]["missing_dependencies"], ["torch"])
         self.assertNotIn("/private/host/path", response.text)
         self.assertFalse(payload["neural_core"]["full_connectome_loaded"])
+        self.assertFalse(payload["neural_core"]["full_connectome_ready"])
+        self.assertFalse(payload["neural_core"]["full_connectome"]["memory_budget"]["ready"])
         self.assertFalse(payload["learning"]["modifies_flywire_synapses"])
 
     def test_brain_run_uses_parallel_specialists(self):
