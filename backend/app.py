@@ -217,6 +217,7 @@ def answer_with_provider(
     message: str,
     memories: list[str] | None = None,
     history: list[str] | None = None,
+    grounded_search: bool = False,
 ) -> str:
     normalized = message.strip()
     lower = normalized.lower()
@@ -239,8 +240,12 @@ def answer_with_provider(
     if lower.startswith("/propose "):
         proposal = improvement_proposal(normalized[9:].strip())
         return str(proposal)
+    if lower.startswith("/research "):
+        if os.getenv("ULTRON_ENABLE_WEB_SEARCH", "false").lower() != "true" or not os.getenv("GOOGLE_API_KEY"):
+            return "Pesquisa web desligada. Configure GOOGLE_API_KEY e ULTRON_ENABLE_WEB_SEARCH=true no Render."
+        return answer_with_provider(normalized[10:].strip(), memories, history, grounded_search=True)
     if lower.startswith("/brain "):
-        result = execute_brain_cycle(normalized[7:].strip())
+        result = execute_brain_cycle(normalized[7:].strip(), history)
         return result["synthesis"]
     if lower.startswith("/multi "):
         if not (os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")):
@@ -299,16 +304,29 @@ def execute_task_with_memory(task: str) -> str:
     return answer_with_provider(task, memories)
 
 
-def execute_brain_cycle(goal: str) -> dict[str, Any]:
+def execute_brain_cycle(goal: str, history: list[str] | None = None) -> dict[str, Any]:
     if not (os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")):
         raise HTTPException(status_code=503, detail="Configure GOOGLE_API_KEY ou OPENAI_API_KEY para ativar o cérebro do ULTRON.")
     with connect_db() as db:
         rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
     memories = rank_memories(goal, rows, limit=8)
+    include_researcher = (
+        os.getenv("ULTRON_ENABLE_WEB_SEARCH", "false").lower() == "true"
+        and bool(os.getenv("GOOGLE_API_KEY"))
+    )
+
+    def invoke_specialist(prompt: str) -> str:
+        if prompt.startswith("PESQUISA_WEB::"):
+            return answer_with_provider(
+                prompt.split("::", 1)[1], memories, history, grounded_search=True
+            )
+        return answer_with_provider(prompt, memories, history)
+
     return run_cognitive_cycle(
         goal,
         memories,
-        lambda prompt: answer_with_provider(prompt, memories),
+        invoke_specialist,
+        include_researcher=include_researcher,
     )
 
 
@@ -317,9 +335,13 @@ def brain_status() -> dict[str, Any]:
     return {
         "name": APP_NAME,
         "brain_version": "1.0.0",
-        "parallel_specialists": ["planner", "solver", "critic"],
+        "parallel_specialists": ["planner", "solver", "critic"] + (
+            ["researcher"] if os.getenv("ULTRON_ENABLE_WEB_SEARCH", "false").lower() == "true"
+            and os.getenv("GOOGLE_API_KEY") else []
+        ),
         "parallel_task_limit": 5,
         "model_configured": bool(os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")),
+        "web_research_enabled": os.getenv("ULTRON_ENABLE_WEB_SEARCH", "false").lower() == "true" and bool(os.getenv("GOOGLE_API_KEY")),
         "memory_enabled": True,
         "autonomous_production_changes": False,
     }
@@ -331,6 +353,19 @@ def brain_run(request: BrainRequest) -> dict[str, Any]:
     save_conversation("user", request.goal.strip())
     save_conversation("assistant", result["synthesis"])
     return result
+
+
+@app.post("/brain/research", dependencies=[Depends(require_api_token)])
+def brain_research(request: BrainRequest) -> dict[str, Any]:
+    if os.getenv("ULTRON_ENABLE_WEB_SEARCH", "false").lower() != "true" or not os.getenv("GOOGLE_API_KEY"):
+        raise HTTPException(status_code=503, detail="Ative ULTRON_ENABLE_WEB_SEARCH=true e configure GOOGLE_API_KEY no Render.")
+    with connect_db() as db:
+        rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
+    memories = rank_memories(request.goal, rows, limit=8)
+    answer = answer_with_provider(request.goal, memories, grounded_search=True)
+    save_conversation("user", request.goal)
+    save_conversation("assistant", answer)
+    return {"query": request.goal, "answer": answer, "grounded": True}
 
 
 @app.post("/brain/multitask", dependencies=[Depends(require_api_token)])
