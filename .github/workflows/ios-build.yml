@@ -31,7 +31,8 @@ jobs:
       - name: Install framework build tools
         run: brew install cmake
       - name: Clone pinned Swift llama wrapper
-        run: git clone --depth 1 --branch 1.2.0 https://github.com/pgorzelany/swift-llama-cpp.git vendor/swift-llama-cpp
+        run: git clone --depth 1 https://github.com/pgorzelany/swift-llama-cpp.git vendor/swift-llama-cpp
+          test "$(git -C vendor/swift-llama-cpp rev-parse HEAD)" = "c0de205096bc735093a1b73107ca4fe52bf99877"
       - name: Verify and prepare official llama.cpp XCFramework
         run: bash vendor/swift-llama-cpp/Scripts/prepare-apple-framework.sh
       - name: Upload prepared Apple framework
@@ -51,12 +52,13 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Clone pinned Swift llama wrapper
-        run: git clone --depth 1 --branch 1.2.0 https://github.com/pgorzelany/swift-llama-cpp.git vendor/swift-llama-cpp
+        run: git clone --depth 1 https://github.com/pgorzelany/swift-llama-cpp.git vendor/swift-llama-cpp
+          test "$(git -C vendor/swift-llama-cpp rev-parse HEAD)" = "c0de205096bc735093a1b73107ca4fe52bf99877"
       - name: Download prepared Apple framework
         uses: actions/download-artifact@v4
         with:
           name: ULTRON-llama-apple-framework
-          path: vendor/swift-llama-cpp/Artifacts
+          path: vendor/swift-llama-cpp/Artifacts/llama-b11960.xcframework
       - name: Generate Xcode project
         run: xcodegen generate
       - name: Build for iOS Simulator
@@ -87,12 +89,13 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Clone pinned Swift llama wrapper
-        run: git clone --depth 1 --branch 1.2.0 https://github.com/pgorzelany/swift-llama-cpp.git vendor/swift-llama-cpp
+        run: git clone --depth 1 https://github.com/pgorzelany/swift-llama-cpp.git vendor/swift-llama-cpp
+          test "$(git -C vendor/swift-llama-cpp rev-parse HEAD)" = "c0de205096bc735093a1b73107ca4fe52bf99877"
       - name: Download prepared Apple framework
         uses: actions/download-artifact@v4
         with:
           name: ULTRON-llama-apple-framework
-          path: vendor/swift-llama-cpp/Artifacts
+          path: vendor/swift-llama-cpp/Artifacts/llama-b11960.xcframework
       - name: Generate Xcode project
         run: xcodegen generate
       - name: Build unsigned app for physical iPhone
