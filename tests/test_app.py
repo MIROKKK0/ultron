@@ -161,6 +161,21 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.json()["synthesis"], "perspectiva")
 
 
+    def test_public_brain_command_runs_cognitive_cycle_without_private_memories(self):
+        expected = {"synthesis": "Plano processado pelo ciclo cognitivo"}
+        with patch("backend.app.execute_brain_cycle", return_value=expected) as cycle:
+            response = client.post("/chat", json={"message": "/brain planejar uma melhoria"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["reply"], expected["synthesis"])
+        self.assertEqual(cycle.call_args.args[0], "planejar uma melhoria")
+        self.assertFalse(cycle.call_args.kwargs["include_private_memories"])
+        self.assertIn("neural_state", cycle.call_args.kwargs)
+
+    def test_public_brain_command_rejects_empty_goal(self):
+        response = client.post("/chat", json={"message": "/brain "})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Informe o objetivo", response.json()["reply"])
+
     def test_brain_run_executes_real_specialists_and_web_research(self):
         fixture = {
             "query": "FlyWire connectome",

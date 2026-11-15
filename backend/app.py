@@ -323,7 +323,13 @@ def execute_task_with_memory(task: str) -> str:
     return answer_without_provider(task, memories, neural_state=neural_state)
 
 
-def execute_brain_cycle(goal: str, history: list[str] | None = None) -> dict[str, Any]:
+def execute_brain_cycle(
+    goal: str,
+    history: list[str] | None = None,
+    *,
+    include_private_memories: bool = True,
+    neural_state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Run real local planner/solver/critic tools; research intents use web search.
 
     FlyBrain always processes the goal first and controls specialist ordering.
@@ -333,10 +339,15 @@ def execute_brain_cycle(goal: str, history: list[str] | None = None) -> dict[str
     if not normalized_goal:
         raise ValueError("Informe o objetivo.")
 
-    with connect_db() as db:
-        rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
-    memories = rank_memories(normalized_goal, rows, limit=8)
-    neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(normalized_goal, memories))
+    if include_private_memories:
+        with connect_db() as db:
+            rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
+        memories = rank_memories(normalized_goal, rows, limit=8)
+    else:
+        # Public chat must never read memories belonging to another installation.
+        memories = []
+    current_neural_state = neural_state if neural_state is not None else FLY_BRAIN.process(normalized_goal, memories)
+    neural_state = apply_learned_strategy_policy(current_neural_state)
     scores = neural_state.get("role_scores", {})
 
     # Each specialist now performs its actual local function instead of returning
@@ -573,6 +584,20 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
             response = research["summary"]
         except Exception:
             response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; o núcleo FlyBrain continua ativo."
+    elif message.casefold() == "/brain" or message.casefold().startswith("/brain "):
+        goal = message[6:].strip()
+        if not goal:
+            response = "Informe o objetivo depois de /brain."
+        else:
+            try:
+                brain_result = execute_brain_cycle(
+                    goal,
+                    include_private_memories=False,
+                    neural_state=neural_state,
+                )
+                response = brain_result["synthesis"]
+            except RuntimeError:
+                response = "O ciclo cognitivo não pôde ser concluído agora. O núcleo FlyBrain permanece obrigatório e não será ignorado."
     elif calculation:
         expression = calculation.group(1).replace(",", ".")
         expression = re.sub(r"\b(vezes|multiplicado por)\b", "*", expression, flags=re.I)
