@@ -332,5 +332,17 @@ class UltronTests(unittest.TestCase):
         self.assertIn("critic", b)
 
 
+    def test_research_chat_uses_hosted_language_with_grounded_context(self):
+        fixture = {"summary": "Fonte oficial: https://example.org/flywire"}
+        hosted = {"text": "Resumo com fonte: https://example.org/flywire", "provider": "groq", "latency_ms": 12.0}
+        with patch("backend.app.search_web", return_value=fixture):
+            with patch("backend.app.generate_reply", return_value=hosted) as generate:
+                response = client.post("/chat", json={"message": "Pesquise na internet sobre FlyWire"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["reply"], hosted["text"])
+        self.assertEqual(response.json()["language_provider"], "groq")
+        self.assertEqual(generate.call_args.kwargs["research_context"], fixture["summary"])
+
+
 if __name__ == "__main__":
     unittest.main()
