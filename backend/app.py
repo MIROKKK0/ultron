@@ -195,11 +195,17 @@ def answer_without_provider(message: str) -> str:
                 (content, datetime.now(timezone.utc).isoformat()),
             )
         return "Anotado na memória do ULTRON."
+    if lower == "/self":
+        return str(SELF_MODEL.public_dict())
+    if lower.startswith("/plan "):
+        return str(plan_task(normalized[6:].strip()))
+    if lower.startswith("/propose "):
+        return str(improvement_proposal(normalized[9:].strip()))
     if lower in {"/help", "ajuda", "o que você faz?"}:
         return (
-            "Sou o ULTRON. Posso conversar, guardar notas com /remember texto, "
-            "listar memória com /memory e calcular com /calc 12*(3+4). "
-            "Ações externas exigem integração explícita e confirmação."
+            "Sou o ULTRON. Use /self, /plan objetivo, /remember nota e "
+            "/calc expressão sem precisar do modelo. Para /brain objetivo e "
+            "/multi tarefa 1 || tarefa 2, configure GOOGLE_API_KEY ou OPENAI_API_KEY."
         )
     return (
         "Estou online, mas a IA ainda não foi configurada. "
