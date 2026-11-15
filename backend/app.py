@@ -323,9 +323,8 @@ def brain_status(request: Request) -> dict[str, Any]:
     }
 
 
-@app.post("/brain/run")
-def brain_run(payload: BrainRequest, request: Request) -> dict[str, Any]:
-    enforce_public_limit(request, "brain-run", limit=10)
+@app.post("/brain/run", dependencies=[Depends(require_api_token)])
+def brain_run(payload: BrainRequest) -> dict[str, Any]:
     try:
         result = execute_brain_cycle(payload.goal.strip())
     except RuntimeError as exc:
@@ -520,19 +519,13 @@ def add_feedback(payload: FeedbackRequest, request: Request) -> dict[str, Any]:
                 values,
             )
             feedback_id = cursor.lastrowid
-        if request.strategy:
-            reward = (request.rating - 3) / 2.0
-            execute(
-                db,
-                "INSERT INTO strategy_feedback(role, reward, created_at) VALUES (?, ?, ?)",
-                (payload.strategy, reward, created_at),
-            )
+
     return {
         "id": feedback_id,
         "stored": True,
         "used_for_model_training": False,
-        "used_for_policy_calibration": bool(request.strategy),
-        "strategy": request.strategy,
+        "used_for_policy_calibration": False,
+        "strategy": payload.strategy,
     }
 
 
