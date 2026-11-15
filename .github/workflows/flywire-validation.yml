@@ -1,0 +1,46 @@
+name: FlyWire Full Connectome Validation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  full-connectome-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout ULTRON
+        uses: actions/checkout@v4
+      - name: Install Git LFS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-lfs
+          git lfs install
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install ULTRON and FlyWire CPU dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-flywire.txt
+      - name: Fetch upstream code and FlyWire v783 dataset
+        run: bash scripts/bootstrap_flywire.sh
+      - name: Run real 138k-neuron connectome smoke simulations
+        env:
+          ULTRON_FLYWIRE_ROOT: vendor/fly-brain
+        run: python scripts/validate_flywire.py
+      - name: Upload simulation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flywire-validation-${{ github.run_id }}
+          path: vendor/fly-brain/data/results/
+          if-no-files-found: ignore
+          retention-days: 14
