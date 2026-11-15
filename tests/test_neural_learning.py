@@ -37,9 +37,21 @@ class NeuralLearningTests(unittest.TestCase):
         restored.load_state_dict(state)
         self.assertEqual(restored.state_dict(), state)
 
-    def test_rejects_empty_activity(self):
+    def test_rejects_empty_and_oversized_activity(self):
+        memory = RewardModulatedAssociativeMemory()
         with self.assertRaises(ValueError):
-            RewardModulatedAssociativeMemory().observe({}, {2: 1.0}, 1.0)
+            memory.observe({}, {2: 1.0}, 1.0)
+        with self.assertRaises(ValueError):
+            memory.observe({i: 1.0 for i in range(49)}, {2: 1.0}, 1.0)
+
+    def test_rejects_invalid_numeric_activity_and_rewards(self):
+        memory = RewardModulatedAssociativeMemory()
+        for activity in ({-1: 1.0}, {1: float("nan")}, {1: 1.1}):
+            with self.subTest(activity=activity):
+                with self.assertRaises(ValueError):
+                    memory.observe(activity, {2: 1.0}, 1.0)
+        with self.assertRaises(ValueError):
+            memory.observe({1: 1.0}, {2: 1.0}, float("nan"))
 
 
 if __name__ == "__main__":
