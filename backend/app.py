@@ -412,8 +412,12 @@ def chat(request: ChatRequest) -> dict[str, str]:
         message, memory_items, history_items, neural_state
     )
     save_conversation("assistant", response)
-    role_scores = neural_state.get("role_scores", {"solver": 0.0})
-    selected_strategy = max(role_scores, key=role_scores.get)
+    role_scores = neural_state.get("role_scores", {})
+    feedback_strategies = {
+        role: float(role_scores.get(role, 0.0))
+        for role in ("planner", "solver", "critic")
+    }
+    selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
     return {"reply": response, "strategy": selected_strategy}
 
 
