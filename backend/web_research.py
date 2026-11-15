@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 
-def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | None = None) -> dict:
+def search_web(query: str, max_results: int = 4, searcher: Callable[..., Any] | None = None) -> dict:
     cleaned = " ".join(query.split())
     if not cleaned:
         raise ValueError("Informe o que o ULTRON deve pesquisar.")
@@ -13,14 +13,14 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
         raise ValueError("A pesquisa deve ter no máximo 500 caracteres.")
     if searcher is None:
         from ddgs import DDGS
-        searcher = DDGS(timeout=12).text
+        searcher = DDGS(timeout=6).text
     raw = []
     last_error: Exception | None = None
     # Try auto-discovery first, then a set of independent supported engines.
     for backend in ("auto", "bing,duckduckgo,yahoo,startpage,wikipedia"):
         try:
             raw = searcher(cleaned, region="br-pt", safesearch="moderate",
-                           max_results=max(1, min(max_results, 8)), backend=backend)
+                           max_results=max(1, min(max_results, 4)), backend=backend)
             if raw:
                 break
         except Exception as exc:
