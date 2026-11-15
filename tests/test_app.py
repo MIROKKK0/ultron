@@ -53,6 +53,26 @@ class UltronTests(unittest.TestCase):
         summary = client.get("/feedback/summary", headers=AUTH)
         self.assertGreaterEqual(summary.json()["total"], 1)
 
+    def test_explicit_feedback_calibrates_only_the_selected_strategy(self):
+        feedback = client.post(
+            "/feedback",
+            json={"rating": 5, "strategy": "solver", "comment": "A solução ajudou"},
+            headers=AUTH,
+        )
+        self.assertEqual(feedback.status_code, 200)
+        self.assertTrue(feedback.json()["used_for_policy_calibration"])
+        neural_state = {
+            "role_scores": {"planner": 1.0, "solver": 1.0, "critic": 1.0},
+            "core": "drosophila_lif_microcircuit",
+        }
+        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state):
+            with patch("backend.app.answer_without_provider", return_value="resposta"):
+                response = client.post("/chat", json={"message": "resolver tarefa"}, headers=AUTH)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["strategy"], "solver")
+        self.assertGreater(neural_state["role_scores"]["solver"], 1.0)
+        self.assertEqual(neural_state["policy_learning"]["synaptic_weights_changed"], False)
+
     def test_chat_includes_recent_conversation_context(self):
         save_conversation("user", "Contexto anterior de teste")
         with patch("backend.app.answer_without_provider", return_value="resposta") as mocked:
