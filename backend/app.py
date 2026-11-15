@@ -405,7 +405,7 @@ def brain_recall(payload: NeuralRecallRequest) -> dict[str, Any]:
     context = LEXICAL_ENCODER.encode(payload.context)
     return {"encoded_features": len(context),
             "associations": ASSOCIATIVE_MEMORY.recall(context),
-            "persistence": "process_memory_only"}
+            "persistence": "database_checkpointed"}
 
 
 @app.post("/brain/flywire/simulate", dependencies=[Depends(require_api_token)])
