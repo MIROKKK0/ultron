@@ -112,11 +112,7 @@ def decode_local(
                 "\n\nPosso usar esse contexto para estruturar a próxima etapa."
             )
     return (
-        "Recebi sua solicitação e processei a entrada pelo núcleo neural local. "
-        f"A atividade atual priorizou a estratégia **{strategy}**.\n\n"
-        "Consigo executar localmente cálculos, comandos de memória e planos "
-        "estruturados. Para responder conteúdo aberto com a profundidade de um "
-        "grande modelo de linguagem, ainda falta um decodificador semântico local "
-        "treinado; não vou simular inteligência que este circuito ainda não possui.\n"
-        f"Solicitação registrada: {text[:1200]}"
+        "Ainda não consegui interpretar essa pergunta com o decodificador local. "
+        "Tente reformular ou ative o Qwen nas configurações para respostas abertas. "
+        f"Estratégia neural priorizada: {strategy}."
     )
