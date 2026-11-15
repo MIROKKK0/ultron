@@ -15,6 +15,10 @@ class FlyWireRuntimeTests(unittest.TestCase):
         self.assertFalse(result["available"])
         self.assertFalse(result["upstream_code_present"])
         self.assertEqual(result["connectome"], "FlyWire FAFB v783")
+        self.assertEqual(result["snapshot_neurons"], 139255)
+        self.assertEqual(result["modeled_neurons"], 138639)
+        self.assertEqual(result["unmodeled_snapshot_neurons"], 616)
+        self.assertEqual(result["model_coverage_percent"], 99.56)
         self.assertEqual(len(result["missing_files"]), 2)
 
     def test_only_upstream_supported_stimuli_are_accepted(self):
