@@ -96,7 +96,7 @@ final class LocalModelManager: ObservableObject {
                 modelUrl: modelFileURL,
                 config: LlamaConfig(
                     batchSize: 128,
-                    maxTokenCount: 256,
+                    maxTokenCount: 1024,
                     useGPU: true,
                     microBatchSize: 32,
                     nThreads: 2,
