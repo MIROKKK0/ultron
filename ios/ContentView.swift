@@ -312,7 +312,12 @@ struct ContentView: View {
     private static func requiresExactServerReply(_ text: String) -> Bool {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return normalized.hasPrefix("/calc ") || normalized == "/self" ||
-            normalized.hasPrefix("/remember ")
+            normalized.hasPrefix("/remember ") || normalized.hasPrefix("/research ") ||
+            normalized == "/brain" || normalized.hasPrefix("/brain ") ||
+            normalized.hasPrefix("pesquise ") || normalized.hasPrefix("pesquisa ") ||
+            normalized.hasPrefix("pesquisar ") || normalized.hasPrefix("procure ") ||
+            normalized.hasPrefix("busque ") || normalized.hasPrefix("o que é ") ||
+            normalized.hasPrefix("como funciona ")
     }
 
     /// Hide Qwen's private reasoning channel while tokens are arriving.
