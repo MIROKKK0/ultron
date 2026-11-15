@@ -7,6 +7,7 @@ connectome weights or language-model parameters.
 from __future__ import annotations
 
 import hashlib
+import heapq
 import math
 import re
 import threading
@@ -96,9 +97,12 @@ class RewardModulatedAssociativeMemory:
                     updated = self._weights.get(key, 0.0) + delta * pre_activity * post_activity
                     self._weights[key] = max(-self.max_weight, min(self.max_weight, updated))
             if len(self._weights) > self.max_associations:
-                weakest = sorted(self._weights, key=lambda key: abs(self._weights[key]))[
-                    :len(self._weights) - self.max_associations
-                ]
+                excess = len(self._weights) - self.max_associations
+                # Select only the entries to evict instead of sorting the entire
+                # association table. This path runs only when the hard cap is hit.
+                weakest = heapq.nsmallest(
+                    excess, self._weights, key=lambda key: abs(self._weights[key])
+                )
                 for key in weakest:
                     del self._weights[key]
             self._observations += 1
