@@ -54,9 +54,9 @@ O serviço configurado é:
 - Plano: Free
 - Banco PostgreSQL: plano Free, com expiração indicada pelo Render em 15/12/2026.
 
-O arquivo `render.yaml` conecta `DATABASE_URL` ao banco. A sincronização do Blueprint ainda precisa ser aprovada no painel do Render. Sem essa conexão, o serviço usa SQLite local, que não deve ser tratado como armazenamento permanente em hospedagem efêmera.
+O arquivo `render.yaml` conecta `DATABASE_URL` ao banco e define `/health` como health check. A sincronização do Blueprint precisa ser aprovada no painel do Render. O Postgres Free existente expira em 15/12/2026 e tem limite de 1 GB; é adequado para teste, não para dados permanentes. O serviço web Free pode dormir após 15 minutos sem tráfego e o SQLite local é efêmero.
 
-Cadastre `GOOGLE_API_KEY` ou `OPENAI_API_KEY` no Environment do serviço para habilitar o modelo. `ULTRON_API_TOKEN` já é configurado separadamente no ambiente do serviço.
+Após aprovar a sincronização do Blueprint, `ULTRON_API_TOKEN` é gerado pelo Render e `DATABASE_URL` é conectado ao Postgres. Cadastre `GOOGLE_API_KEY` no Environment do serviço para habilitar o Gemini; o valor é secreto e não deve ser enviado pelo chat.
 
 ## App iOS e IPA
 
