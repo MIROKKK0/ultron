@@ -1,6 +1,6 @@
 # ULTRON
 
-Assistente pessoal em português com app nativo para iPhone, API HTTPS, memória persistente e núcleo FlyBrain obrigatório, sem API externa de IA.
+Assistente pessoal em português com app nativo para iPhone, API HTTPS, memória persistente e núcleo FlyBrain obrigatório, com geração de linguagem online opcional e fallback local.
 
 ## Componentes
 
@@ -8,9 +8,9 @@ Assistente pessoal em português com app nativo para iPhone, API HTTPS, memória
 - Backend FastAPI.
 - PostgreSQL em produção ou SQLite para desenvolvimento local.
 - Chat, pesquisa e status públicos com limite básico por IP; sem token manual no iPhone. O chat público é temporariamente sem memória persistente para não expor dados entre instalações. Rotas administrativas e de memória continuam protegidas.
-- Núcleo de controle obrigatório FlyBrain no backend; após o servidor processar cada mensagem, o app pode usar Qwen3 0.6B Q4_K_M local via llama.cpp/Metal para geração de linguagem, sem tokens de provedor. Se o modelo não estiver instalado, usa a resposta segura do servidor.
+- Núcleo de controle obrigatório FlyBrain no backend; quando configurado, o servidor usa Groq/OpenRouter Free para geração de linguagem e o iPhone mostra essa resposta diretamente. Sem provedor online, o app pode usar Qwen3 0.6B Q4_K_M local via llama.cpp/Metal; sem ambos, usa a resposta segura do servidor.
 - Pesquisa web sem chave via metabusca DDGS, com links para as fontes; testes Python e GitHub Actions para CI, simulador e IPA.
-- Núcleo neural obrigatório (`backend/fly_brain.py`): microcircuito LIF local inspirado em dinâmica de neurônios da mosca, com atividade recorrente, estado curto e sinais de prioridade para planner/solver/critic; o ciclo cognitivo sempre passa por ele antes do decodificador linguístico local.
+- Núcleo neural obrigatório (`backend/fly_brain.py`): microcircuito LIF local inspirado em dinâmica de neurônios da mosca, com atividade recorrente, estado curto e sinais de prioridade para planner/solver/critic; o ciclo cognitivo sempre passa por ele antes da camada de linguagem local ou hospedada.
 - O microcircuito LIF reduzido (48 neurônios por padrão) é o núcleo de controle leve. A ponte real para o conectoma FlyWire FAFB v783 (~138.639 neurônios) já existe em `backend/flywire_runtime.py`, com testes e execução dos experimentos documentados; ela só fica ativa após instalar código, dados e dependências e habilitar `ULTRON_ENABLE_FULL_FLYWIRE=1` em um host com recursos suficientes. Não está habilitada no Render Free.
 - Feedback persistido para medir satisfação ao longo do tempo (não treina pesos do modelo).
 
