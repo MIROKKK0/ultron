@@ -41,7 +41,7 @@ Com Bearer token, o backend oferece:
 - `POST /feedback` com avaliação de 1 a 5 e comentário opcional.
 - `GET /feedback/summary`: média de avaliações armazenadas.
 
-O chat público não lê nem grava memória/conversas compartilhadas até existir uma identidade segura por instalação. Rotas administrativas protegidas mantêm a memória persistente. No chat do iPhone, use `/self`, `/plan seu objetivo`, `/research sua pergunta` e `/calc 12*(3+4)`. O endpoint `/brain/run` usa o FlyBrain para priorizar as estratégias locais e gerar uma síntese determinística. Use `/research sua pergunta` para pesquisar na internet; o ULTRON retorna trechos e links de fontes. A busca não usa LLM para sintetizar e pode falhar se o mecanismo de pesquisa bloquear o servidor. `/brain/multitask` aceita até cinco tarefas. Feedback público fica registrado para avaliação do produto, mas não altera o cérebro nem treina pesos.
+O chat público não lê nem grava memória/conversas compartilhadas até existir uma identidade segura por instalação. Rotas administrativas protegidas mantêm a memória persistente. No chat do iPhone, use `/self`, `/plan seu objetivo`, `/research sua pergunta` e `/calc 12*(3+4)`. O endpoint `/brain/run` usa o FlyBrain para priorizar as estratégias locais e gerar uma síntese determinística. Use `/research sua pergunta` para pesquisar na internet; o ULTRON retorna trechos e links de fontes. A busca não usa LLM para sintetizar e pode falhar se o mecanismo de pesquisa bloquear o servidor. `/brain/multitask` aceita até cinco tarefas. Feedback explícito do usuário calibra apenas a prioridade de planner/solver/critic, com ajuste limitado a ±15% e limite de 10 avaliações por hora/IP. Isso não treina pesos do modelo de linguagem nem sinapses FlyWire. O módulo experimental de associação usa codificador esparso, recompensa e decaimento; seu estado é salvo no banco.
 
 Para PostgreSQL, defina `DATABASE_URL`. Nenhuma chave de provedor de IA é necessária. O chat e a pesquisa públicos têm limites por IP; memória e rotas administrativas continuam exigindo `ULTRON_API_TOKEN`.
 
@@ -56,7 +56,7 @@ O serviço configurado é:
 - Plano: Free
 - Banco PostgreSQL: plano Free, com expiração indicada pelo Render em 15/12/2026.
 
-O arquivo `render.yaml` conecta `DATABASE_URL` ao banco e define `/health` como health check. O rate limit atual é em memória por instância; antes de escalar, trocar por quota compartilhada no PostgreSQL e ativar App Attest. A memória privada só deve voltar ao chat depois do isolamento por instalação. A sincronização do Blueprint precisa ser aprovada no painel do Render. O Postgres Free existente expira em 15/12/2026 e tem limite de 1 GB; é adequado para teste, não para dados permanentes. O serviço web Free pode dormir após 15 minutos sem tráfego e o SQLite local é efêmero.
+O arquivo `render.yaml` conecta `DATABASE_URL` ao banco e define `/health` como health check. O rate limit atual é em memória por instância; antes de escalar, trocar por quota compartilhada no PostgreSQL e ativar App Attest. A memória privada só deve voltar ao chat depois do isolamento por instalação. A memória associativa experimental é persistida como checkpoint separado. A sincronização do Blueprint precisa ser aprovada no painel do Render. O Postgres Free existente expira em 15/12/2026 e tem limite de 1 GB; é adequado para teste, não para dados permanentes. O serviço web Free pode dormir após 15 minutos sem tráfego e o SQLite local é efêmero.
 
 Após aprovar a sincronização do Blueprint, `ULTRON_API_TOKEN` é gerado pelo Render e `DATABASE_URL` é conectado ao Postgres. O token Bearer protege a API; ele não habilita nem paga um provedor de IA.
 
@@ -82,3 +82,12 @@ Depois, instale o IPA pelo SideStore. A compilação de simulador não pode ser 
 - O runtime não usa chaves de provedores de IA externos.
 - O ULTRON não executa comandos arbitrários nem contorna autenticação ou assinaturas.
 - Ações externas ou irreversíveis exigem confirmação explícita.
+
+
+### Aprendizagem neural experimental
+
+- `backend/neural_learning.py` implementa codificação lexical esparsa e associações pré/pós-atividade moduladas por recompensa, com pesos limitados, decaimento e checkpoint.
+- `POST /brain/learn` e `POST /brain/recall` são rotas protegidas para experimentos controlados.
+- O FlyBrain consome a codificação e usa a recordação associativa como sinal limitado de atividade do grupo de memória.
+- O feedback explícito no aplicativo atualiza apenas prioridades das estratégias, com limites; não modifica o conectoma FlyWire ou os pesos de um LLM.
+- Isso é uma camada computacional inspirada em aprendizagem biológica, não uma reprodução completa do mushroom body nem prova de inteligência geral.
