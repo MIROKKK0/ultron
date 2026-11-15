@@ -54,5 +54,27 @@ class NeuralLearningTests(unittest.TestCase):
             memory.observe({1: 1.0}, {2: 1.0}, float("nan"))
 
 
+    def test_indexed_recall_matches_weights_after_learning_and_restore(self):
+        memory = RewardModulatedAssociativeMemory(learning_rate=0.1, decay=0.99)
+        for feature in range(120):
+            memory.observe({feature: 1.0}, {feature + 1000: 0.5}, 1.0)
+        query = {3: 0.75, 17: 1.0, 88: 0.25}
+        expected = []
+        scores = {}
+        for (pre, post), weight in memory._weights.items():
+            if pre in query:
+                scores[post] = scores.get(post, 0.0) + query[pre] * weight
+        expected = [
+            {"feature": feature, "activation": round(score, 6)}
+            for feature, score in sorted(scores.items(), key=lambda item: (-item[1], item[0]))[:8]
+            if score > 0
+        ]
+        self.assertEqual(memory.recall(query), expected)
+
+        restored = RewardModulatedAssociativeMemory()
+        restored.load_state_dict(memory.state_dict())
+        self.assertEqual(restored.recall(query), expected)
+
+
 if __name__ == "__main__":
     unittest.main()

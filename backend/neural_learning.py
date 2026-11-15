@@ -59,6 +59,8 @@ class RewardModulatedAssociativeMemory:
         self.max_associations = max_associations
         self.max_features_per_observation = max_features_per_observation
         self._weights: dict[tuple[int, int], float] = {}
+        # Recall only visits associations connected to active input features.
+        self._by_pre: dict[int, dict[int, float]] = {}
         self._lock = threading.RLock()
         self._observations = 0
 
@@ -101,11 +103,19 @@ class RewardModulatedAssociativeMemory:
                 ]
                 for key in weakest:
                     del self._weights[key]
+            self._rebuild_recall_index()
             self._observations += 1
             return {"observations": self._observations, "associations": len(self._weights),
                     "reward": reward, "learning_rate": self.learning_rate,
                     "weight_bound": self.max_weight,
                     "features_context": len(context), "features_outcome": len(outcome)}
+
+    def _rebuild_recall_index(self) -> None:
+        """Build a read-optimized index keyed by active input feature."""
+        by_pre: dict[int, dict[int, float]] = {}
+        for (pre, post), weight in self._weights.items():
+            by_pre.setdefault(pre, {})[post] = weight
+        self._by_pre = by_pre
 
     def recall(self, context: dict[int, float], limit: int = 8) -> list[dict]:
         if not context:
@@ -113,9 +123,9 @@ class RewardModulatedAssociativeMemory:
         context = self._validated_activity(context, "Contexto", self.max_features_per_observation)
         scores: dict[int, float] = defaultdict(float)
         with self._lock:
-            for (pre, post), weight in self._weights.items():
-                if pre in context:
-                    scores[post] += context[pre] * weight
+            for pre, activity in context.items():
+                for post, weight in self._by_pre.get(pre, {}).items():
+                    scores[post] += activity * weight
         return [{"feature": feature, "activation": round(score, 6)}
                 for feature, score in sorted(scores.items(), key=lambda item: (-item[1], item[0]))[:max(1, min(limit, 32))]
                 if score > 0]
@@ -138,6 +148,7 @@ class RewardModulatedAssociativeMemory:
             weights[(pre, post)] = max(-self.max_weight, min(self.max_weight, weight))
         with self._lock:
             self._weights = weights
+            self._rebuild_recall_index()
             self._observations = max(0, int(state.get("observations", 0)))
 
 

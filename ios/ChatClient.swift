@@ -115,14 +115,10 @@ struct ChatClient {
     func send(_ message: String, serverURL: String) async throws -> ChatResult {
         let url = try endpoint("/chat", serverURL: serverURL)
 
-        // A successful liveness check ensures the first POST is not sent
-        // to a sleeping Render instance.
-        guard await warmUp(serverURL: serverURL) else {
-            throw ChatClientError.connectionFailed(
-                "Não consegui acordar o servidor. Verifique a internet e toque em Tentar novamente."
-            )
-        }
-
+        // Send directly to /chat. A separate /health round-trip before every
+        // message adds latency and cannot prevent Render from sleeping again.
+        // The chat request itself wakes a sleeping instance; transient failures
+        // are retried below.
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 180
