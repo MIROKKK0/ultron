@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import Combine
 import SwiftLlama
 
 @MainActor
@@ -63,7 +64,7 @@ final class LocalModelManager: ObservableObject {
         }
     }
 
-    func removeModel() {
+    func removeModel() async {
         do {
             await service?.stopCompletion()
             service = nil
