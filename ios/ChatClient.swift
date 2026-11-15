@@ -92,7 +92,7 @@ struct ChatClient {
         guard let url = try? endpoint("/health", serverURL: serverURL) else { return false }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 90
+        request.timeoutInterval = 150
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
@@ -125,7 +125,7 @@ struct ChatClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 120
+        request.timeoutInterval = 180
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Request-ID")
