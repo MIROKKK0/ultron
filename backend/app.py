@@ -404,30 +404,25 @@ def health() -> dict[str, Any]:
 def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     enforce_public_limit(request, "chat", limit=20)
     message = payload.message.strip()
-    with connect_db() as db:
-        memory_rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
-        history_rows = execute(
-            db, "SELECT role, content FROM conversations ORDER BY id DESC LIMIT 12"
-        ).fetchall()
-    memory_items = rank_memories(message, memory_rows, limit=8)
-    history_items = [
-        f"{row['role']}: {row['content']}" for row in reversed(history_rows)
-    ]
-    # Every normal chat turn passes through the mandatory spiking control center.
+    # Public chat must not read or write shared private memories/conversations.
     try:
-        neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, memory_items))
+        neural_state = FLY_BRAIN.process(message, [])
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    save_conversation("user", message)
-    response = answer_without_provider(
-        message, memory_items, history_items, neural_state
-    )
-    save_conversation("assistant", response)
+    if message.casefold().startswith("/research "):
+        try:
+            research = search_web(message[10:].strip())
+            response = research["summary"]
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Pesquisa web indisponível no momento; tente novamente.") from exc
+    elif message.casefold().startswith("/remember "):
+        response = "A memória pessoal ficará disponível quando a identificação segura por instalação estiver concluída. Nenhum dado foi gravado."
+    else:
+        response = answer_without_provider(message, [], [], neural_state)
     role_scores = neural_state.get("role_scores", {})
-    feedback_strategies = {
-        role: float(role_scores.get(role, 0.0))
-        for role in ("planner", "solver", "critic")
-    }
+    feedback_strategies = {role: float(role_scores.get(role, 0.0)) for role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
     return {"reply": response, "strategy": selected_strategy}
 
