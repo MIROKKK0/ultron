@@ -11,6 +11,8 @@ import hashlib
 import math
 import os
 import threading
+from functools import lru_cache
+from itertools import islice
 from dataclasses import asdict, dataclass
 from typing import Iterable
 
@@ -53,6 +55,7 @@ class FlyBrainCore:
         }
 
     @staticmethod
+    @lru_cache(maxsize=4096)
     def _bucket(token: str, size: int) -> int:
         digest = hashlib.blake2b(token.encode("utf-8"), digest_size=4).digest()
         return int.from_bytes(digest, "big") % size
@@ -88,7 +91,7 @@ class FlyBrainCore:
         goal = str(goal).strip()
         if not goal:
             raise ValueError("Informe o objetivo para o cérebro neural.")
-        memory_text = " ".join(str(item)[:400] for item in list(memories)[:8])
+        memory_text = " ".join(str(item)[:400] for item in islice(memories, 8))
         tokens = self._tokens(goal)
         memory_tokens = self._tokens(memory_text)
         encoded_input = LEXICAL_ENCODER.encode(goal)
@@ -112,10 +115,11 @@ class FlyBrainCore:
             # neuron/timestep. The previous implementation repeatedly sorted
             # the token set in the innermost loop.
             ordered_tokens = sorted(tokens) or ["idle"]
+            # Every functional group uses the same deterministic lexical
+            # routing; calculate it once and reuse it for all groups.
             routed_cells = {
-                group: {self._bucket(ordered_tokens[cell % len(ordered_tokens)], n)
-                        for cell in range(n)}
-                for group in range(len(GROUPS))
+                self._bucket(ordered_tokens[cell % len(ordered_tokens)], n)
+                for cell in range(n)
             }
             threshold = self.params.threshold
             for _ in range(self.steps):
@@ -138,7 +142,7 @@ class FlyBrainCore:
                     recurrent_drive = recurrent_by_group[group] * 3.0
                     for cell in range(n):
                         idx = base + cell
-                        token_drive = sensory[group] if cell in routed_cells[group] else sensory[group] * 0.25
+                        token_drive = sensory[group] if cell in routed_cells else sensory[group] * 0.25
                         voltage = previous[idx] + alpha * (
                             -previous[idx] + token_drive * 18.0 + recurrent_drive
                         )
