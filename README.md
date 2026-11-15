@@ -1,6 +1,6 @@
 # ULTRON
 
-Assistente pessoal em português, com app nativo para iPhone, API HTTPS, autenticação, memória persistente e IA opcional.
+Assistente pessoal em português com app nativo para iPhone, API HTTPS, memória persistente e núcleo FlyBrain obrigatório, sem API externa de IA.
 
 ## Componentes
 
@@ -8,10 +8,10 @@ Assistente pessoal em português, com app nativo para iPhone, API HTTPS, autenti
 - Backend FastAPI.
 - PostgreSQL em produção ou SQLite para desenvolvimento local.
 - Autenticação Bearer por `ULTRON_API_TOKEN`.
-- Google Gemini (`GOOGLE_API_KEY`) ou OpenAI (`OPENAI_API_KEY`).
+- Decodificador linguístico local determinístico; não exige tokens Gemini, OpenAI ou Claude.
 - Testes Python e GitHub Actions para CI, simulador e IPA.
-- Núcleo neural obrigatório (`backend/fly_brain.py`): microcircuito LIF local inspirado em dinâmica de neurônios da mosca, com atividade recorrente, estado curto e sinais de prioridade para planner/solver/critic; o ciclo cognitivo sempre passa por ele antes dos especialistas de linguagem.
-- O microcircuito atual é uma implementação reduzida (48 neurônios por padrão), NÃO o conectoma FlyWire completo de ~138 mil neurônios. A integração do simulador completo `eonsystemspbc/fly-brain` e seus dados de conectividade requer uma etapa separada de infraestrutura/recursos e não é declarada como concluída.
+- Núcleo neural obrigatório (`backend/fly_brain.py`): microcircuito LIF local inspirado em dinâmica de neurônios da mosca, com atividade recorrente, estado curto e sinais de prioridade para planner/solver/critic; o ciclo cognitivo sempre passa por ele antes do decodificador linguístico local.
+- O microcircuito atual é uma implementação reduzida (48 neurônios por padrão), NÃO o conectoma FlyWire completo de ~138 mil neurônios. A integração do simulador completo `eonsystemspbc/fly-brain` e seus dados de conectividade ainda está pendente; o projeto não declara o conectoma completo como ativo.
 - Feedback persistido para medir satisfação ao longo do tempo (não treina pesos do modelo).
 
 ## Backend local
@@ -35,15 +35,15 @@ Com Bearer token, o backend oferece:
 - `POST /improvement-proposals`: proposta testável, sem aplicar alterações automaticamente.
 - `GET /benchmarks`: casos internos de fumaça.
 - `GET /brain/status`: estado e limites do cérebro neural obrigatório, incluindo versão, runtime e indicação se o conectoma completo está carregado.
-- `POST /brain/research` com `{"goal":"..."}`: pesquisa com fontes via Gemini Google Search grounding (requer `ULTRON_ENABLE_WEB_SEARCH=true`).
+- `POST /brain/research`: retorna 503 até existir uma implementação de pesquisa local sem serviços externos.
 - `POST /brain/run` com `{"goal":"..."}`: ciclo cognitivo com planejador, solucionador, crítico e síntese.
 - `POST /brain/multitask` com `{"tasks":["...","..."]}`: até cinco tarefas independentes em paralelo.
 - `POST /feedback` com avaliação de 1 a 5 e comentário opcional.
 - `GET /feedback/summary`: média de avaliações armazenadas.
 
-A memória do chat prioriza itens com maior correspondência lexical e acrescenta até 12 mensagens recentes como contexto temporário. No próprio chat do iPhone, use `/self`, `/plan seu objetivo`, `/brain seu objetivo complexo`, `/multi tarefa 1 || tarefa 2`, `/remember sua nota` e `/calc 12*(3+4)`. O endpoint `/brain/run` coordena três perspectivas em paralelo e uma síntese; quando `ULTRON_ENABLE_WEB_SEARCH=true` e Gemini estão configurados, inclui um pesquisador com Google Search grounding. `/brain/research` e `/research` retornam URLs de fontes; pesquisa externa fica desligada por padrão. `/brain/multitask` aceita até cinco tarefas. Feedback fica registrado para avaliação do produto, mas não atualiza automaticamente os pesos do Gemini/OpenAI.
+A memória do chat prioriza itens com maior correspondência lexical e acrescenta até 12 mensagens recentes como contexto temporário. No próprio chat do iPhone, use `/self`, `/plan seu objetivo`, `/brain seu objetivo complexo`, `/multi tarefa 1 || tarefa 2`, `/remember sua nota` e `/calc 12*(3+4)`. O endpoint `/brain/run` usa o FlyBrain para priorizar as estratégias locais e gerar uma síntese determinística. A pesquisa web ainda não está implementada no modo sem tokens. `/brain/multitask` aceita até cinco tarefas. Feedback fica registrado para avaliação do produto, mas ainda não treina automaticamente os pesos do decodificador.
 
-Para PostgreSQL, defina `DATABASE_URL`. Para ativar respostas inteligentes, defina `GOOGLE_API_KEY` (Gemini) ou `OPENAI_API_KEY`. O Gemini é a opção prevista para começar com o nível gratuito disponível na conta Google AI Studio; limites e disponibilidade dependem da conta e do modelo.
+Para PostgreSQL, defina `DATABASE_URL`. Nenhuma chave de provedor de IA é necessária. `ULTRON_API_TOKEN` é apenas o token de autenticação da API, não um token de IA.
 
 Nunca coloque chaves de provedor ou tokens em commits, no app ou em arquivos públicos. Cadastre-os como variáveis secretas no serviço de hospedagem.
 
@@ -58,7 +58,7 @@ O serviço configurado é:
 
 O arquivo `render.yaml` conecta `DATABASE_URL` ao banco e define `/health` como health check. A sincronização do Blueprint precisa ser aprovada no painel do Render. O Postgres Free existente expira em 15/12/2026 e tem limite de 1 GB; é adequado para teste, não para dados permanentes. O serviço web Free pode dormir após 15 minutos sem tráfego e o SQLite local é efêmero.
 
-Após aprovar a sincronização do Blueprint, `ULTRON_API_TOKEN` é gerado pelo Render e `DATABASE_URL` é conectado ao Postgres. Cadastre `GOOGLE_API_KEY` no Environment do serviço para habilitar o Gemini; o valor é secreto e não deve ser enviado pelo chat.
+Após aprovar a sincronização do Blueprint, `ULTRON_API_TOKEN` é gerado pelo Render e `DATABASE_URL` é conectado ao Postgres. O token Bearer protege a API; ele não habilita nem paga um provedor de IA.
 
 ## App iOS e IPA
 
@@ -81,6 +81,6 @@ Depois, instale o IPA pelo SideStore. A compilação de simulador não pode ser 
 ## Segurança
 
 - As rotas de chat e memória exigem Bearer token.
-- As chaves do provedor de IA ficam apenas no servidor.
+- O runtime não usa chaves de provedores de IA externos.
 - O ULTRON não executa comandos arbitrários nem contorna autenticação ou assinaturas.
 - Ações externas ou irreversíveis exigem confirmação explícita.
