@@ -1,45 +1,52 @@
 # ULTRON
 
-Assistente pessoal em português, com API HTTP, memória persistente local e integração opcional com um modelo de IA.
+Assistente pessoal em português, com aplicativo nativo para iPhone, API HTTP, memória persistente e integração opcional com IA.
 
-## O que existe nesta versão
+## O que já está no projeto
 
-- API FastAPI com endpoint de saúde e conversa.
-- Memória persistente SQLite: criar, listar e apagar notas.
-- Calculadora com parser restrito (sem executar código arbitrário).
+- App nativo SwiftUI com chat, status de conexão e configuração do servidor.
+- Cliente HTTPS para conversar com a API.
+- Backend FastAPI com memória SQLite.
+- Calculadora segura e comandos locais.
 - Integração opcional com OpenAI Responses API.
-- Resposta local básica quando não há chave de IA configurada.
-- Testes automatizados e CI no GitHub Actions.
+- Testes Python e workflows de CI/build no GitHub Actions.
 
-## Executar
+## Backend
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn backend.app:app --host 0.0.0.0 --port 8000
+python ultron.py
 ```
 
-Abra `http://localhost:8000/docs` para testar a API.
+A API fica em `http://localhost:8000`; a documentação interativa fica em `/docs`.
 
-## Comandos de conversa
+Defina `OPENAI_API_KEY` no ambiente do servidor para habilitar respostas via modelo. Não coloque chaves no app iOS nem em commits.
 
-- `/help` — mostra os comandos disponíveis.
-- `/remember texto` — grava uma nota na memória local.
-- `/calc 12*(3+4)` — calcula uma expressão matemática segura.
-- `GET /memory` — lista as notas.
-- `DELETE /memory/{id}` — apaga uma nota.
+## App iOS
 
-## Inteligência artificial opcional
+O projeto Xcode é gerado com XcodeGen:
 
-Defina `OPENAI_API_KEY` no ambiente do servidor. Opcionalmente, defina `ULTRON_MODEL`. Nunca coloque chaves no código, no README ou em commits.
+```bash
+brew install xcodegen
+xcodegen generate
+open ULTRON.xcodeproj
+```
 
-Sem a chave, o serviço continua funcionando com comandos locais básicos.
+O workflow `ULTRON iOS Build` compila o app para o simulador iOS em um runner macOS do GitHub. No app, informe o endereço HTTPS público do backend em Configurações.
+
+## IPA para iPhone
+
+A compilação do simulador não gera um IPA instalável no iPhone. Para distribuir um IPA assinado, o workflow precisa de certificado Apple e provisioning profile válidos, guardados como GitHub Secrets. Não envie certificados, senhas ou chaves nesta conversa.
 
 ## Segurança
 
-Esta base não executa comandos arbitrários, não tenta invadir sistemas e não contorna autenticação ou assinaturas. Ações externas e irreversíveis devem exigir confirmação explícita.
+O ULTRON não executa comandos arbitrários, não tenta invadir sistemas e não contorna autenticação ou assinaturas. Ações externas ou irreversíveis devem exigir confirmação explícita.
 
-## Estado do projeto
+## Próximas etapas
 
-Esta é a fundação do backend. A interface iOS, voz, permissões nativas e distribuição IPA ainda precisam ser implementadas e validadas separadamente.
+- Hospedar o backend em um endpoint HTTPS estável.
+- Validar o build iOS no GitHub Actions.
+- Configurar assinatura de dispositivo e exportação IPA.
+- Adicionar voz, notificações e integrações nativas após validação.
