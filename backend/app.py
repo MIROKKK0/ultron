@@ -473,6 +473,7 @@ def chat(request: ChatRequest) -> dict[str, str]:
     response = answer_with_provider(
         message, memory_items, history_items, neural_state=neural_state
     )
+    save_conversation("assistant", response)
     return {"reply": response}
 
 
