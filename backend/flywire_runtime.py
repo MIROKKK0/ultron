@@ -153,3 +153,8 @@ def simulate(stimulus: str, duration_sec: float = 0.1) -> dict[str, Any]:
         if _runtime is None:
             _runtime = FlyWireRuntime()
         return _runtime.simulate(stimulus, duration_sec)
+
+
+def runtime_loaded() -> bool:
+    """True only after the real connectome and model are resident in this process."""
+    return _runtime is not None
