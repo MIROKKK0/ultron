@@ -21,6 +21,20 @@ class PerceptionApiTests(unittest.TestCase):
         self.assertEqual(locomotion.status_code, 200)
         self.assertEqual(locomotion.json()["connectome_stimulus"], "p9")
 
+    def test_perception_endpoint_rejects_negated_and_mixed_intents(self):
+        negated = self.client.post(
+            "/brain/perception", json={"goal": "Não quero comida"}
+        )
+        self.assertEqual(negated.status_code, 200)
+        self.assertFalse(negated.json()["connectome_mapped"])
+
+        mixed = self.client.post(
+            "/brain/perception", json={"goal": "Quero comer e caminhar"}
+        )
+        self.assertEqual(mixed.status_code, 200)
+        self.assertEqual(mixed.json()["intent"], "ambiguous_multiple_supported_intents")
+        self.assertIsNone(mixed.json()["connectome_stimulus"])
+
     def test_perception_endpoint_does_not_fake_language_mapping(self):
         response = self.client.post(
             "/brain/perception", json={"goal": "Explique cálculo diferencial"}
