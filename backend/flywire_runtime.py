@@ -32,8 +32,10 @@ def _root() -> Path:
 def status() -> dict[str, Any]:
     root = _root()
     missing = [str(path) for path in DATA_FILES if not (root / path).is_file()]
-    code_ready = (root / "code" / "run_pytorch.py").is_file()
-    dependencies = {name: importlib.util.find_spec(name) is not None for name in ("torch", "pandas", "pyarrow")}
+    code_files = (root / "code" / "benchmark.py", root / "code" / "run_pytorch.py")
+    missing_code = [str(path.relative_to(root)) for path in code_files if not path.is_file()]
+    code_ready = not missing_code
+    dependencies = {name: importlib.util.find_spec(name) is not None for name in ("torch", "pandas", "pyarrow", "numpy")}
     missing_dependencies = [name for name, present in dependencies.items() if not present]
     return {
         "available": not missing and code_ready and not missing_dependencies,
@@ -43,6 +45,7 @@ def status() -> dict[str, Any]:
         "root": str(root),
         "missing_files": missing,
         "upstream_code_present": code_ready,
+        "missing_code_files": missing_code,
         "dependencies": dependencies,
         "missing_dependencies": missing_dependencies,
         "backend": "PyTorch CPU",
@@ -88,6 +91,8 @@ class FlyWireRuntime:
         self.runner = runner
         self.benchmark = benchmark
         self.device = torch.device("cpu")
+        threads = max(1, min(4, int(os.getenv("ULTRON_FLYWIRE_THREADS", "2"))))
+        torch.set_num_threads(threads)
         self.flyid_to_index, _ = runner.get_hash_tables(str(benchmark.path_comp))
         self.weights = runner.get_weights(
             str(benchmark.path_con), str(benchmark.path_comp), str(benchmark.path_wt), csr=True
