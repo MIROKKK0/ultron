@@ -359,7 +359,7 @@ struct ContentView: View {
             do {
                 let result = try await client.send(
                     text,
-                    history: Array(messages.dropLast().suffix(10)),
+                    history: Array(messages.dropLast().filter { !Self.isGenericFallback($0.text) }.suffix(10)),
                     serverURL: serverURL
                 )
                 serverOnline = true
