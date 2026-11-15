@@ -240,7 +240,11 @@ def answer_with_provider(message: str, memories: list[str] | None = None) -> str
         return result["synthesis"]
     if lower.startswith("/multi "):
         tasks = [item.strip() for item in normalized[7:].split("||") if item.strip()]
-        result = run_multitask(tasks, lambda task: answer_with_provider(task, memories or []))
+        if not tasks:
+            return "Informe tarefas separadas por ||."
+        if len(tasks) > 5:
+            return "O limite é de cinco tarefas paralelas por vez."
+        result = run_multitask(tasks, execute_task_with_memory)
         return "\\n".join(
             f"{index}. [{item['status']}] {item['task']}: {item.get('result', item.get('error', ''))}"
             for index, item in enumerate(result["results"], start=1)
@@ -274,6 +278,13 @@ def answer_with_provider(message: str, memories: list[str] | None = None) -> str
         raise HTTPException(status_code=502, detail="O provedor de IA não respondeu.") from exc
 
     return answer_without_provider(message)
+
+
+def execute_task_with_memory(task: str) -> str:
+    with connect_db() as db:
+        rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
+    memories = rank_memories(task, rows, limit=5)
+    return answer_with_provider(task, memories)
 
 
 def execute_brain_cycle(goal: str) -> dict[str, Any]:
@@ -319,11 +330,23 @@ def brain_multitask(request: MultiTaskRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail="O limite é de cinco tarefas paralelas.")
     if not (os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")):
         raise HTTPException(status_code=503, detail="Configure uma chave de provedor de IA no Render.")
-    result = run_multitask(tasks, lambda task: answer_with_provider(task, []))
+    if any(len(task) > 4000 for task in tasks):
+        raise HTTPException(status_code=422, detail="Cada tarefa deve ter no máximo 4000 caracteres.")
+    result = run_multitask(tasks, execute_task_with_memory)
     for item in result["results"]:
         if item["status"] == "completed":
             save_conversation("assistant", f"[Multitarefa] {item['task']}\\n{item['result']}")
     return result
+
+
+@app.get("/")
+def root() -> dict[str, str]:
+    return {
+        "name": APP_NAME,
+        "status": "online",
+        "health": "/health",
+        "docs": "/docs",
+    }
 
 
 @app.get("/health")
