@@ -16,16 +16,14 @@ class ProviderError(RuntimeError):
 
 
 def provider_configured() -> bool:
-    return all(
-        os.getenv(name, "").strip()
-        for name in ("ULTRON_LLM_BASE_URL", "ULTRON_LLM_API_KEY", "ULTRON_LLM_MODEL")
-    )
+    # Gemini is the default free-tier candidate; compatible providers can override it.
+    return bool(os.getenv("ULTRON_LLM_API_KEY", "").strip())
 
 
 def provider_name() -> str | None:
     if not provider_configured():
         return None
-    return os.getenv("ULTRON_LLM_NAME", "online model").strip() or "online model"
+    return os.getenv("ULTRON_LLM_NAME", "Gemini 3.8 Flash").strip() or "Gemini 3.8 Flash"
 
 
 def generate_chat_reply(messages: list[dict[str, str]]) -> str | None:
@@ -37,9 +35,9 @@ def generate_chat_reply(messages: list[dict[str, str]]) -> str | None:
     if not provider_configured():
         return None
 
-    base_url = os.environ["ULTRON_LLM_BASE_URL"].strip().rstrip("/")
+    base_url = os.getenv("ULTRON_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").strip().rstrip("/")
     api_key = os.environ["ULTRON_LLM_API_KEY"].strip()
-    model = os.environ["ULTRON_LLM_MODEL"].strip()
+    model = os.getenv("ULTRON_LLM_MODEL", "gemini-3.8-flash").strip()
     if not base_url.startswith("https://"):
         raise ProviderError("O endereço do provedor de IA precisa usar HTTPS.")
 
