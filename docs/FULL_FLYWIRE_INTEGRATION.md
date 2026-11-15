@@ -17,7 +17,10 @@ automaticamente ULTRON em uma IA geral ou consciente.
 ## Integração adicionada
 
 - `backend/flywire_runtime.py` carrega o runner PyTorch upstream, verifica os
-  dados v783 e executa sessões persistentes de simulação em CPU.
+  dados v783 e executa sessões persistentes de simulação em CPU. A rota
+  `GET /brain/status` agora informa separadamente prontidão, arquivos e
+  dependências ausentes, runtime realmente carregado e modo habilitado, sem
+  expor caminhos internos do host.
 - `scripts/bootstrap_flywire.sh` clona o projeto upstream e baixa seus objetos
   Git LFS; não coloca os dados grandes no Git do ULTRON.
 - `requirements-flywire.txt` mantém PyTorch/Arrow isolados do servidor leve.
@@ -47,7 +50,14 @@ Não habilite esse caminho em Render Free: o plano leve não oferece a memória/
 necessária para garantir uma execução estável. O servidor só deve ativá-lo após
 um benchmark real no hardware de destino.
 
-## Limites ainda não resolvidos
+## Estado atual e limites ainda não resolvidos
+
+O cérebro completo não está ativo no Render Free. A validação de CI comprova
+que a simulação de teste consegue carregar o conectoma e executar passos no
+runner do GitHub, mas não prova que o processo de produção tem memória, CPU,
+dados LFS ou tempo de execução suficientes. A API mantém o microcircuito leve
+como núcleo operacional e só declara FlyWire completo quando o runtime real
+está carregado na memória.
 
 1. O mapeamento de linguagem natural para populações sensoriais precisa de uma
    camada de percepção treinada e validada com os IDs/annotations corretos.
