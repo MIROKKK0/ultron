@@ -4,11 +4,13 @@ import unittest
 from pathlib import Path
 
 os.environ["ULTRON_DB_PATH"] = str(Path(tempfile.gettempdir()) / "ultron-tests.sqlite3")
+os.environ["ULTRON_API_TOKEN"] = "test-ultron-token"
 
 from fastapi.testclient import TestClient
 from backend.app import app, calculate
 
 client = TestClient(app)
+AUTH = {"Authorization": "Bearer test-ultron-token"}
 
 
 class UltronTests(unittest.TestCase):
@@ -24,13 +26,21 @@ class UltronTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             calculate("__import__('os').system('echo unsafe')")
 
+    def test_api_requires_token(self):
+        response = client.post("/chat", json={"message": "oi"})
+        self.assertEqual(response.status_code, 401)
+
     def test_memory_crud(self):
-        created = client.post("/memory", json={"content": "Lembrar de testar o ULTRON"})
+        created = client.post(
+            "/memory",
+            json={"content": "Lembrar de testar o ULTRON"},
+            headers=AUTH,
+        )
         self.assertEqual(created.status_code, 200)
         memory_id = created.json()["id"]
-        listed = client.get("/memory")
+        listed = client.get("/memory", headers=AUTH)
         self.assertTrue(any(item["id"] == memory_id for item in listed.json()["items"]))
-        deleted = client.delete(f"/memory/{memory_id}")
+        deleted = client.delete(f"/memory/{memory_id}", headers=AUTH)
         self.assertEqual(deleted.status_code, 200)
 
 
