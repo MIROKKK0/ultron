@@ -108,31 +108,46 @@ class FlyBrainCore:
             n = self.neurons_per_group
             spikes_by_group = [0] * len(GROUPS)
             alpha = self.params.dt_ms / self.params.tau_mem_ms
+            # Precompute lexical routing once per request, not inside every
+            # neuron/timestep. The previous implementation repeatedly sorted
+            # the token set in the innermost loop.
+            ordered_tokens = sorted(tokens) or ["idle"]
+            routed_cells = {
+                group: {self._bucket(ordered_tokens[cell % len(ordered_tokens)], n)
+                        for cell in range(n)}
+                for group in range(len(GROUPS))
+            }
+            threshold = self.params.threshold
             for _ in range(self.steps):
-                previous = list(self._voltage)
+                previous = self._voltage
+                # Recurrent drive is identical for every target cell in a
+                # functional group, so compute it once per group and timestep.
+                source_rates = [
+                    sum(1 for value in previous[source * n:(source + 1) * n]
+                        if value >= threshold) / n
+                    for source in range(len(GROUPS))
+                ]
+                recurrent_by_group = [
+                    sum(self._connections(source, target) * source_rates[source]
+                        for source in range(len(GROUPS)))
+                    for target in range(len(GROUPS))
+                ]
+                next_voltage = [0.0] * len(previous)
                 for group in range(len(GROUPS)):
+                    base = group * n
+                    recurrent_drive = recurrent_by_group[group] * 3.0
                     for cell in range(n):
-                        idx = group * n + cell
-                        token_drive = sensory[group] if cell == self._bucket(
-                            str(sorted(tokens)[cell % max(1, len(tokens))]) if tokens else "idle", n
-                        ) else sensory[group] * 0.25
-                        recurrent = 0.0
-                        for source_group in range(len(GROUPS)):
-                            weight = self._connections(source_group, group)
-                            if weight:
-                                source_start = source_group * n
-                                recurrent += weight * sum(
-                                    1.0 for value in previous[source_start:source_start + n]
-                                    if value >= self.params.threshold
-                                ) / n
+                        idx = base + cell
+                        token_drive = sensory[group] if cell in routed_cells[group] else sensory[group] * 0.25
                         voltage = previous[idx] + alpha * (
-                            -previous[idx] + token_drive * 18.0 + recurrent * 3.0
+                            -previous[idx] + token_drive * 18.0 + recurrent_drive
                         )
-                        if voltage >= self.params.threshold:
-                            self._voltage[idx] = self.params.reset
+                        if voltage >= threshold:
+                            next_voltage[idx] = self.params.reset
                             spikes_by_group[group] += 1
                         else:
-                            self._voltage[idx] = max(self.params.leak, voltage)
+                            next_voltage[idx] = max(self.params.leak, voltage)
+                self._voltage = next_voltage
 
             rates = {
                 name: spikes_by_group[index] / float(self.steps * n)
