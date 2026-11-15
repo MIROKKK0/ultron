@@ -330,7 +330,7 @@ def brain_run(payload: BrainRequest, request: Request) -> dict[str, Any]:
         result = execute_brain_cycle(payload.goal.strip())
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    save_conversation("user", request.goal.strip())
+    save_conversation("user", payload.goal.strip())
     save_conversation("assistant", result["synthesis"])
     return result
 
