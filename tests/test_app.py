@@ -131,6 +131,15 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertIn("FlyWire data unavailable", response.json()["detail"])
 
+    def test_chat_returns_nonnegative_stage_timings(self):
+        response = client.post("/chat", json={"message": "oi"})
+        self.assertEqual(response.status_code, 200)
+        timings = response.json()["timings_ms"]
+        for key in ("flybrain", "strategy_policy", "research", "server_total"):
+            self.assertIn(key, timings)
+            self.assertGreaterEqual(timings[key], 0)
+        self.assertGreaterEqual(timings["server_total"], timings["flybrain"])
+
     def test_chat_returns_only_a_feedback_supported_strategy(self):
         neural_state = {
             "role_scores": {"planner": 1.0, "solver": 1.0, "critic": 1.0, "researcher": 99.0},
