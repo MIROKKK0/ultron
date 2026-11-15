@@ -101,6 +101,10 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .task(id: serverURL) {
+            // Render Free can sleep while idle; warm it in the background at launch.
+            await client.warmUp(serverURL: serverURL)
+        }
     }
 
     private static func requiresExactServerReply(_ text: String) -> Bool {
