@@ -1,3 +1,5 @@
+import unittest
+
 from backend.agent_core import (
     SELF_MODEL,
     improvement_proposal,
@@ -6,34 +8,32 @@ from backend.agent_core import (
 )
 
 
-def test_self_model_is_honest_about_limits():
-    model = SELF_MODEL.public_dict()
-    assert model["name"] == "ULTRON"
-    assert any("não treina pesos" in item for item in model["limitations"])
+class AgentCoreTests(unittest.TestCase):
+    def test_self_model_is_honest_about_limits(self):
+        model = SELF_MODEL.public_dict()
+        self.assertEqual(model["name"], "ULTRON")
+        self.assertTrue(any("não treina pesos" in item for item in model["limitations"]))
+
+    def test_system_instructions_include_relevant_memory(self):
+        prompt = system_instructions(["Prefere respostas em português"])
+        self.assertIn("Prefere respostas em português", prompt)
+        self.assertIn("Não modifique o próprio código de produção", prompt)
+
+    def test_review_is_explicitly_heuristic(self):
+        result = review_response("resolver bug", "A solução é esta.")
+        self.assertTrue(result["passed"])
+        self.assertIn("não comprova", result["note"])
+
+    def test_improvement_proposal_never_applies_itself(self):
+        proposal = improvement_proposal("O endpoint /chat está lento")
+        self.assertEqual(proposal["status"], "proposal_only")
+        self.assertFalse(proposal["production_changes"])
+        self.assertIn("executar testes", proposal["plan"][3])
+
+    def test_empty_improvement_problem_is_rejected(self):
+        with self.assertRaises(ValueError):
+            improvement_proposal(" ")
 
 
-def test_system_instructions_include_relevant_memory():
-    prompt = system_instructions(["Prefere respostas em português"])
-    assert "Prefere respostas em português" in prompt
-    assert "Não modifique o próprio código de produção" in prompt
-
-
-def test_review_is_explicitly_heuristic():
-    result = review_response("resolver bug", "A solução é esta.")
-    assert result["passed"] is True
-    assert "não comprova" in result["note"]
-
-
-def test_improvement_proposal_never_applies_itself():
-    proposal = improvement_proposal("O endpoint /chat está lento")
-    assert proposal["status"] == "proposal_only"
-    assert proposal["production_changes"] is False
-    assert "executar testes" in proposal["plan"][3]
-
-
-def test_empty_improvement_problem_is_rejected():
-    try:
-        improvement_proposal(" ")
-    except ValueError:
-        return
-    raise AssertionError("Expected empty proposal to fail")
+if __name__ == "__main__":
+    unittest.main()
