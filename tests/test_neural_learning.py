@@ -37,6 +37,15 @@ class NeuralLearningTests(unittest.TestCase):
         restored.load_state_dict(state)
         self.assertEqual(restored.state_dict(), state)
 
+    def test_association_count_is_capped_without_losing_bound(self):
+        memory = RewardModulatedAssociativeMemory(
+            learning_rate=0.2, decay=1.0, max_associations=2
+        )
+        memory.observe({1: 1.0, 2: 1.0}, {10: 1.0, 11: 1.0}, 1.0)
+        state = memory.state_dict()
+        self.assertLessEqual(len(state["weights"]), 2)
+        self.assertTrue(all(abs(item[2]) <= 1.0 for item in state["weights"]))
+
     def test_rejects_empty_and_oversized_activity(self):
         memory = RewardModulatedAssociativeMemory()
         with self.assertRaises(ValueError):

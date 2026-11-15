@@ -181,17 +181,19 @@ class FlyWireRuntime:
 
         model, state, rates, generator = self.sessions[key]
         steps = int(float(duration_sec) * 1000.0 / float(self.runner.DT))
-        total_spikes = 0
-        active_neurons: set[int] = set()
+        # Keep spike aggregation in Torch for the whole simulation window.
+        # The previous per-step .item()/nonzero().tolist() forced repeated
+        # Python<->Torch synchronization and allocated a Python set every step.
+        total_spikes = self.torch.zeros((), dtype=self.torch.int64, device=self.device)
+        active_mask = self.torch.zeros((self.neuron_count,), dtype=self.torch.bool, device=self.device)
         with self.torch.no_grad():
             for _ in range(steps):
                 state = model(*((rates,) + tuple(state)), generator=generator)
                 spikes = state[2]
-                total_spikes += int(spikes.sum().item())
-                if bool(spikes.any()):
-                    active_neurons.update(
-                        int(index) for index in spikes[0].nonzero(as_tuple=False).flatten().tolist()
-                    )
+                total_spikes += spikes.sum(dtype=self.torch.int64)
+                active_mask.logical_or_(spikes[0].to(dtype=self.torch.bool))
+        total_spikes_count = int(total_spikes.item())
+        active_neuron_count = int(active_mask.sum().item())
         self.sessions[key] = (model, state, rates, generator)
         return {
             "engine": "upstream_flywire_pytorch",
@@ -203,8 +205,8 @@ class FlyWireRuntime:
             "simulation_seconds": float(duration_sec),
             "timestep_ms": float(self.runner.DT),
             "steps": steps,
-            "active_neurons": len(active_neurons),
-            "spikes": total_spikes,
+            "active_neurons": active_neuron_count,
+            "spikes": total_spikes_count,
             "device": "cpu",
             "language_generation": False,
             "interpretation": (
