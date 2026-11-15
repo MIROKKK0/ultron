@@ -77,11 +77,10 @@ class FlyBrainCore:
             stimulus = "p9"
         else:
             return None
-        try:
-            from backend.flywire_runtime import simulate
-            return simulate(stimulus, 0.01)
-        except (RuntimeError, ValueError) as exc:
-            return {"available": False, "error": str(exc), "stimulus": stimulus}
+        from backend.flywire_runtime import simulate
+        # Explicit full-brain mode must fail closed; never silently downgrade
+        # to the 48-neuron demo circuit when the connectome cannot be loaded.
+        return simulate(stimulus, 0.01)
 
     def process(self, goal: str, memories: Iterable[str] = ()) -> dict:
         goal = str(goal).strip()
