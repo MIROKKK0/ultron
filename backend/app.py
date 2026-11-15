@@ -324,22 +324,85 @@ def execute_task_with_memory(task: str) -> str:
 
 
 def execute_brain_cycle(goal: str, history: list[str] | None = None) -> dict[str, Any]:
+    """Run real local planner/solver/critic tools; research intents use web search.
+
+    FlyBrain always processes the goal first and controls specialist ordering.
+    The local language decoder remains subordinate and no hosted LLM is called.
+    """
+    normalized_goal = goal.strip()
+    if not normalized_goal:
+        raise ValueError("Informe o objetivo.")
+
     with connect_db() as db:
         rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
-    memories = rank_memories(goal, rows, limit=8)
-    neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(goal, memories))
-    answer = answer_without_provider(goal, memories, history, neural_state)
-    scores = neural_state["role_scores"]
-    roles = sorted(("planner", "solver", "critic"),
-        key=lambda role: float(scores.get(role, 0.0)), reverse=True)
-    agents = [{"role": role, "neural_priority": scores.get(role, 0.0),
-        "status": "completed", "result": answer if index == 0 else
-        f"Perspectiva {role}: validar pressupostos, riscos e critérios de conclusão."}
-        for index, role in enumerate(roles)]
-    return {"brain_version": "3.0.0-local", "neural_core": neural_state,
-        "goal": goal, "agents": agents, "synthesis": answer,
+    memories = rank_memories(normalized_goal, rows, limit=8)
+    neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(normalized_goal, memories))
+    scores = neural_state.get("role_scores", {})
+
+    # Each specialist now performs its actual local function instead of returning
+    # a decorative placeholder string.
+    plan = plan_task(normalized_goal)
+    answer = answer_without_provider(normalized_goal, memories, history, neural_state)
+    critique = review_response(normalized_goal, answer)
+    outputs: dict[str, dict[str, Any]] = {
+        "planner": {"status": "completed", "result": plan},
+        "solver": {"status": "completed", "result": {"reply": answer}},
+        "critic": {"status": "completed", "result": critique},
+    }
+
+    research_query = (
+        normalized_goal[10:].strip()
+        if normalized_goal.casefold().startswith("/research ")
+        else _extract_research_query(normalized_goal)
+    )
+    research: dict[str, Any] | None = None
+    if research_query:
+        try:
+            research = search_web(research_query)
+            outputs["researcher"] = {
+                "status": "completed" if research.get("count", 0) else "no_results",
+                "result": research,
+            }
+        except Exception as exc:
+            # Do not fabricate research or let a temporary search outage erase
+            # the other completed cognitive stages.
+            outputs["researcher"] = {
+                "status": "failed",
+                "result": {"error": "Pesquisa web indisponível no momento."},
+            }
+
+    roles = sorted(
+        outputs,
+        key=lambda role: float(scores.get(role, 0.0)),
+        reverse=True,
+    )
+    agents = [
+        {
+            "role": role,
+            "neural_priority": float(scores.get(role, 0.0)),
+            **outputs[role],
+        }
+        for role in roles
+    ]
+    synthesis = research["summary"] if research and research.get("count", 0) else answer
+    if research and not research.get("count", 0):
+        synthesis += "\\n\\nA pesquisa não retornou fontes verificáveis."
+    return {
+        "brain_version": "4.0.0-local-tools",
+        "neural_core": neural_state,
+        "goal": normalized_goal,
+        "plan": plan,
+        "agents": agents,
+        "research": research,
+        "review": critique,
+        "synthesis": synthesis,
         "synthesis_status": "completed",
-        "execution_policy": "FlyBrain é o núcleo obrigatório; decodificador local sem APIs ou tokens externos."}
+        "execution_policy": (
+            "FlyBrain processa primeiro e prioriza as ferramentas locais; "
+            "planner, solver e critic executam funções reais; pesquisa usa fontes web; "
+            "decodificador linguístico local sem APIs ou tokens externos."
+        ),
+    }
 
 
 @app.get("/brain/status")
