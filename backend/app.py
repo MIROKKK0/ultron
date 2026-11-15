@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
@@ -17,6 +17,8 @@ from backend.brain import run_multitask
 from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
 from backend.flywire_runtime import status as flywire_status, runtime_loaded as flywire_runtime_loaded
 from backend.local_decoder import decode_local
+from backend.public_access import enforce_public_limit
+from backend.web_research import search_web
 
 APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -291,8 +293,9 @@ def execute_brain_cycle(goal: str, history: list[str] | None = None) -> dict[str
         "execution_policy": "FlyBrain é o núcleo obrigatório; decodificador local sem APIs ou tokens externos."}
 
 
-@app.get("/brain/status", dependencies=[Depends(require_api_token)])
-def brain_status() -> dict[str, Any]:
+@app.get("/brain/status")
+def brain_status(request: Request) -> dict[str, Any]:
+    enforce_public_limit(request, "brain-status", limit=60)
     return {
         "name": APP_NAME,
         "brain_version": "3.0.0-local",
@@ -314,16 +317,17 @@ def brain_status() -> dict[str, Any]:
         "model_configured": False,
         "language_decoder": "local_deterministic",
         "external_ai_tokens_required": False,
-        "web_research_enabled": False,
+        "web_research_enabled": True,
         "memory_enabled": True,
         "autonomous_production_changes": False,
     }
 
 
-@app.post("/brain/run", dependencies=[Depends(require_api_token)])
-def brain_run(request: BrainRequest) -> dict[str, Any]:
+@app.post("/brain/run")
+def brain_run(payload: BrainRequest, request: Request) -> dict[str, Any]:
+    enforce_public_limit(request, "brain-run", limit=10)
     try:
-        result = execute_brain_cycle(request.goal.strip())
+        result = execute_brain_cycle(payload.goal.strip())
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     save_conversation("user", request.goal.strip())
@@ -343,9 +347,15 @@ def brain_flywire_simulate(request: FlyWireSimulationRequest) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@app.post("/brain/research", dependencies=[Depends(require_api_token)])
-def brain_research(request: BrainRequest) -> dict[str, Any]:
-    raise HTTPException(status_code=503, detail="Pesquisa web não está implementada no modo local sem tokens.")
+@app.post("/brain/research")
+def brain_research(payload: BrainRequest, request: Request) -> dict[str, Any]:
+    enforce_public_limit(request, "web-research", limit=8)
+    try:
+        return search_web(payload.goal)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Pesquisa web indisponível no momento; tente novamente.") from exc
 
 
 @app.post("/brain/multitask", dependencies=[Depends(require_api_token)])
@@ -390,9 +400,10 @@ def health() -> dict[str, Any]:
     }
 
 
-@app.post("/chat", dependencies=[Depends(require_api_token)])
-def chat(request: ChatRequest) -> dict[str, str]:
-    message = request.message.strip()
+@app.post("/chat")
+def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
+    enforce_public_limit(request, "chat", limit=20)
+    message = payload.message.strip()
     with connect_db() as db:
         memory_rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
         history_rows = execute(
@@ -494,11 +505,12 @@ def benchmarks() -> dict[str, Any]:
             "warning": "Casos internos; não comparam inteligência entre modelos."}
 
 
-@app.post("/feedback", dependencies=[Depends(require_api_token)])
-def add_feedback(request: FeedbackRequest) -> dict[str, Any]:
+@app.post("/feedback")
+def add_feedback(payload: FeedbackRequest, request: Request) -> dict[str, Any]:
+    enforce_public_limit(request, "feedback", limit=30)
     with connect_db() as db:
         created_at = datetime.now(timezone.utc).isoformat()
-        values = (request.conversation_id, request.rating, request.comment.strip(), created_at)
+        values = (payload.conversation_id, payload.rating, payload.comment.strip(), created_at)
         if is_postgres(db):
             cursor = execute(
                 db,
@@ -518,7 +530,7 @@ def add_feedback(request: FeedbackRequest) -> dict[str, Any]:
             execute(
                 db,
                 "INSERT INTO strategy_feedback(role, reward, created_at) VALUES (?, ?, ?)",
-                (request.strategy, reward, created_at),
+                (payload.strategy, reward, created_at),
             )
     return {
         "id": feedback_id,
