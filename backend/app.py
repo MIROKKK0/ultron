@@ -435,7 +435,7 @@ def brain_status(request: Request) -> dict[str, Any]:
             "neurons": full_status["expected_neurons"] if loaded else FLY_BRAIN.neurons_per_group * 4,
             "microcircuit_neurons": FLY_BRAIN.neurons_per_group * 4,
             "simulation_steps": FLY_BRAIN.steps,
-            "full_connectome_ready": bool(full_status["available"]),
+            "full_connectome_ready": bool(full_status["available"] and full_status.get("memory_budget", {}).get("ready", False)),
             "full_connectome_loaded": loaded,
             "full_connectome_enabled_for_chat": full_connectome_enabled,
             "full_connectome": {
@@ -448,6 +448,7 @@ def brain_status(request: Request) -> dict[str, Any]:
                 "missing_code_files": full_status["missing_code_files"],
                 "missing_dependencies": full_status["missing_dependencies"],
                 "backend": full_status["backend"],
+                "memory_budget": full_status.get("memory_budget", {"ready": False, "source": "unknown"}),
             },
             "supported_full_connectome_stimuli": ["sugar", "p9"],
             "active_engine": "FlyWire v783" if loaded else "48-neuron LIF microcircuit",
@@ -469,6 +470,7 @@ def brain_status(request: Request) -> dict[str, Any]:
         "limitations": [
             "FlyWire v783 is a sensory/motor simulator, not a text-generating model.",
             "Only documented sugar and p9 stimuli are mapped to the full connectome.",
+            "Full-connectome loading is blocked unless measured free memory meets the configured safety budget.",
             "The lightweight 48-neuron LIF circuit remains active when the full runtime is not loaded.",
         ],
     }
