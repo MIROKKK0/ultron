@@ -1,8 +1,8 @@
 """Bounded, reward-modulated associative plasticity for ULTRON.
 
 This is an experimental computational learning layer inspired by fly mushroom
-body circuits. It is NOT a biological simulation of those circuits and does
-not modify the upstream FlyWire connectome weights.
+body circuits. It is not a biological simulation and never modifies FlyWire
+connectome weights or language-model parameters.
 """
 from __future__ import annotations
 
@@ -11,14 +11,13 @@ import math
 import re
 import threading
 from collections import defaultdict
-from typing import Iterable
 
 
 class SparseLexicalEncoder:
-    """Deterministic sparse lexical feature encoder; not a semantic embedding model."""
+    """Deterministic sparse lexical feature encoder; not semantic embeddings."""
 
     def __init__(self, dimensions: int = 256, max_features: int = 48) -> None:
-        if dimensions < 32 or max_features < 1:
+        if dimensions < 32 or max_features < 1 or max_features > 128:
             raise ValueError("Dimensões do codificador inválidas.")
         self.dimensions = dimensions
         self.max_features = max_features
@@ -43,29 +42,48 @@ class SparseLexicalEncoder:
 
 
 class RewardModulatedAssociativeMemory:
-    """Small three-factor association store: pre-activity, post-activity, reward.
-
-    Weights are bounded and decayed. Callers must persist state explicitly if
-    durable learning is required; the default instance is process-local.
-    """
+    """Three-factor associations with strict feature, value and storage bounds."""
 
     def __init__(self, learning_rate: float = 0.08, decay: float = 0.999,
-                 max_weight: float = 1.0, max_associations: int = 20000) -> None:
+                 max_weight: float = 1.0, max_associations: int = 20000,
+                 max_features_per_observation: int = 48) -> None:
         if not 0 < learning_rate <= 0.25 or not 0.9 <= decay <= 1.0:
             raise ValueError("Parâmetros de plasticidade fora dos limites.")
+        if not 0 < max_weight <= 1.0 or not 1 <= max_associations <= 20000:
+            raise ValueError("Limites de memória associativa inválidos.")
+        if not 1 <= max_features_per_observation <= 128:
+            raise ValueError("Limite de características inválido.")
         self.learning_rate = learning_rate
         self.decay = decay
         self.max_weight = max_weight
         self.max_associations = max_associations
+        self.max_features_per_observation = max_features_per_observation
         self._weights: dict[tuple[int, int], float] = {}
         self._lock = threading.RLock()
         self._observations = 0
 
+    @staticmethod
+    def _validated_activity(activity: dict[int, float], label: str,
+                            maximum: int) -> dict[int, float]:
+        if not isinstance(activity, dict) or not activity or len(activity) > maximum:
+            raise ValueError(f"{label} deve conter de 1 a {maximum} características.")
+        validated: dict[int, float] = {}
+        for raw_index, raw_value in activity.items():
+            index = int(raw_index)
+            value = float(raw_value)
+            if not 0 <= index < 4096 or not math.isfinite(value) or not 0.0 <= value <= 1.0:
+                raise ValueError(f"Atividade de {label} fora dos limites.")
+            validated[index] = value
+        return validated
+
     def observe(self, context: dict[int, float], outcome: dict[int, float],
                 reward: float) -> dict:
-        reward = max(-1.0, min(1.0, float(reward)))
-        if not context or not outcome:
-            raise ValueError("Contexto e resultado precisam conter atividade.")
+        reward = float(reward)
+        if not math.isfinite(reward):
+            raise ValueError("Recompensa precisa ser um número finito.")
+        reward = max(-1.0, min(1.0, reward))
+        context = self._validated_activity(context, "Contexto", self.max_features_per_observation)
+        outcome = self._validated_activity(outcome, "Resultado", self.max_features_per_observation)
         with self._lock:
             for key in list(self._weights):
                 self._weights[key] *= self.decay
@@ -74,8 +92,8 @@ class RewardModulatedAssociativeMemory:
             delta = self.learning_rate * reward
             for pre, pre_activity in context.items():
                 for post, post_activity in outcome.items():
-                    key = (int(pre), int(post))
-                    updated = self._weights.get(key, 0.0) + delta * float(pre_activity) * float(post_activity)
+                    key = (pre, post)
+                    updated = self._weights.get(key, 0.0) + delta * pre_activity * post_activity
                     self._weights[key] = max(-self.max_weight, min(self.max_weight, updated))
             if len(self._weights) > self.max_associations:
                 weakest = sorted(self._weights, key=lambda key: abs(self._weights[key]))[
@@ -86,14 +104,16 @@ class RewardModulatedAssociativeMemory:
             self._observations += 1
             return {"observations": self._observations, "associations": len(self._weights),
                     "reward": reward, "learning_rate": self.learning_rate,
-                    "weight_bound": self.max_weight}
+                    "weight_bound": self.max_weight,
+                    "features_context": len(context), "features_outcome": len(outcome)}
 
     def recall(self, context: dict[int, float], limit: int = 8) -> list[dict]:
+        context = self._validated_activity(context, "Contexto", self.max_features_per_observation)
         scores: dict[int, float] = defaultdict(float)
         with self._lock:
             for (pre, post), weight in self._weights.items():
                 if pre in context:
-                    scores[post] += float(context[pre]) * weight
+                    scores[post] += context[pre] * weight
         return [{"feature": feature, "activation": round(score, 6)}
                 for feature, score in sorted(scores.items(), key=lambda item: (-item[1], item[0]))[:max(1, min(limit, 32))]
                 if score > 0]
