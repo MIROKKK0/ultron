@@ -274,6 +274,27 @@ struct ContentView: View {
             normalized.hasPrefix("/remember ")
     }
 
+    /// Hide Qwen's private reasoning channel while tokens are arriving.
+    /// Some Qwen3 builds emit <think> blocks despite the /no_think hint.
+    private static func visibleAnswer(from raw: String) -> String {
+        var visible = raw
+        if let start = visible.range(of: "<think>", options: .caseInsensitive) {
+            if let end = visible.range(of: "</think>", options: .caseInsensitive,
+                                       range: start.upperBound..<visible.endIndex) {
+                visible.removeSubrange(start.lowerBound..<end.upperBound)
+            } else {
+                visible = String(visible[..<start.lowerBound])
+            }
+        }
+        visible = visible.replacingOccurrences(
+            of: "</?think>", with: "", options: [.regularExpression, .caseInsensitive]
+        )
+        visible = visible.replacingOccurrences(
+            of: "<\\|[^>]*\\|>", with: "", options: .regularExpression
+        )
+        return visible.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isSending else { return }
@@ -318,13 +339,16 @@ struct ContentView: View {
                         var generated = ""
                         for try await token in stream {
                             generated += token
-                            if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
-                                messages[index].text = generated
+                            let visible = Self.visibleAnswer(from: generated)
+                            // Keep the verified backend answer visible until the
+                            // local model produces user-facing text. Never stream
+                            // private <think> content into the chat bubble.
+                            if !visible.isEmpty,
+                               let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
+                                messages[index].text = visible
                             }
                         }
-                        let cleaned = generated
-                            .replacingOccurrences(of: "<think>[\\s\\S]*?</think>", with: "", options: .regularExpression)
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        let cleaned = Self.visibleAnswer(from: generated)
                         if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
                             messages[index].text = cleaned.isEmpty ? result.reply : cleaned
                         }
