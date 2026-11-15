@@ -11,7 +11,8 @@ Status: implementação integrada em andamento. O módulo de codificação espar
 
 ## O que falta para o cérebro virar o núcleo de uma IA útil
 
-### 1. Codificador de entrada (parcial — primeira versão adicionada)\nFoi adicionado um codificador lexical esparso determinístico de 256 dimensões. Ele não é embedding semântico e ainda não generaliza significado; é uma ponte inicial testável entre texto e atividade.
+### 1. Codificador de entrada (parcial — primeira versão adicionada)
+Foi adicionado um codificador lexical esparso determinístico de 256 dimensões. Ele não é embedding semântico e ainda não generaliza significado; é uma ponte inicial testável entre texto e atividade.
 Criar uma representação estruturada de texto, áudio, imagem e resultados da web. O codificador precisa mapear intenção, entidades, relações, contexto e incerteza para padrões de atividade neural. Não basta mapear palavras isoladas para neurônios escolhidos manualmente.
 
 Critérios de aceitação:
@@ -27,7 +28,8 @@ Critérios:
 - comparar spikes, taxas de disparo e neurônios recrutados com resultados de referência;
 - registrar versão do dataset, checksums, parâmetros e resultados de cada experimento.
 
-### 3. Memória neural e aprendizagem (parcial — primeira versão adicionada)\nFoi adicionada memória associativa pré/pós-atividade modulada por recompensa, com decaimento, limites de peso, recall e checkpoint no banco. O feedback do app ajusta prioridades de estratégia dentro de limites. Ainda não há plasticidade dos pesos FlyWire.
+### 3. Memória neural e aprendizagem (parcial — primeira versão adicionada)
+Foi adicionada memória associativa pré/pós-atividade modulada por recompensa, com decaimento, limites de peso, recall e checkpoint no banco. O feedback do app ajusta prioridades de estratégia dentro de limites. Ainda não há plasticidade dos pesos FlyWire.
 A memória atual é uma tabela de texto com busca lexical. O feedback atual ajusta apenas prioridades de planner/solver/critic. Não há plasticidade sináptica.
 
 A pesquisa sobre o mushroom body da mosca aponta mecanismos relevantes: células Kenyon, neurônios dopaminérgicos, neurônios de saída, reforço, erro de previsão, plasticidade e memórias com estabilidade diferente. A próxima implementação deve usar uma regra de plasticidade de três fatores (atividade pré/pós-sináptica + sinal modulador), com limites, decaimento, consolidação e replay. Não se deve atualizar os 15 milhões de pesos sem experimento controlado.
@@ -38,10 +40,12 @@ Critérios:
 - comparar contra uma baseline sem plasticidade;
 - permitir exportar, restaurar e auditar o estado aprendido.
 
-### 4. Decodificador de saída (pendente)\nO decodificador atual continua determinístico e baseado em regras; não foi treinado para ler padrões neurais e gerar linguagem.
+### 4. Decodificador de saída (pendente)
+O decodificador atual continua determinístico e baseado em regras; não foi treinado para ler padrões neurais e gerar linguagem.
 Atividade neural não é texto. Treinar um readout que transforme padrões populacionais em intenções, ações e respostas. O readout precisa ser avaliado em dados separados dos usados no treino. Sem essa ponte, o LIF pode simular spikes mas não conversar abertamente.
 
-### 5. Ciclo cognitivo e ferramentas (parcial)\nO chat, pesquisa, core neural e decodificador estão conectados em um fluxo; especialistas paralelos continuam sendo perspectivas heurísticas executadas pelo decodificador local, não agentes de linguagem independentes.
+### 5. Ciclo cognitivo e ferramentas (parcial)
+O chat, pesquisa, core neural e decodificador estão conectados em um fluxo; especialistas paralelos continuam sendo perspectivas heurísticas executadas pelo decodificador local, não agentes de linguagem independentes.
 O planner/solver/critic atual é uma orquestração heurística, não três inteligências independentes. O próximo ciclo deve ser:
 1. codificar a solicitação;
 2. recuperar memória relevante;
@@ -54,7 +58,8 @@ O planner/solver/critic atual é uma orquestração heurística, não três inte
 
 Pesquisa web é uma ferramenta de percepção externa, não deve ser apresentada como se o conectoma tivesse conhecimento da internet. A busca deve guardar consulta, URLs, data, trechos e evidência, e separar fatos de inferências.
 
-### 6. Autoaperfeiçoamento seguro (parcial)\nFeedback real do usuário calibra prioridades de estratégia, com limite de 10 avaliações por IP/hora e ajuste máximo de ±15%. O módulo associativo tem aprendizagem experimental por recompensa. Não há autoalteração de código nem treino de pesos do conectoma.
+### 6. Autoaperfeiçoamento seguro (parcial)
+Feedback real do usuário calibra prioridades de estratégia, com limite de 10 avaliações por IP/hora e ajuste máximo de ±15%. O módulo associativo tem aprendizagem experimental por recompensa. Não há autoalteração de código nem treino de pesos do conectoma.
 A evolução atual é calibração limitada por feedback. Para evoluir de verdade, criar um ciclo de experimentos:
 - detectar falhas recorrentes;
 - criar hipótese e métrica antes de alterar;
@@ -74,7 +79,9 @@ O iPhone 11 Pro deve ser tratado inicialmente como cliente SwiftUI. Executar o c
 ### 8. Segurança do acesso sem token (bloqueador antes de publicar)
 Não colocar um segredo estático dentro do IPA. Para endpoints públicos, usar limites compartilhados no banco, quotas por instalação, proteção contra abuso e isolamento de memória/conversas por instalação. A opção nativa de integridade é Apple App Attest, com desafio de uso único, atestado validado no servidor e assertions assinadas. Até concluir isso, não abrir endpoints que leiam/escrevam memória privada ou alterem aprendizagem global sem autenticação.
 
-Nota de implementação: a rota pública do chat está deliberadamente sem memória persistente até existir isolamento de dados por instalação. Não remover essa proteção para 'fazer memória funcionar' sem concluir App Attest/identidade e testes de privacidade.\n\n## Ordem recomendada
+Nota de implementação: a rota pública do chat está deliberadamente sem memória persistente até existir isolamento de dados por instalação. Não remover essa proteção para 'fazer memória funcionar' sem concluir App Attest/identidade e testes de privacidade.
+
+## Ordem recomendada
 
 1. Fechar privacidade, identidade de instalação, rate limits compartilhados e testes de API.
 2. Ativar pesquisa web com fontes, timeout, cache e validação dos links.
