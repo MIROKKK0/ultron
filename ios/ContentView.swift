@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @AppStorage("ultronServerURL") private var serverURL = "https://ultron-api-c5ae.onrender.com"
-    @AppStorage("ultronAPIToken") private var apiToken = ""
+    @State private var apiToken = KeychainStore.load() ?? ""
     @State private var messages: [ChatMessage] = [
         ChatMessage(role: .assistant, text: "Olá. Eu sou o ULTRON. Configure servidor e token para começar. Comandos: /self, /brain seu objetivo complexo, /research sua pergunta, /multi tarefa 1 || tarefa 2, /plan seu objetivo, /remember sua nota e /calc 12*(3+4).")
     ]
@@ -95,6 +95,9 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onChange(of: apiToken) { newValue in
+            KeychainStore.save(newValue)
+        }
     }
 
     private func send() {
@@ -158,7 +161,7 @@ private struct SettingsView: View {
                     SecureField("Token de acesso", text: $draftToken)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    Text("Use o endereço HTTPS e o token fornecidos na configuração do servidor. A chave do provedor de IA fica somente no servidor.")
+                    Text("Use o endereço HTTPS e o token fornecidos na configuração do servidor. Este token só autentica a API; não é uma chave de IA. Configure ULTRON_API_TOKEN no painel do Render e use o mesmo valor aqui.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
