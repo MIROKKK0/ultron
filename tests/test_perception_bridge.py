@@ -29,6 +29,14 @@ class PerceptionBridgeTests(unittest.TestCase):
     def test_empty_input_is_safe(self):
         self.assertEqual(perceive("  ")["intent"], "empty")
 
+    def test_flybrain_exposes_bridge_decision_without_claiming_full_connectome(self):
+        from backend.fly_brain import FlyBrainCore
+
+        state = FlyBrainCore().process("Quero comida")
+        self.assertEqual(state["perception"]["stimulus"], "sugar")
+        self.assertFalse(state["is_full_connectome"])
+
+
 
 if __name__ == "__main__":
     unittest.main()
