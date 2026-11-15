@@ -110,6 +110,12 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(provider.call_args.args[3], neural_state)
         self.assertEqual(response.json()["reply"], "resposta")
 
+    def test_chat_fails_closed_when_full_brain_is_enabled_but_unavailable(self):
+        with patch("backend.app.FLY_BRAIN.process", side_effect=RuntimeError("FlyWire data unavailable")):
+            response = client.post("/chat", json={"message": "quero comida"}, headers=AUTH)
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("FlyWire data unavailable", response.json()["detail"])
+
     def test_brain_status(self):
         response = client.get("/brain/status", headers=AUTH)
         self.assertEqual(response.status_code, 200)
