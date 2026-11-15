@@ -479,7 +479,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     message = payload.message.strip()
     # Public chat must not read or write shared private memories/conversations.
     try:
-        neural_state = FLY_BRAIN.process(message, [])
+        neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, []))
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     if message.casefold().startswith("/research "):
@@ -575,7 +575,8 @@ def benchmarks() -> dict[str, Any]:
 
 @app.post("/feedback")
 def add_feedback(payload: FeedbackRequest, request: Request) -> dict[str, Any]:
-    enforce_public_limit(request, "feedback", limit=30)
+    # Explicit user ratings are the only public learning signal; throttle heavily.
+    enforce_public_limit(request, "feedback", limit=10, window_seconds=3600)
     with connect_db() as db:
         created_at = datetime.now(timezone.utc).isoformat()
         values = (payload.conversation_id, payload.rating, payload.comment.strip(), created_at)
@@ -593,12 +594,20 @@ def add_feedback(payload: FeedbackRequest, request: Request) -> dict[str, Any]:
                 values,
             )
             feedback_id = cursor.lastrowid
+        if payload.strategy:
+            reward = (payload.rating - 3) / 2.0
+            execute(
+                db,
+                "INSERT INTO strategy_feedback(role, reward, created_at) VALUES (?, ?, ?)",
+                (payload.strategy, reward, created_at),
+            )
 
     return {
         "id": feedback_id,
         "stored": True,
         "used_for_model_training": False,
-        "used_for_policy_calibration": False,
+        "used_for_policy_calibration": bool(payload.strategy),
+        "learning_scope": "bounded_strategy_priority_only",
         "strategy": payload.strategy,
     }
 
