@@ -18,17 +18,22 @@ struct ChatMessage: Identifiable, Codable {
     }
 }
 
-private struct ChatRequest: Encodable { let message: String }
+private struct ChatTurn: Encodable { let role: String; let content: String }
+private struct ChatRequest: Encodable { let message: String; let history: [ChatTurn] }
 private struct ChatResponse: Decodable {
     let reply: String
     let strategy: String?
     let brainContext: BrainContext?
     let timingsMS: [String: Double]?
+    let providerUsed: Bool?
+    let providerName: String?
 
     enum CodingKeys: String, CodingKey {
         case reply, strategy
         case brainContext = "brain_context"
         case timingsMS = "timings_ms"
+        case providerUsed = "provider_used"
+        case providerName = "provider_name"
     }
 }
 private struct FeedbackRequest: Encodable {
@@ -59,6 +64,8 @@ struct ChatResult {
     let brainContext: BrainContext?
     let timingsMS: [String: Double]
     let networkRoundTripMS: Double
+    let providerUsed: Bool
+    let providerName: String?
 }
 
 enum ChatClientError: LocalizedError {
@@ -118,7 +125,7 @@ struct ChatClient {
         return false
     }
 
-    func send(_ message: String, serverURL: String) async throws -> ChatResult {
+    func send(_ message: String, history: [ChatMessage] = [], serverURL: String) async throws -> ChatResult {
         let url = try endpoint("/chat", serverURL: serverURL)
 
         // Send directly to /chat. A separate /health round-trip before every
@@ -131,7 +138,12 @@ struct ChatClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Request-ID")
-        request.httpBody = try JSONEncoder().encode(ChatRequest(message: message))
+        let recentHistory = history.suffix(10).map { item in
+            ChatTurn(role: item.role.rawValue, content: item.text)
+        }
+        request.httpBody = try JSONEncoder().encode(
+            ChatRequest(message: message, history: Array(recentHistory))
+        )
 
         var lastError: Error?
         for attempt in 0..<3 {
@@ -153,7 +165,9 @@ struct ChatClient {
                     strategy: result.strategy,
                     brainContext: result.brainContext,
                     timingsMS: result.timingsMS ?? [:],
-                    networkRoundTripMS: networkRoundTripMS
+                    networkRoundTripMS: networkRoundTripMS,
+                    providerUsed: result.providerUsed ?? false,
+                    providerName: result.providerName
                 )
             } catch {
                 lastError = error
