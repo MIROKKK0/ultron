@@ -96,6 +96,19 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(mocked.call_args.args[1], [])
         self.assertEqual(mocked.call_args.args[2], [])
 
+    def test_public_chat_does_not_persist_shared_conversations(self):
+        with patch("backend.app.save_conversation") as save:
+            response = client.post("/chat", json={"message": "conversa privada"})
+        self.assertEqual(response.status_code, 200)
+        save.assert_not_called()
+
+    def test_public_remember_request_does_not_write_shared_memory(self):
+        with patch("backend.app.connect_db") as connect:
+            response = client.post("/chat", json={"message": "lembre que gosto de respostas curtas"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("identificação segura por instalação", response.json()["reply"])
+        connect.assert_not_called()
+
     def test_every_chat_turn_passes_through_mandatory_neural_core(self):
         neural_state = {"core": "drosophila_lif_microcircuit", "mandatory": True}
         with patch("backend.app.FLY_BRAIN.process", return_value=neural_state) as neural:
