@@ -365,7 +365,7 @@ struct ContentView: View {
                     if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
                         messages[index].text = result.reply
                     }
-                    errorMessage = "A resposta do FlyBrain foi mantida; o refinamento local não concluiu: \\(error.localizedDescription)"
+                    errorMessage = "A resposta do FlyBrain foi mantida; o refinamento local não concluiu: \(error.localizedDescription)"
                 }
             } catch {
                 serverOnline = false
