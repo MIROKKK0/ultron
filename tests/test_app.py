@@ -103,8 +103,9 @@ class UltronTests(unittest.TestCase):
         save.assert_not_called()
 
     def test_public_remember_request_does_not_write_shared_memory(self):
-        with patch("backend.app.connect_db") as connect:
-            response = client.post("/chat", json={"message": "lembre que gosto de respostas curtas"})
+        with patch("backend.app.apply_learned_strategy_policy", side_effect=lambda state: state):
+            with patch("backend.app.connect_db") as connect:
+                response = client.post("/chat", json={"message": "lembre que gosto de respostas curtas"})
         self.assertEqual(response.status_code, 200)
         self.assertIn("identificação segura por instalação", response.json()["reply"])
         connect.assert_not_called()
