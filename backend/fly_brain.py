@@ -103,7 +103,7 @@ class FlyBrainCore:
                                     if value >= self.params.threshold
                                 ) / n
                         voltage = previous[idx] + alpha * (
-                            -previous[idx] + token_drive * 1.4 + recurrent * 3.0
+                            -previous[idx] + token_drive * 18.0 + recurrent * 3.0
                         )
                         if voltage >= self.params.threshold:
                             self._voltage[idx] = self.params.reset
