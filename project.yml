@@ -1,13 +1,19 @@
 name: ULTRON
 options:
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "17.0"
+packages:
+  SwiftLlama:
+    path: vendor/swift-llama-cpp
 targets:
   ULTRON:
     type: application
     platform: iOS
     sources:
       - path: ios
+    dependencies:
+      - package: SwiftLlama
+        product: SwiftLlama
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.ultron.assistant
