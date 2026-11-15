@@ -35,8 +35,6 @@ jobs:
       - name: Run real 138k-neuron connectome smoke simulations
         env:
           ULTRON_FLYWIRE_ROOT: vendor/fly-brain
-        env:
-          ULTRON_FLYWIRE_ROOT: vendor/fly-brain
           FLYWIRE_VALIDATION_OUTPUT: artifacts/flywire-validation.json
         run: python scripts/validate_flywire.py
       - name: Upload simulation evidence
