@@ -372,7 +372,7 @@ struct ContentView: View {
                 )
                 let server = result.timingsMS
                 let serverSummary = "Rede: \(Int(result.networkRoundTripMS)) ms · Servidor: \(Int(server["server_total"] ?? 0)) ms · FlyBrain: \(Int(server["flybrain"] ?? 0)) ms · Política: \(Int(server["strategy_policy"] ?? 0)) ms"
-                assistantMessage.diagnostics = serverSummary + (result.providerUsed ? " · (result.providerName ?? "IA online")" : (localModel.isModelAvailable ? " · Qwen: processando" : " · Qwen: não instalado"))
+                assistantMessage.diagnostics = serverSummary + (result.providerUsed ? " · \(result.providerName ?? "IA online")" : (localModel.isModelAvailable ? " · Qwen: processando" : " · Qwen: não instalado"))
                 messages.append(assistantMessage)
 
                 // Do not expose a generic decoder fallback as the final answer.
