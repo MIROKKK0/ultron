@@ -89,6 +89,10 @@ def init_db() -> None:
                 id BIGSERIAL PRIMARY KEY, conversation_id BIGINT, rating INTEGER NOT NULL,
                 comment TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
             )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS strategy_feedback (
+                id BIGSERIAL PRIMARY KEY, role TEXT NOT NULL,
+                reward DOUBLE PRECISION NOT NULL, created_at TEXT NOT NULL
+            )""")
         else:
             execute(db, """
                 CREATE TABLE IF NOT EXISTS memories (
@@ -108,6 +112,10 @@ def init_db() -> None:
             execute(db, """CREATE TABLE IF NOT EXISTS feedback (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER, rating INTEGER NOT NULL,
                 comment TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+            )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS strategy_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT NOT NULL,
+                reward REAL NOT NULL, created_at TEXT NOT NULL
             )""")
 
 
@@ -139,6 +147,7 @@ class FeedbackRequest(BaseModel):
     rating: int = Field(ge=1, le=5)
     comment: str = Field(default="", max_length=2000)
     conversation_id: int | None = None
+    strategy: Literal["planner", "solver", "critic"] | None = None
 
 
 class BrainRequest(BaseModel):
@@ -222,6 +231,39 @@ def answer_with_provider(message: str, memories: list[str] | None = None,
     return answer_without_provider(message, memories, history, neural_state)
 
 
+def apply_learned_strategy_policy(neural_state: dict[str, Any]) -> dict[str, Any]:
+    """Calibrate strategy priorities from explicit user ratings, within safe bounds.
+
+    This never changes FlyWire synapses, model weights, security rules, or code.
+    """
+    with connect_db() as db:
+        rows = execute(
+            db,
+            "SELECT role, AVG(reward) AS average_reward, COUNT(*) AS samples "
+            "FROM strategy_feedback GROUP BY role",
+        ).fetchall()
+    adjustments: dict[str, float] = {}
+    scores = neural_state.get("role_scores", {})
+    for row in rows:
+        role = str(row["role"])
+        if role not in scores:
+            continue
+        samples = int(row["samples"])
+        average_reward = float(row["average_reward"])
+        confidence = samples / (samples + 5.0)
+        adjustment = max(-0.15, min(0.15, average_reward * 0.15 * confidence))
+        scores[role] = round(max(0.0, float(scores[role]) * (1.0 + adjustment)), 4)
+        adjustments[role] = round(adjustment, 4)
+    neural_state["policy_learning"] = {
+        "method": "bounded_explicit_feedback_calibration",
+        "samples_by_strategy": {str(row["role"]): int(row["samples"]) for row in rows},
+        "applied_adjustments": adjustments,
+        "synaptic_weights_changed": False,
+        "self_modifying_code": False,
+    }
+    return neural_state
+
+
 def execute_task_with_memory(task: str) -> str:
     with connect_db() as db:
         rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
@@ -234,7 +276,7 @@ def execute_brain_cycle(goal: str, history: list[str] | None = None) -> dict[str
     with connect_db() as db:
         rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
     memories = rank_memories(goal, rows, limit=8)
-    neural_state = FLY_BRAIN.process(goal, memories)
+    neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(goal, memories))
     answer = answer_without_provider(goal, memories, history, neural_state)
     scores = neural_state["role_scores"]
     roles = sorted(("planner", "solver", "critic"),
@@ -358,13 +400,15 @@ def chat(request: ChatRequest) -> dict[str, str]:
         f"{row['role']}: {row['content']}" for row in reversed(history_rows)
     ]
     # Every normal chat turn passes through the mandatory spiking control center.
-    neural_state = FLY_BRAIN.process(message, memory_items)
+    neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, memory_items))
     save_conversation("user", message)
     response = answer_without_provider(
         message, memory_items, history_items, neural_state
     )
     save_conversation("assistant", response)
-    return {"reply": response}
+    role_scores = neural_state.get("role_scores", {"solver": 0.0})
+    selected_strategy = max(role_scores, key=role_scores.get)
+    return {"reply": response, "strategy": selected_strategy}
 
 
 @app.post("/memory", dependencies=[Depends(require_api_token)])
@@ -443,7 +487,8 @@ def benchmarks() -> dict[str, Any]:
 @app.post("/feedback", dependencies=[Depends(require_api_token)])
 def add_feedback(request: FeedbackRequest) -> dict[str, Any]:
     with connect_db() as db:
-        values = (request.conversation_id, request.rating, request.comment.strip(), datetime.now(timezone.utc).isoformat())
+        created_at = datetime.now(timezone.utc).isoformat()
+        values = (request.conversation_id, request.rating, request.comment.strip(), created_at)
         if is_postgres(db):
             cursor = execute(
                 db,
@@ -458,7 +503,20 @@ def add_feedback(request: FeedbackRequest) -> dict[str, Any]:
                 values,
             )
             feedback_id = cursor.lastrowid
-    return {"id": feedback_id, "stored": True, "used_for_model_training": False}
+        if request.strategy:
+            reward = (request.rating - 3) / 2.0
+            execute(
+                db,
+                "INSERT INTO strategy_feedback(role, reward, created_at) VALUES (?, ?, ?)",
+                (request.strategy, reward, created_at),
+            )
+    return {
+        "id": feedback_id,
+        "stored": True,
+        "used_for_model_training": False,
+        "used_for_policy_calibration": bool(request.strategy),
+        "strategy": request.strategy,
+    }
 
 
 @app.get("/feedback/summary", dependencies=[Depends(require_api_token)])
