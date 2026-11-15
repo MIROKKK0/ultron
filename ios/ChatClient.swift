@@ -70,6 +70,17 @@ enum ChatClientError: LocalizedError {
 }
 
 struct ChatClient {
+    /// Wake a sleeping free-tier Render instance before the user sends a message.
+    func warmUp(serverURL: String) async {
+        guard let base = URL(string: serverURL), base.scheme == "https",
+              let url = URL(string: "/health", relativeTo: base) else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 25
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        _ = try? await URLSession.shared.data(for: request)
+    }
+
     func send(_ message: String, serverURL: String) async throws -> ChatResult {
         guard let base = URL(string: serverURL), base.scheme == "https",
               let url = URL(string: "/chat", relativeTo: base) else {
