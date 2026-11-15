@@ -163,6 +163,7 @@ class FlyBrainCore:
                 "critic": 0.55 + self._trace[2] + novelty * 0.2,
                 "researcher": 0.4 + self._trace[0] * 0.35 + novelty * 0.35,
             }
+            perception = perceive(goal)
             full_connectome = self._full_connectome_signal(goal)
             if full_connectome and full_connectome.get("full_connectome_loaded"):
                 activity = min(1.0, full_connectome["active_neurons"] / max(1, full_connectome["neurons"]))
