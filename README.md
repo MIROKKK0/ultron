@@ -10,6 +10,8 @@ Assistente pessoal em português, com app nativo para iPhone, API HTTPS, autenti
 - Autenticação Bearer por `ULTRON_API_TOKEN`.
 - Google Gemini (`GOOGLE_API_KEY`) ou OpenAI (`OPENAI_API_KEY`).
 - Testes Python e GitHub Actions para CI, simulador e IPA.
+- Núcleo próprio de agente com planejamento, recuperação lexical de memórias, autoavaliação e propostas de melhoria supervisionadas.
+- Feedback persistido para medir satisfação ao longo do tempo (não treina pesos do modelo).
 
 ## Backend local
 
@@ -22,6 +24,19 @@ python ultron.py --host 0.0.0.0
 ```
 
 A API local fica em `http://localhost:8000`; a documentação interativa fica em `/docs`.
+
+## Recursos do agente
+
+Com Bearer token, o backend oferece:
+- `GET /self`: identidade, capacidades e estado de configuração.
+- `POST /agent/plan` com `{"goal":"..."}`: plano de tarefa, risco e necessidade de aprovação.
+- `POST /reflect`: checklist heurístico de uma resposta.
+- `POST /improvement-proposals`: proposta testável, sem aplicar alterações automaticamente.
+- `GET /benchmarks`: casos internos de fumaça.
+- `POST /feedback` com avaliação de 1 a 5 e comentário opcional.
+- `GET /feedback/summary`: média de avaliações armazenadas.
+
+A memória do chat prioriza itens com maior correspondência lexical. Feedback melhora a avaliação e orientação futura do produto, mas não atualiza automaticamente os pesos do Gemini/OpenAI.
 
 Para PostgreSQL, defina `DATABASE_URL`. Para ativar respostas inteligentes, defina `GOOGLE_API_KEY` (Gemini) ou `OPENAI_API_KEY`. O Gemini é a opção prevista para começar com o nível gratuito disponível na conta Google AI Studio; limites e disponibilidade dependem da conta e do modelo.
 
