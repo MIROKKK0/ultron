@@ -359,6 +359,9 @@ struct ContentView: View {
                     text: result.reply,
                     strategy: result.strategy
                 )
+                let server = result.timingsMS
+                let serverSummary = "Rede: \(Int(result.networkRoundTripMS)) ms · Servidor: \(Int(server["server_total"] ?? 0)) ms · FlyBrain: \(Int(server["flybrain"] ?? 0)) ms · Política: \(Int(server["strategy_policy"] ?? 0)) ms"
+                assistantMessage.diagnostics = serverSummary + (localModel.isModelAvailable ? " · Qwen: processando" : " · Qwen: não instalado")
                 messages.append(assistantMessage)
 
                 // Show the verified FlyBrain reply immediately. Qwen refinement
@@ -374,6 +377,7 @@ struct ContentView: View {
 
                 do {
                     let contextMessages = Array(messages.dropLast(2).suffix(4))
+                    let qwenStartedAt = Date()
                     let stream = try await localModel.stream(
                         userMessage: text,
                         previousMessages: contextMessages,
@@ -381,7 +385,11 @@ struct ContentView: View {
                         serverReply: result.reply
                     )
                     var generated = ""
+                    var firstTokenMS: Int?
                     for try await token in stream {
+                        if firstTokenMS == nil {
+                            firstTokenMS = Int(Date().timeIntervalSince(qwenStartedAt) * 1000)
+                        }
                         generated += token
                         let visible = Self.visibleAnswer(from: generated)
                         if !visible.isEmpty,
@@ -392,6 +400,9 @@ struct ContentView: View {
                     let cleaned = Self.visibleAnswer(from: generated)
                     if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
                         messages[index].text = cleaned.isEmpty ? result.reply : cleaned
+                        let totalQwenMS = Int(Date().timeIntervalSince(qwenStartedAt) * 1000)
+                        let firstToken = firstTokenMS.map { "\($0) ms até o primeiro token" } ?? "sem tokens"
+                        messages[index].diagnostics = (messages[index].diagnostics ?? "") + " · Qwen: \(totalQwenMS) ms (\(firstToken))"
                     }
                 } catch {
                     if let index = messages.firstIndex(where: { $0.id == assistantMessage.id }) {
@@ -433,6 +444,14 @@ private struct MessageBubble: View {
                         isUser ? Color.red : Color(.secondarySystemBackground),
                         in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                     )
+
+                if !isUser, let diagnostics = message.diagnostics {
+                    Text(diagnostics)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 7)
+                }
 
                 if !isUser, let strategy = message.strategy {
                     HStack(spacing: 10) {
