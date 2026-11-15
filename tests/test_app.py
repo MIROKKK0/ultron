@@ -107,7 +107,7 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.json()["reply"], "resposta")
         self.assertEqual(response.json()["brain_context"]["core"], "drosophila_lif_microcircuit")
         self.assertEqual(response.json()["brain_context"]["is_full_connectome"], False)
-        self.assertEqual(response.json()["brain_context"]["role_scores"], {})
+        self.assertEqual(response.json()["brain_context"]["role_scores"], {"planner": 0.0, "solver": 0.0, "critic": 0.0})
 
     def test_chat_fails_closed_when_full_brain_is_enabled_but_unavailable(self):
         with patch("backend.app.FLY_BRAIN.process", side_effect=RuntimeError("FlyWire data unavailable")):
