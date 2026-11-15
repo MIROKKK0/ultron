@@ -12,6 +12,8 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.agent_core import SELF_MODEL, improvement_proposal, review_response, system_instructions
+
 APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 DB_PATH = Path(os.getenv("ULTRON_DB_PATH", "ultron.db"))
@@ -108,6 +110,15 @@ class MemoryRequest(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
 
 
+class ReviewRequest(BaseModel):
+    task: str = Field(min_length=1, max_length=8000)
+    response: str = Field(min_length=1, max_length=12000)
+
+
+class ImprovementRequest(BaseModel):
+    problem: str = Field(min_length=1, max_length=2000)
+
+
 def _safe_math(node: ast.AST) -> float:
     if isinstance(node, ast.Expression):
         return _safe_math(node.body)
@@ -169,7 +180,8 @@ def answer_without_provider(message: str) -> str:
     )
 
 
-def answer_with_provider(message: str) -> str:
+def answer_with_provider(message: str, memories: list[str] | None = None) -> str:
+    instructions = system_instructions(memories or [])
     google_key = os.getenv("GOOGLE_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
 
@@ -180,7 +192,7 @@ def answer_with_provider(message: str) -> str:
             client = genai.Client(api_key=google_key)
             response = client.models.generate_content(
                 model=os.getenv("ULTRON_GEMINI_MODEL", "gemini-2.5-flash"),
-                contents=message,
+                contents=f"{instructions}\n\nSolicitação do usuário:\n{message}",
             )
             return response.text or "Não consegui gerar uma resposta agora."
 
@@ -190,13 +202,7 @@ def answer_with_provider(message: str) -> str:
             client = OpenAI(api_key=openai_key)
             response = client.responses.create(
                 model=os.getenv("ULTRON_MODEL", "gpt-4.1-mini"),
-                instructions=(
-                    "Você é ULTRON, um assistente pessoal em português brasileiro. "
-                    "Seja claro e útil. Não alegue executar ações que não executou. "
-                    "Não forneça instruções para invadir sistemas, roubar credenciais, "
-                    "burlar assinaturas ou causar dano. Peça confirmação antes de "
-                    "qualquer ação externa ou irreversível."
-                ),
+                instructions=instructions,
                 input=message,
             )
             return response.output_text
@@ -224,7 +230,10 @@ def health() -> dict[str, Any]:
 def chat(request: ChatRequest) -> dict[str, str]:
     message = request.message.strip()
     save_conversation("user", message)
-    response = answer_with_provider(message)
+    with connect_db() as db:
+        memory_rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 12").fetchall()
+    memory_items = [row["content"] for row in memory_rows]
+    response = answer_with_provider(message, memory_items)
     save_conversation("assistant", response)
     return {"reply": response}
 
@@ -267,3 +276,23 @@ def delete_memory(memory_id: int) -> dict[str, bool]:
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail="Memória não encontrada.")
     return {"deleted": True}
+
+
+@app.get("/self", dependencies=[Depends(require_api_token)])
+def self_knowledge() -> dict[str, Any]:
+    health = {
+        "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
+        "ai_configured": bool(os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")),
+        "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
+    }
+    return {"identity": SELF_MODEL.public_dict(), "runtime": health}
+
+
+@app.post("/reflect", dependencies=[Depends(require_api_token)])
+def reflect(request: ReviewRequest) -> dict[str, Any]:
+    return review_response(request.task, request.response)
+
+
+@app.post("/improvement-proposals", dependencies=[Depends(require_api_token)])
+def propose_improvement(request: ImprovementRequest) -> dict[str, Any]:
+    return improvement_proposal(request.problem)
