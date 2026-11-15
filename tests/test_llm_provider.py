@@ -52,6 +52,34 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(captured["json"]["model"], "test-model")
         self.assertFalse(captured["json"]["stream"])
 
+    def test_gemini_free_tier_defaults(self):
+        captured = {}
+
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"choices": [{"message": {"content": "Resposta"}}]}
+
+        def fake_post(url, **kwargs):
+            captured["url"] = url
+            captured["json"] = kwargs["json"]
+            return Response()
+
+        with patch.dict(os.environ, {"ULTRON_LLM_API_KEY": "test-key"}, clear=True):
+            with patch.object(llm_provider.httpx, "post", side_effect=fake_post):
+                self.assertEqual(
+                    llm_provider.generate_chat_reply([{"role": "user", "content": "Oi"}]),
+                    "Resposta",
+                )
+
+        self.assertEqual(
+            captured["url"],
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        )
+        self.assertEqual(captured["json"]["model"], "gemini-3.8-flash")
+
     def test_rejects_non_https_provider(self):
         with patch.dict(os.environ, {"ULTRON_LLM_BASE_URL": "http://example.ai/v1"}):
             with self.assertRaises(llm_provider.ProviderError):
