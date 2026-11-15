@@ -257,10 +257,7 @@ def brain_status() -> dict[str, Any]:
             "neurons": FLY_BRAIN.neurons_per_group * 4,
             "full_connectome_loaded": False,
         },
-        "parallel_specialists": ["planner", "solver", "critic"] + (
-            ["researcher"] if os.getenv("ULTRON_ENABLE_WEB_SEARCH", "false").lower() == "true"
-            and os.getenv("GOOGLE_API_KEY") else []
-        ),
+        "parallel_specialists": ["planner", "solver", "critic"],
         "parallel_task_limit": 5,
         "model_configured": False,\n        "language_decoder": "local_deterministic",\n        "external_ai_tokens_required": False,
         "web_research_enabled": False,
@@ -279,15 +276,7 @@ def brain_run(request: BrainRequest) -> dict[str, Any]:
 
 @app.post("/brain/research", dependencies=[Depends(require_api_token)])
 def brain_research(request: BrainRequest) -> dict[str, Any]:
-    if os.getenv("ULTRON_ENABLE_WEB_SEARCH", "false").lower() != "true" or not os.getenv("GOOGLE_API_KEY"):
-        raise HTTPException(status_code=503, detail="Ative ULTRON_ENABLE_WEB_SEARCH=true e configure GOOGLE_API_KEY no Render.")
-    with connect_db() as db:
-        rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
-    memories = rank_memories(request.goal, rows, limit=8)
-    answer = answer_with_provider(request.goal, memories, grounded_search=True)
-    save_conversation("user", request.goal)
-    save_conversation("assistant", answer)
-    return {"query": request.goal, "answer": answer, "grounded": True}
+    raise HTTPException(status_code=503, detail="Pesquisa web não está implementada no modo local sem tokens.")
 
 
 @app.post("/brain/multitask", dependencies=[Depends(require_api_token)])
@@ -297,8 +286,6 @@ def brain_multitask(request: MultiTaskRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail="Informe ao menos uma tarefa válida.")
     if len(tasks) > 5:
         raise HTTPException(status_code=422, detail="O limite é de cinco tarefas paralelas.")
-    if not (os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")):
-        raise HTTPException(status_code=503, detail="Configure uma chave de provedor de IA no Render.")
     if any(len(task) > 4000 for task in tasks):
         raise HTTPException(status_code=422, detail="Cada tarefa deve ter no máximo 4000 caracteres.")
     result = run_multitask(tasks, execute_task_with_memory)
@@ -347,8 +334,8 @@ def chat(request: ChatRequest) -> dict[str, str]:
     # Every normal chat turn passes through the mandatory spiking control center.
     neural_state = FLY_BRAIN.process(message, memory_items)
     save_conversation("user", message)
-    response = answer_with_provider(
-        message, memory_items, history_items, neural_state=neural_state
+    response = answer_without_provider(
+        message, memory_items, history_items, neural_state
     )
     save_conversation("assistant", response)
     return {"reply": response}
@@ -398,7 +385,9 @@ def delete_memory(memory_id: int) -> dict[str, bool]:
 def self_knowledge() -> dict[str, Any]:
     health = {
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
-        "ai_configured": bool(os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")),
+        "ai_configured": False,
+        "neural_core_configured": True,
+        "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
     }
     return {"identity": SELF_MODEL.public_dict(), "runtime": health}
