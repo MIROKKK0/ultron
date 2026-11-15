@@ -52,6 +52,12 @@ class FlyWireRuntimeTests(unittest.TestCase):
         self.assertEqual(state["neurons"], 138639)
         self.assertEqual(state["full_connectome"]["spikes"], 3400)
 
+    def test_full_mode_fails_closed_when_connectome_is_unavailable(self):
+        with patch.dict(os.environ, {"ULTRON_ENABLE_FULL_FLYWIRE": "1"}):
+            with patch("backend.flywire_runtime.simulate", side_effect=RuntimeError("missing connectome")):
+                with self.assertRaisesRegex(RuntimeError, "missing connectome"):
+                    FlyBrainCore._full_connectome_signal("quero comida")
+
     def test_simulation_requires_real_data_and_never_falls_back(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch.dict(os.environ, {"ULTRON_FLYWIRE_ROOT": directory}):
