@@ -8,7 +8,7 @@ os.environ["ULTRON_DB_PATH"] = str(Path(tempfile.gettempdir()) / "ultron-tests.s
 os.environ["ULTRON_API_TOKEN"] = "test-ultron-token"
 
 from fastapi.testclient import TestClient
-from backend.app import app, calculate
+from backend.app import app, calculate, save_conversation
 
 client = TestClient(app)
 AUTH = {"Authorization": "Bearer test-ultron-token"}
@@ -52,6 +52,13 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         summary = client.get("/feedback/summary", headers=AUTH)
         self.assertGreaterEqual(summary.json()["total"], 1)
+
+    def test_chat_includes_recent_conversation_context(self):
+        save_conversation("user", "Contexto anterior de teste")
+        with patch("backend.app.answer_with_provider", return_value="resposta") as mocked:
+            response = client.post("/chat", json={"message": "continue"}, headers=AUTH)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any("Contexto anterior de teste" in item for item in mocked.call_args.args[2]))
 
     def test_brain_status(self):
         response = client.get("/brain/status", headers=AUTH)
