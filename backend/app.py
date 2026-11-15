@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
+from backend.brain import run_cognitive_cycle, run_multitask
 
 APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -137,6 +138,14 @@ class FeedbackRequest(BaseModel):
     conversation_id: int | None = None
 
 
+class BrainRequest(BaseModel):
+    goal: str = Field(min_length=1, max_length=4000)
+
+
+class MultiTaskRequest(BaseModel):
+    tasks: list[str] = Field(min_length=1, max_length=5)
+
+
 def _safe_math(node: ast.AST) -> float:
     if isinstance(node, ast.Expression):
         return _safe_math(node.body)
@@ -220,6 +229,16 @@ def answer_with_provider(message: str, memories: list[str] | None = None) -> str
     if lower.startswith("/propose "):
         proposal = improvement_proposal(normalized[9:].strip())
         return str(proposal)
+    if lower.startswith("/brain "):
+        result = execute_brain_cycle(normalized[7:].strip())
+        return result["synthesis"]
+    if lower.startswith("/multi "):
+        tasks = [item.strip() for item in normalized[7:].split("||") if item.strip()]
+        result = run_multitask(tasks, lambda task: answer_with_provider(task, memories or []))
+        return "\\n".join(
+            f"{index}. [{item['status']}] {item['task']}: {item.get('result', item.get('error', ''))}"
+            for index, item in enumerate(result["results"], start=1)
+        )
     instructions = system_instructions(memories or [])
     google_key = os.getenv("GOOGLE_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
@@ -249,6 +268,56 @@ def answer_with_provider(message: str, memories: list[str] | None = None) -> str
         raise HTTPException(status_code=502, detail="O provedor de IA não respondeu.") from exc
 
     return answer_without_provider(message)
+
+
+def execute_brain_cycle(goal: str) -> dict[str, Any]:
+    if not (os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")):
+        raise HTTPException(status_code=503, detail="Configure GOOGLE_API_KEY ou OPENAI_API_KEY para ativar o cérebro do ULTRON.")
+    with connect_db() as db:
+        rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
+    memories = rank_memories(goal, rows, limit=8)
+    return run_cognitive_cycle(
+        goal,
+        memories,
+        lambda prompt: answer_with_provider(prompt, memories),
+    )
+
+
+@app.get("/brain/status", dependencies=[Depends(require_api_token)])
+def brain_status() -> dict[str, Any]:
+    return {
+        "name": APP_NAME,
+        "brain_version": "1.0.0",
+        "parallel_specialists": ["planner", "solver", "critic"],
+        "parallel_task_limit": 5,
+        "model_configured": bool(os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")),
+        "memory_enabled": True,
+        "autonomous_production_changes": False,
+    }
+
+
+@app.post("/brain/run", dependencies=[Depends(require_api_token)])
+def brain_run(request: BrainRequest) -> dict[str, Any]:
+    result = execute_brain_cycle(request.goal.strip())
+    save_conversation("user", request.goal.strip())
+    save_conversation("assistant", result["synthesis"])
+    return result
+
+
+@app.post("/brain/multitask", dependencies=[Depends(require_api_token)])
+def brain_multitask(request: MultiTaskRequest) -> dict[str, Any]:
+    tasks = [task.strip() for task in request.tasks if task.strip()]
+    if not tasks:
+        raise HTTPException(status_code=422, detail="Informe ao menos uma tarefa válida.")
+    if len(tasks) > 5:
+        raise HTTPException(status_code=422, detail="O limite é de cinco tarefas paralelas.")
+    if not (os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")):
+        raise HTTPException(status_code=503, detail="Configure uma chave de provedor de IA no Render.")
+    result = run_multitask(tasks, lambda task: answer_with_provider(task, []))
+    for item in result["results"]:
+        if item["status"] == "completed":
+            save_conversation("assistant", f"[Multitarefa] {item['task']}\\n{item['result']}")
+    return result
 
 
 @app.get("/health")
