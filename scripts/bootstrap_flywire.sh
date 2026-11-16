@@ -31,6 +31,11 @@ for file in \
   fi
 done
 
+if ! grep -q "Version 2, June 1991" "$ROOT/LICENSE"; then
+  echo "Unexpected FlyBrain license text; review the upstream license before use." >&2
+  exit 5
+fi
+
 echo "FlyBrain upstream revision: $ACTUAL_REVISION"
 echo "FlyWire v783 data sizes and SHA-256:"
 sha256sum \
