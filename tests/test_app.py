@@ -79,7 +79,7 @@ class UltronTests(unittest.TestCase):
             "is_full_connectome": False,
             "role_scores": {"planner": 0.2, "solver": 0.4, "critic": 0.95},
         }
-        expected_plan = {"goal": "Apagar dados antigos", "human_approval_required": True}
+        expected_plan = {"goal": "Apagar dados antigos", "human_approval_required": True, "strategy": "critic", "steps": [{"step": 1, "action": "mapear riscos primeiro"}]}
         with patch("backend.app.FLY_BRAIN.process", return_value=neural_state) as neural:
             with patch("backend.app.apply_learned_strategy_policy", side_effect=lambda state: state):
                 with patch("backend.app.plan_task", return_value=expected_plan) as planner:
