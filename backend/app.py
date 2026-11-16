@@ -350,9 +350,15 @@ def execute_brain_cycle(
     neural_state = apply_learned_strategy_policy(current_neural_state)
     scores = neural_state.get("role_scores", {})
 
+    # The highest-priority neural strategy also controls the plan's step order.
+    planning_strategy = max(
+        ("planner", "solver", "critic"),
+        key=lambda role: float(scores.get(role, 0.0)),
+    )
+    plan = plan_task(normalized_goal, strategy=planning_strategy)
+
     # Each specialist now performs its actual local function instead of returning
     # a decorative placeholder string.
-    plan = plan_task(normalized_goal)
     answer = answer_without_provider(normalized_goal, memories, history, neural_state)
     critique = review_response(normalized_goal, answer)
     outputs: dict[str, dict[str, Any]] = {
@@ -694,7 +700,7 @@ def agent_plan(request: PlanRequest) -> dict[str, Any]:
         supported_roles,
         key=lambda role: float(scores.get(role, 0.0)),
     )
-    plan = plan_task(request.goal)
+    plan = plan_task(request.goal, strategy=selected_strategy)
     plan["neural_control"] = {
         "core": neural_state.get("core", "flybrain"),
         "version": neural_state.get("version"),
