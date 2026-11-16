@@ -468,25 +468,59 @@ def brain_run(payload: BrainRequest) -> dict[str, Any]:
 
 @app.post("/brain/learn", dependencies=[Depends(require_api_token)])
 def brain_learn(payload: NeuralLearningRequest) -> dict[str, Any]:
-    """Apply a bounded experimental reward-modulated association update."""
-    context = LEXICAL_ENCODER.encode(payload.context)
-    outcome = LEXICAL_ENCODER.encode(payload.outcome)
+    """Apply bounded local learning only after FlyBrain controls memory attention."""
+    context_text = payload.context.strip()
+    outcome_text = payload.outcome.strip()
     try:
-        result = ASSOCIATIVE_MEMORY.observe(context, outcome, payload.reward)
+        neural_state = FLY_BRAIN.process(f"{context_text}\n{outcome_text}", [])
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    memory_attention = float(neural_state.get("group_activity", {}).get("memory", 0.0))
+    memory_attention = max(0.0, min(1.0, memory_attention))
+    learning_scale = 0.5 + 0.5 * memory_attention
+    context = LEXICAL_ENCODER.encode(context_text)
+    outcome = LEXICAL_ENCODER.encode(outcome_text)
+    try:
+        result = ASSOCIATIVE_MEMORY.observe(context, outcome, payload.reward * learning_scale)
         persist_associative_memory()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"learning": result, "method": "three_factor_reward_modulated_association",
-            "flywire_synapses_modified": False, "language_model_weights_modified": False,
-            "persistence": "database_checkpointed"}
+    return {
+        "learning": result,
+        "neural_control": {
+            "core": neural_state.get("core"),
+            "memory_attention": round(memory_attention, 4),
+            "learning_scale": round(learning_scale, 4),
+        },
+        "method": "three_factor_reward_modulated_association",
+        "flywire_synapses_modified": False,
+        "language_model_weights_modified": False,
+        "persistence": "database_checkpointed",
+    }
 
 
 @app.post("/brain/recall", dependencies=[Depends(require_api_token)])
 def brain_recall(payload: NeuralRecallRequest) -> dict[str, Any]:
+    """Use FlyBrain's own associative recall as the memory endpoint result."""
+    try:
+        neural_state = FLY_BRAIN.process(payload.context.strip(), [])
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     context = LEXICAL_ENCODER.encode(payload.context)
-    return {"encoded_features": len(context),
-            "associations": ASSOCIATIVE_MEMORY.recall(context),
-            "persistence": "database_checkpointed"}
+    return {
+        "encoded_features": len(context),
+        "associations": neural_state.get("associative_recall", []),
+        "neural_control": {
+            "core": neural_state.get("core"),
+            "memory_attention": neural_state.get("group_activity", {}).get("memory", 0.0),
+        },
+        "persistence": "database_checkpointed",
+    }
 
 
 @app.post("/brain/flywire/simulate", dependencies=[Depends(require_api_token)])
