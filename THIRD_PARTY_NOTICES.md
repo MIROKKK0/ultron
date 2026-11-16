@@ -10,7 +10,7 @@ Scientific/software reference:
 - The upstream project describes a FlyWire-based LIF simulation with roughly
   138,000 neurons and millions of synapses, plus Brian2, PyTorch, NEST GPU and
   GeNN runners.
-- Upstream repository license: GPL-2.0. Its `code/paper-phil-drosophila`
+- Upstream repository license: GPL-2.0-only (LICENSE file: GNU GPL version 2, June 1991). Its `code/paper-phil-drosophila`
   subdirectory contains a separately licensed MIT component; check the exact
   file-level license before copying any upstream source.
 
