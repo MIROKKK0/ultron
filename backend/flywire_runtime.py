@@ -49,7 +49,7 @@ def status() -> dict[str, Any]:
         "dependencies": dependencies,
         "missing_dependencies": missing_dependencies,
         "backend": "PyTorch CPU",
-        "license_note": "Upstream code GPL-2.0-or-later; FlyWire-derived data terms must be preserved.",
+        "license_note": "Upstream code GPL-2.0-only (LICENSE: Version 2, June 1991); FlyWire-derived data terms must be preserved.",
     }
 
 
