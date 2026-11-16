@@ -71,6 +71,54 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(plan.status_code, 200)
         self.assertTrue(plan.json()["human_approval_required"])
 
+    def test_agent_planner_is_gated_by_flybrain_and_uses_its_selected_strategy(self):
+        neural_state = {
+            "core": "drosophila_lif_microcircuit",
+            "version": "0.1.0",
+            "is_full_connectome": False,
+            "role_scores": {"planner": 0.2, "solver": 0.4, "critic": 0.95},
+        }
+        expected_plan = {"goal": "Apagar dados antigos", "human_approval_required": True}
+        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state) as neural:
+            with patch("backend.app.apply_learned_strategy_policy", side_effect=lambda state: state):
+                with patch("backend.app.plan_task", return_value=expected_plan) as planner:
+                    response = client.post(
+                        "/agent/plan",
+                        json={"goal": "Apagar dados antigos"},
+                        headers=AUTH,
+                    )
+        self.assertEqual(response.status_code, 200)
+        neural.assert_called_once_with("Apagar dados antigos", [])
+        planner.assert_called_once_with("Apagar dados antigos")
+        self.assertEqual(response.json()["neural_control"]["selected_strategy"], "critic")
+        self.assertEqual(response.json()["neural_control"]["priority"], 0.95)
+
+    def test_agent_planner_fails_closed_when_flybrain_is_unavailable(self):
+        with patch("backend.app.FLY_BRAIN.process", side_effect=RuntimeError("FlyBrain unavailable")):
+            with patch("backend.app.plan_task") as planner:
+                response = client.post(
+                    "/agent/plan",
+                    json={"goal": "Planejar uma alteração"},
+                    headers=AUTH,
+                )
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("FlyBrain unavailable", response.json()["detail"])
+        planner.assert_not_called()
+
+    def test_runtime_does_not_import_hosted_ai_provider_sdks(self):
+        root = Path(__file__).resolve().parents[1]
+        forbidden = ("openai", "anthropic", "google-generativeai", "google-genai", "cohere")
+        requirements = (root / "requirements.txt").read_text(encoding="utf-8").casefold()
+        for package in forbidden:
+            self.assertNotIn(package, requirements)
+        import_pattern = __import__("re").compile(
+            r"^\\s*(?:from|import)\\s+(?:openai|anthropic|google\\.generativeai|google\\.genai|cohere)\\b",
+            __import__("re").MULTILINE,
+        )
+        for module in ("app.py", "brain.py", "agent_core.py", "fly_brain.py", "local_decoder.py"):
+            source = (root / "backend" / module).read_text(encoding="utf-8")
+            self.assertIsNone(import_pattern.search(source), f"Hosted AI SDK import found in backend/{module}")
+
     def test_feedback_is_persisted(self):
         response = client.post("/feedback", json={"rating": 5, "comment": "Resposta útil"}, headers=AUTH)
         self.assertEqual(response.status_code, 200)
