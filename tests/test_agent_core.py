@@ -58,6 +58,16 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(plan["risk"], "high")
         self.assertTrue(plan["human_approval_required"])
 
+    def test_neural_strategy_changes_actual_plan_step_order(self):
+        planner = plan_task("Organizar uma tarefa", strategy="planner")
+        solver = plan_task("Organizar uma tarefa", strategy="solver")
+        critic = plan_task("Apagar dados antigos", strategy="critic")
+        self.assertEqual(planner["strategy"], "planner")
+        self.assertIn("entender o objetivo", planner["steps"][0]["action"])
+        self.assertIn("menor solução", solver["steps"][0]["action"])
+        self.assertIn("riscos", critic["steps"][0]["action"])
+        self.assertTrue(critic["human_approval_required"])
+
 
 if __name__ == "__main__":
     unittest.main()
