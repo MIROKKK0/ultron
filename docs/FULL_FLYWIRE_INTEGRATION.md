@@ -18,8 +18,11 @@ automaticamente ULTRON em uma IA geral ou consciente.
 
 - `backend/flywire_runtime.py` carrega o runner PyTorch upstream, verifica os
   dados v783 e executa sessões persistentes de simulação em CPU.
-- `scripts/bootstrap_flywire.sh` clona o projeto upstream e baixa seus objetos
-  Git LFS; não coloca os dados grandes no Git do ULTRON.
+- `scripts/bootstrap_flywire.sh` busca uma revisão upstream fixada
+  (`a3db62f9436074e485c0278290c2164ed6150808` por padrão; configurável por
+  `ULTRON_FLYWIRE_REVISION`). Os arquivos v783 são blobs Git comuns, não Git LFS:
+  completude ~3,47 MB e conectividade ~100,8 MB. O script verifica a revisão e
+  exige também o arquivo LICENSE.
 - `requirements-flywire.txt` mantém PyTorch/Arrow isolados do servidor leve.
 - O runtime aceita somente os estímulos documentados pelo upstream (`sugar`
   e `p9`). Ele não inventa uma tradução semântica para mensagens arbitrárias.
@@ -32,14 +35,20 @@ automaticamente ULTRON em uma IA geral ou consciente.
 
 ## Preparar e testar
 
-Em Linux com Git LFS, disco e memória suficientes:
+Em Linux com Git, disco e memória suficientes:
 
 ```bash
-git lfs version
+git --version
 bash scripts/bootstrap_flywire.sh
 python -m pip install -r requirements-flywire.txt
-ULTRON_FLYWIRE_ROOT=vendor/fly-brain python -m unittest tests.test_flywire_runtime -v
+ULTRON_FLYWIRE_ROOT=vendor/fly-brain python -m unittest discover -s tests -p 'test_flywire_runtime.py' -v
+python scripts/validate_flywire.py
 ```
+
+O artefato de validação registra o commit upstream exato e SHA-256 de cada
+arquivo de dados, permitindo reproduzir e auditar o dataset usado. Para atualizar
+a revisão, defina `ULTRON_FLYWIRE_REVISION` explicitamente e revise os novos
+avisos/licenças antes de executar o benchmark.
 
 O carregamento da matriz CSR pode consumir centenas de MB adicionais. A simulação
 CPU de 138k neurônios e milhões de arestas é muito mais pesada que a API atual.
