@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -111,9 +112,9 @@ class UltronTests(unittest.TestCase):
         requirements = (root / "requirements.txt").read_text(encoding="utf-8").casefold()
         for package in forbidden:
             self.assertNotIn(package, requirements)
-        import_pattern = __import__("re").compile(
-            r"^\\s*(?:from|import)\\s+(?:openai|anthropic|google\\.generativeai|google\\.genai|cohere)\\b",
-            __import__("re").MULTILINE,
+        import_pattern = re.compile(
+            r"^\s*(?:from|import)\s+(?:openai|anthropic|google\.generativeai|google\.genai|cohere)\b",
+            re.MULTILINE,
         )
         for module in ("app.py", "brain.py", "agent_core.py", "fly_brain.py", "local_decoder.py"):
             source = (root / "backend" / module).read_text(encoding="utf-8")
