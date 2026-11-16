@@ -58,7 +58,7 @@ um benchmark real no hardware de destino.
 4. Plasticidade, aprendizagem e alterações de pesos não podem ser anunciadas
    como autoaprendizagem geral. Qualquer aprendizado futuro deve ser mensurável,
    persistente, reversível e testado.
-5. A licença do código upstream é GPL-2.0-or-later; os dados derivados do
+5. A licença do código upstream é GPL-2.0-only (LICENSE: versão 2, junho de 1991); os dados derivados do
    FlyWire têm avisos/termos próprios. Preserve os avisos e valide a licença
    aplicável ao redistribuir dados.
 
