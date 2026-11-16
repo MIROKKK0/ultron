@@ -156,11 +156,13 @@ def rank_memories(query: str, memories: Iterable[dict], limit: int = 8) -> list[
     return [content for score, content in scored[:limit] if score > 0]
 
 
-def plan_task(goal: str) -> dict:
-    """Create a transparent task plan with explicit risks and verification."""
+def plan_task(goal: str, strategy: str = "planner") -> dict:
+    """Create a safe plan whose step order follows the FlyBrain-selected strategy."""
     goal = goal.strip()
     if not goal:
         raise ValueError("Informe o objetivo.")
+    if strategy not in {"planner", "solver", "critic"}:
+        strategy = "planner"
     lower = goal.lower()
     if any(word in lower for word in ("apagar", "deletar", "excluir", "comprar", "pagar", "publicar", "enviar")):
         risk = "high"
@@ -171,16 +173,38 @@ def plan_task(goal: str) -> dict:
     else:
         risk = "low"
         approval = False
+
+    steps_by_strategy = {
+        "planner": [
+            "entender o objetivo e identificar restrições",
+            "selecionar apenas ferramentas disponíveis e autorizadas",
+            "executar em etapas pequenas e reversíveis",
+            "validar o resultado com testes ou evidências",
+            "relatar o que foi feito, o que falhou e o que falta",
+        ],
+        "solver": [
+            "definir a menor solução que produza um resultado verificável",
+            "selecionar apenas ferramentas disponíveis e autorizadas",
+            "executar a solução em etapas pequenas e reversíveis",
+            "validar o resultado com testes ou evidências",
+            "registrar o resultado, as falhas e o próximo passo",
+        ],
+        "critic": [
+            "mapear riscos, efeitos colaterais e ações irreversíveis",
+            "definir restrições, dependências e aprovações necessárias",
+            "verificar se as ferramentas disponíveis são autorizadas",
+            "executar somente etapas reversíveis e de baixo risco",
+            "validar evidências e registrar limitações ou falhas",
+        ],
+    }
     return {
         "goal": goal[:2000],
         "risk": risk,
         "human_approval_required": approval,
+        "strategy": strategy,
         "steps": [
-            {"step": 1, "action": "entender o objetivo e identificar restrições"},
-            {"step": 2, "action": "selecionar apenas ferramentas disponíveis e autorizadas"},
-            {"step": 3, "action": "executar em etapas pequenas e reversíveis"},
-            {"step": 4, "action": "validar o resultado com testes ou evidências"},
-            {"step": 5, "action": "relatar o que foi feito, o que falhou e o que falta"},
+            {"step": index, "action": action}
+            for index, action in enumerate(steps_by_strategy[strategy], 1)
         ],
         "completion_criteria": [
             "resultado verificável",
