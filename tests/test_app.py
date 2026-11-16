@@ -9,7 +9,7 @@ os.environ["ULTRON_DB_PATH"] = str(Path(tempfile.gettempdir()) / "ultron-tests.s
 os.environ["ULTRON_API_TOKEN"] = "test-ultron-token"
 
 from fastapi.testclient import TestClient
-from backend.app import app, calculate, save_conversation
+from backend.app import app, calculate, save_conversation, FLY_BRAIN
 
 client = TestClient(app)
 AUTH = {"Authorization": "Bearer test-ultron-token"}
@@ -174,20 +174,40 @@ class UltronTests(unittest.TestCase):
         self.assertIn(response.json()["strategy"], {"planner", "solver", "critic"})
 
 
-    def test_reward_learning_and_recall_endpoints_are_protected_and_functional(self):
-        learned = client.post(
-            "/brain/learn",
-            json={"context": "gostei de respostas úteis", "outcome": "resposta útil", "reward": 1.0},
-            headers=AUTH,
-        )
-        self.assertEqual(learned.status_code, 200)
-        self.assertEqual(learned.json()["method"], "three_factor_reward_modulated_association")
-        self.assertFalse(learned.json()["flywire_synapses_modified"])
-        recalled = client.post(
-            "/brain/recall", json={"context": "gostei de respostas úteis"}, headers=AUTH
-        )
+    def test_reward_learning_and_recall_endpoints_are_gated_by_flybrain_attention(self):
+        with patch("backend.app.FLY_BRAIN.process", wraps=FLY_BRAIN.process) as neural:
+            learned = client.post(
+                "/brain/learn",
+                json={"context": "gostei de respostas úteis", "outcome": "resposta útil", "reward": 1.0},
+                headers=AUTH,
+            )
+            self.assertEqual(learned.status_code, 200)
+            self.assertEqual(learned.json()["method"], "three_factor_reward_modulated_association")
+            self.assertFalse(learned.json()["flywire_synapses_modified"])
+            self.assertGreaterEqual(learned.json()["neural_control"]["learning_scale"], 0.5)
+            self.assertLessEqual(learned.json()["neural_control"]["learning_scale"], 1.0)
+            recalled = client.post(
+                "/brain/recall", json={"context": "gostei de respostas úteis"}, headers=AUTH
+            )
         self.assertEqual(recalled.status_code, 200)
         self.assertTrue(recalled.json()["associations"])
+        self.assertEqual(neural.call_count, 2)
+
+    def test_memory_actions_fail_closed_when_flybrain_is_unavailable(self):
+        with patch("backend.app.FLY_BRAIN.process", side_effect=RuntimeError("FlyBrain unavailable")):
+            with patch("backend.app.ASSOCIATIVE_MEMORY.observe") as observe:
+                learned = client.post(
+                    "/brain/learn",
+                    json={"context": "entrada", "outcome": "resultado", "reward": 1.0},
+                    headers=AUTH,
+                )
+        self.assertEqual(learned.status_code, 503)
+        observe.assert_not_called()
+        with patch("backend.app.FLY_BRAIN.process", side_effect=RuntimeError("FlyBrain unavailable")):
+            recalled = client.post(
+                "/brain/recall", json={"context": "entrada"}, headers=AUTH
+            )
+        self.assertEqual(recalled.status_code, 503)
 
     def test_reward_learning_rejects_missing_authentication(self):
         response = client.post(
