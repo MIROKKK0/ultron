@@ -17,6 +17,11 @@ class FlyWireRuntimeTests(unittest.TestCase):
         self.assertEqual(result["connectome"], "FlyWire FAFB v783")
         self.assertEqual(len(result["missing_files"]), 2)
 
+    def test_status_reports_exact_upstream_code_license(self):
+        result = flywire_runtime.status()
+        self.assertIn("GPL-2.0-only", result["license_note"])
+        self.assertNotIn("or-later", result["license_note"])
+
     def test_only_upstream_supported_stimuli_are_accepted(self):
         self.assertEqual(flywire_runtime._select_experiment("sugar"), "sugar")
         self.assertEqual(flywire_runtime._select_experiment("P9"), "p9")
