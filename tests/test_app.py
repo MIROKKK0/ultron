@@ -90,7 +90,9 @@ class UltronTests(unittest.TestCase):
                     )
         self.assertEqual(response.status_code, 200)
         neural.assert_called_once_with("Apagar dados antigos", [])
-        planner.assert_called_once_with("Apagar dados antigos")
+        planner.assert_called_once_with("Apagar dados antigos", strategy="critic")
+        self.assertEqual(response.json()["strategy"], "critic")
+        self.assertIn("riscos", response.json()["steps"][0]["action"])
         self.assertEqual(response.json()["neural_control"]["selected_strategy"], "critic")
         self.assertEqual(response.json()["neural_control"]["priority"], 0.95)
 
