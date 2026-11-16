@@ -682,7 +682,27 @@ def propose_improvement(request: ImprovementRequest) -> dict[str, Any]:
 
 @app.post("/agent/plan", dependencies=[Depends(require_api_token)])
 def agent_plan(request: PlanRequest) -> dict[str, Any]:
-    return plan_task(request.goal)
+    # Planning is a cognitive action: FlyBrain must select the strategy first.
+    try:
+        neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(request.goal, []))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    scores = neural_state.get("role_scores", {})
+    supported_roles = ("planner", "solver", "critic")
+    selected_strategy = max(
+        supported_roles,
+        key=lambda role: float(scores.get(role, 0.0)),
+    )
+    plan = plan_task(request.goal)
+    plan["neural_control"] = {
+        "core": neural_state.get("core", "flybrain"),
+        "version": neural_state.get("version"),
+        "is_full_connectome": bool(neural_state.get("is_full_connectome", False)),
+        "selected_strategy": selected_strategy,
+        "priority": float(scores.get(selected_strategy, 0.0)),
+    }
+    return plan
 
 
 @app.get("/benchmarks", dependencies=[Depends(require_api_token)])
