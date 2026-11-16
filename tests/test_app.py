@@ -199,13 +199,21 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["parallel_task_limit"], 5)
 
-    def test_brain_run_uses_parallel_specialists(self):
+    def test_brain_run_uses_parallel_specialists_and_mandatory_flybrain(self):
+        neural_state = {
+            "core": "drosophila_lif_microcircuit",
+            "role_scores": {"planner": 0.8, "solver": 0.7, "critic": 0.6},
+        }
         with patch.dict(os.environ, {"GOOGLE_API_KEY": "", "OPENAI_API_KEY": ""}):
-            with patch("backend.app.answer_without_provider", return_value="perspectiva"):
-                response = client.post(
-                    "/brain/run", json={"goal": "Planejar uma melhoria"}, headers=AUTH
-                )
+            with patch("backend.app.FLY_BRAIN.process", return_value=neural_state) as neural:
+                with patch("backend.app.apply_learned_strategy_policy", side_effect=lambda state: state):
+                    with patch("backend.app.answer_without_provider", return_value="perspectiva"):
+                        response = client.post(
+                            "/brain/run", json={"goal": "Planejar uma melhoria"}, headers=AUTH
+                        )
         self.assertEqual(response.status_code, 200)
+        neural.assert_called_once()
+        self.assertEqual(neural.call_args.args[0], "Planejar uma melhoria")
         self.assertEqual(len(response.json()["agents"]), 3)
         self.assertEqual(response.json()["synthesis"], "perspectiva")
 
