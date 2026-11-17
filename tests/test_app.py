@@ -211,7 +211,7 @@ class UltronTests(unittest.TestCase):
 
     def test_brain_multitask(self):
         with patch.dict(os.environ, {"GOOGLE_API_KEY": "", "OPENAI_API_KEY": ""}):
-            with patch("backend.app.answer_without_provider", side_effect=lambda prompt, memories=None, history=None, neural_state=None: "feito: " + prompt):
+            with patch("backend.app.answer_without_provider", side_effect=lambda prompt, memories=None, history=None: "feito: " + prompt):
                 response = client.post(
                     "/brain/multitask",
                     json={"tasks": ["resumir projeto", "listar riscos"]},
