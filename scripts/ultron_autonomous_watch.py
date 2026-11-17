@@ -50,8 +50,8 @@ def repo_scan() -> dict:
             continue
         try:
             for line_no, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
-                if re.search(r"\\b(TODO|FIXME|HACK|XXX)\\b", line, re.I):
-                    matches.append({"file": name, "line": line_no, "marker": re.search(r"\\b(TODO|FIXME|HACK|XXX)\\b", line, re.I).group(1), "text": line.strip()[:180]})
+                if re.search(r"\b(TODO|FIXME|HACK|XXX)\b", line, re.I):
+                    matches.append({"file": name, "line": line_no, "marker": re.search(r"\b(TODO|FIXME|HACK|XXX)\b", line, re.I).group(1), "text": line.strip()[:180]})
         except OSError:
             continue
     return {"tracked_files": len(tracked), "maintenance_markers": matches[:80], "marker_count": len(matches)}
@@ -152,7 +152,7 @@ def main() -> int:
     lines += ["", "## Guardrails", "- Este ciclo é somente leitura. Não baixa nem executa código externo.", "- Não altera pesos de produção, código, branches, PRs ou deployments.", "- Repositórios encontrados são pistas; licenças e segurança precisam de revisão."]
     if report["errors"]:
         lines += ["", "## Erros de coleta", *[f"- {item}" for item in report["errors"]]]
-    markdown = "\\n".join(lines) + "\\n"
+    markdown = "\n".join(lines) + "\n"
 
     summary_path = os.getenv("GITHUB_STEP_SUMMARY")
     if summary_path:
