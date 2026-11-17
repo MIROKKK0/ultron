@@ -98,11 +98,11 @@ def run_cognitive_cycle(
     ]
     parallel = run_multitask(prompts, execute, max_workers=len(roles))
     perspectives = [
-        {"role": role, "neural_priority": scores.get(role, 0.0), **result}
+        {"role": role, "priority": scores.get(role, 0.0), **result}
         for (role, _), result in zip(roles, parallel["results"])
     ]
     evidence = "\n\n".join(
-        f"[{item['role']} | prioridade neural {item['neural_priority']:.3f} | {item['status']}]\n"
+        f"[{item['role']} | prioridade {item['priority']:.3f} | {item['status']}]\n"
         f"{item.get('result', item.get('error', ''))}"
         for item in perspectives
     )
