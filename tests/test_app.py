@@ -56,6 +56,15 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("pesquisa na internet", response.json()["reply"])
 
+    def test_runtime_status_reports_memory_budget_without_model_claims(self):
+        response = client.get("/runtime/status")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["memory"]["budget_mb"], 512)
+        self.assertEqual(payload["language_engine"], "local_deterministic")
+        self.assertFalse(payload["generative_model_configured"])
+        self.assertFalse(payload["external_ai_providers"])
+
     def test_health(self):
         response = client.get("/health")
         self.assertEqual(response.status_code, 200)
