@@ -2,6 +2,12 @@ name: ULTRON autonomous evolution
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: ["feat/ultron-core-assistant"]
+    paths:
+      - "training/**"
+      - "scripts/train_intent_model.py"
+      - ".github/workflows/ultron-autonomous-evolution.yml"
   schedule:
     # GitHub Actions uses UTC; 14:17 UTC is approximately 11:17 in Brazil (BRT).
     - cron: "17 14 * * *"
