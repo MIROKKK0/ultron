@@ -133,7 +133,8 @@ def train(args: argparse.Namespace) -> dict:
     output.parent.mkdir(parents=True, exist_ok=True)
     temp = output.with_name(output.name + ".tmp")
     torch.save({"model_state": model.state_dict(), "model_config": model.config_dict(),
-        "tokenizer_version": tokenizer.version, "tokenizer_vocab_size": tokenizer.vocab_size,\n        "tokenizer_json_sha256": hashlib.sha256(Path(tokenizer_json_path).read_bytes()).hexdigest() if tokenizer_json_path else None, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
+        "tokenizer_version": tokenizer.version, "tokenizer_vocab_size": tokenizer.vocab_size,
+        "tokenizer_json_sha256": hashlib.sha256(Path(tokenizer_json_path).read_bytes()).hexdigest() if tokenizer_json_path else None, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
         "training_steps": completed_steps, "requested_training_steps": args.steps,
         "best_step": best_step, "best_validation_loss": best_validation_loss,
         "early_stopping_patience": args.early_stopping_patience, "min_delta": args.min_delta,
