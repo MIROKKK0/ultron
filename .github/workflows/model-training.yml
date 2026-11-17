@@ -1,0 +1,40 @@
+name: ULTRON model training
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 14 * * *"
+  pull_request:
+    branches: ["feat/ultron-core-assistant"]
+    paths:
+      - "training/**"
+      - "scripts/train_intent_model.py"
+      - "backend/model/**"
+      - ".github/workflows/model-training.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  reproducible-training:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Train model from ULTRON corpus
+        run: python scripts/train_intent_model.py
+      - name: Verify deterministic model artifact
+        run: python scripts/train_intent_model.py --check
+      - name: Run model and skills tests
+        run: python -m unittest tests.test_intent_model tests.test_skills -v
+      - name: Benchmark latency and memory
+        run: python scripts/benchmark_intent_model.py --iterations 1000 | tee ultron-evolution-report.txt
+      - name: Save daily evolution report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultron-daily-evolution-report
+          path: ultron-evolution-report.txt
+          retention-days: 14

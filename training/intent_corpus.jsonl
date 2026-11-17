@@ -1,0 +1,225 @@
+{"intent":"greeting","text":"oi"}
+{"intent":"greeting","text":"olá"}
+{"intent":"greeting","text":"ola"}
+{"intent":"greeting","text":"bom dia"}
+{"intent":"greeting","text":"boa tarde"}
+{"intent":"greeting","text":"boa noite"}
+{"intent":"greeting","text":"e aí ultron"}
+{"intent":"greeting","text":"tudo bem ultron"}
+{"intent":"greeting","text":"oi tudo bem"}
+{"intent":"greeting","text":"saudações ultron"}
+{"intent":"greeting","text":"fala ultron"}
+{"intent":"greeting","text":"hey ultron"}
+{"intent":"greeting","text":"como vai"}
+{"intent":"greeting","text":"oi assistente"}
+{"intent":"greeting","text":"olá tudo certo"}
+{"intent":"greeting","text":"fala comigo"}
+{"intent":"greeting","text":"olá, ultron"}
+{"intent":"greeting","text":"bom dia assistente"}
+{"intent":"greeting","text":"boa noite, tudo certo"}
+{"intent":"greeting","text":"e aí, como vai?"}
+{"intent":"greeting","text":"saudações"}
+{"intent":"greeting","text":"oi, tudo bem com você"}
+{"intent":"greeting","text":"hey, ultron"}
+{"intent":"greeting","text":"tudo certo?"}
+{"intent":"greeting","text":"como você está hoje"}
+{"intent":"help","text":"ajuda"}
+{"intent":"help","text":"o que você faz"}
+{"intent":"help","text":"quais são suas funções"}
+{"intent":"help","text":"como posso usar você"}
+{"intent":"help","text":"me mostra os comandos"}
+{"intent":"help","text":"como funciona o ultron"}
+{"intent":"help","text":"preciso de ajuda"}
+{"intent":"help","text":"me explique suas capacidades"}
+{"intent":"help","text":"quais recursos estão disponíveis"}
+{"intent":"help","text":"como usar o assistente"}
+{"intent":"help","text":"me ajuda"}
+{"intent":"help","text":"preciso de suporte"}
+{"intent":"help","text":"mostre o que sabe fazer"}
+{"intent":"help","text":"liste suas habilidades"}
+{"intent":"help","text":"quais comandos posso usar"}
+{"intent":"help","text":"me ensine a usar o ultron"}
+{"intent":"help","text":"quero ver suas funções"}
+{"intent":"help","text":"me dê uma orientação de uso"}
+{"intent":"help","text":"o que posso pedir a você"}
+{"intent":"help","text":"me mostra como funciona"}
+{"intent":"identity","text":"quem é você"}
+{"intent":"identity","text":"quem e voce"}
+{"intent":"identity","text":"me fale sobre você"}
+{"intent":"identity","text":"qual seu nome"}
+{"intent":"identity","text":"o que é o ultron"}
+{"intent":"identity","text":"apresente-se"}
+{"intent":"identity","text":"quem criou você"}
+{"intent":"identity","text":"qual é sua arquitetura"}
+{"intent":"identity","text":"você é uma ia"}
+{"intent":"identity","text":"me diga quem você é"}
+{"intent":"identity","text":"diga seu nome"}
+{"intent":"identity","text":"você se chama como"}
+{"intent":"identity","text":"fale da sua identidade"}
+{"intent":"identity","text":"qual é sua função"}
+{"intent":"identity","text":"descreva quem você é"}
+{"intent":"identity","text":"você é o ultron?"}
+{"intent":"identity","text":"qual é o seu propósito"}
+{"intent":"identity","text":"me apresente o sistema"}
+{"intent":"identity","text":"qual modelo você usa"}
+{"intent":"identity","text":"explique sua arquitetura atual"}
+{"intent":"plan","text":"planeje minha semana"}
+{"intent":"plan","text":"crie um plano para estudar"}
+{"intent":"plan","text":"me ajude a organizar meu projeto"}
+{"intent":"plan","text":"quais etapas devo seguir"}
+{"intent":"plan","text":"como faço para resolver isso"}
+{"intent":"plan","text":"organize essas tarefas"}
+{"intent":"plan","text":"quero planejar uma viagem"}
+{"intent":"plan","text":"monte um roteiro de execução"}
+{"intent":"plan","text":"divida esse objetivo em etapas"}
+{"intent":"plan","text":"me ajuda a planejar"}
+{"intent":"plan","text":"faça um planejamento"}
+{"intent":"plan","text":"me ajude com um roteiro"}
+{"intent":"plan","text":"organize meu dia"}
+{"intent":"plan","text":"crie etapas para esse objetivo"}
+{"intent":"plan","text":"quero um plano de ação"}
+{"intent":"plan","text":"estruture esse trabalho"}
+{"intent":"plan","text":"como posso organizar isso"}
+{"intent":"plan","text":"planeje a execução do projeto"}
+{"intent":"plan","text":"divida meu trabalho em tarefas"}
+{"intent":"plan","text":"monte um plano de estudos"}
+{"intent":"calculate","text":"quanto é 12 vezes 4"}
+{"intent":"calculate","text":"calcule 25 mais 17"}
+{"intent":"calculate","text":"resolva 12*(3+4)"}
+{"intent":"calculate","text":"quanto dá 100 dividido por 5"}
+{"intent":"calculate","text":"faça essa conta"}
+{"intent":"calculate","text":"preciso de um cálculo"}
+{"intent":"calculate","text":"somar 40 e 20"}
+{"intent":"calculate","text":"qual o resultado de 9 vezes 9"}
+{"intent":"calculate","text":"calcule 2 elevado a 3"}
+{"intent":"calculate","text":"quanto é 10 menos 3"}
+{"intent":"calculate","text":"qual é 15 mais 7"}
+{"intent":"calculate","text":"resolva esta expressão"}
+{"intent":"calculate","text":"quanto é 8 multiplicado por 6"}
+{"intent":"calculate","text":"calcule 100 menos 37"}
+{"intent":"calculate","text":"quanto é 144 dividido por 12"}
+{"intent":"calculate","text":"faça o cálculo de 3 ao quadrado"}
+{"intent":"calculate","text":"quanto dá 5 vezes 9"}
+{"intent":"calculate","text":"me ajude com matemática"}
+{"intent":"calculate","text":"calcule 18 por cento de 200"}
+{"intent":"calculate","text":"resolva 7+8"}
+{"intent":"research","text":"pesquise na internet sobre inteligência artificial"}
+{"intent":"research","text":"procure informações sobre python"}
+{"intent":"research","text":"quais são as notícias de hoje"}
+{"intent":"research","text":"busque na web novidades do iphone"}
+{"intent":"research","text":"pesquise o preço atual"}
+{"intent":"research","text":"me diga mais sobre transformer"}
+{"intent":"research","text":"quem é o presidente atual"}
+{"intent":"research","text":"como funciona o protocolo http"}
+{"intent":"research","text":"encontre fontes sobre ciência"}
+{"intent":"research","text":"pesquisa sobre redes neurais"}
+{"intent":"research","text":"busque na internet por notícias"}
+{"intent":"research","text":"procure na web informações atuais"}
+{"intent":"research","text":"pesquise quem ganhou o jogo ontem"}
+{"intent":"research","text":"encontre informações recentes sobre IA"}
+{"intent":"research","text":"consulte fontes online sobre python"}
+{"intent":"research","text":"quero pesquisar na internet"}
+{"intent":"research","text":"faça uma busca online"}
+{"intent":"research","text":"o que aconteceu hoje no mundo"}
+{"intent":"research","text":"procure o lançamento mais recente"}
+{"intent":"research","text":"investigue esse assunto na web"}
+{"intent":"remember","text":"lembre que gosto de respostas curtas"}
+{"intent":"remember","text":"guarde essa informação"}
+{"intent":"remember","text":"anote que meu projeto se chama ultron"}
+{"intent":"remember","text":"quero salvar uma memória"}
+{"intent":"remember","text":"lembra disso para depois"}
+{"intent":"remember","text":"registre esta nota"}
+{"intent":"remember","text":"memorize essa preferência"}
+{"intent":"remember","text":"não esqueça essa informação"}
+{"intent":"remember","text":"salve esse detalhe"}
+{"intent":"remember","text":"quero que você se lembre"}
+{"intent":"remember","text":"guarde isso na memória"}
+{"intent":"remember","text":"salve esta informação para mim"}
+{"intent":"remember","text":"lembre-se desta regra"}
+{"intent":"remember","text":"anote para não esquecer"}
+{"intent":"remember","text":"registre na memória do ultron"}
+{"intent":"remember","text":"quero que lembre disso"}
+{"intent":"remember","text":"memorize esse dado"}
+{"intent":"remember","text":"salve minha preferência"}
+{"intent":"remember","text":"armazene essa nota"}
+{"intent":"remember","text":"lembre que prefiro português"}
+{"intent":"improve","text":"melhore a si mesmo"}
+{"intent":"improve","text":"como você pode evoluir"}
+{"intent":"improve","text":"analise seus próprios erros"}
+{"intent":"improve","text":"proponha uma melhoria para o ultron"}
+{"intent":"improve","text":"faça uma autoavaliação"}
+{"intent":"improve","text":"quero que você se autoaperfeiçoe"}
+{"intent":"improve","text":"crie um plano de evolução"}
+{"intent":"improve","text":"encontre bugs no seu código"}
+{"intent":"improve","text":"revise sua arquitetura"}
+{"intent":"improve","text":"como ficar mais inteligente"}
+{"intent":"improve","text":"faça uma revisão de si mesmo"}
+{"intent":"improve","text":"avalie como melhorar"}
+{"intent":"improve","text":"quais bugs você precisa corrigir"}
+{"intent":"improve","text":"gere uma proposta de autoevolução"}
+{"intent":"improve","text":"planeje sua própria melhoria"}
+{"intent":"improve","text":"revise o próprio sistema"}
+{"intent":"improve","text":"encontre pontos fracos na sua arquitetura"}
+{"intent":"improve","text":"crie tarefas para evoluir"}
+{"intent":"improve","text":"melhore seu desempenho"}
+{"intent":"improve","text":"faça um diagnóstico interno"}
+{"intent":"thanks","text":"obrigado"}
+{"intent":"thanks","text":"obrigada"}
+{"intent":"thanks","text":"valeu"}
+{"intent":"thanks","text":"muito obrigado"}
+{"intent":"thanks","text":"agradeço"}
+{"intent":"thanks","text":"brigadão"}
+{"intent":"thanks","text":"thanks"}
+{"intent":"thanks","text":"valeu mesmo"}
+{"intent":"thanks","text":"obrigado pela ajuda"}
+{"intent":"thanks","text":"perfeito obrigado"}
+{"intent":"thanks","text":"muito valeu"}
+{"intent":"thanks","text":"obrigado mesmo"}
+{"intent":"thanks","text":"agradeço sua ajuda"}
+{"intent":"thanks","text":"brigado"}
+{"intent":"thanks","text":"show, valeu"}
+{"intent":"thanks","text":"valeu pela força"}
+{"intent":"thanks","text":"obrigada mesmo"}
+{"intent":"thanks","text":"agradecido"}
+{"intent":"thanks","text":"era isso, obrigado"}
+{"intent":"thanks","text":"perfeito, valeu"}
+{"intent":"status","text":"você está funcionando"}
+{"intent":"status","text":"qual seu status"}
+{"intent":"status","text":"está online"}
+{"intent":"status","text":"como está o sistema"}
+{"intent":"status","text":"verifique seu estado"}
+{"intent":"status","text":"o servidor está ativo"}
+{"intent":"status","text":"qual o estado do ultron"}
+{"intent":"status","text":"me diga se está tudo certo"}
+{"intent":"status","text":"seu modelo está carregado"}
+{"intent":"status","text":"você está pronto"}
+{"intent":"status","text":"qual é o estado atual"}
+{"intent":"status","text":"me informe o estado do servidor"}
+{"intent":"status","text":"o ultron está pronto"}
+{"intent":"status","text":"confirme se está online"}
+{"intent":"status","text":"como está sua execução"}
+{"intent":"status","text":"verifique se a api responde"}
+{"intent":"status","text":"seu sistema está funcionando"}
+{"intent":"status","text":"qual o estado da ia"}
+{"intent":"status","text":"informe a saúde do sistema"}
+{"intent":"status","text":"está tudo operacional"}
+{"intent":"unknown","text":"conte uma história sobre dragões"}
+{"intent":"unknown","text":"me explique fotossíntese"}
+{"intent":"unknown","text":"qual a capital do brasil"}
+{"intent":"unknown","text":"me dê uma opinião sobre cinema"}
+{"intent":"unknown","text":"escreva um poema curto"}
+{"intent":"unknown","text":"como aprender inglês"}
+{"intent":"unknown","text":"fale sobre música"}
+{"intent":"unknown","text":"quero conversar sobre futebol"}
+{"intent":"unknown","text":"o que é gravidade"}
+{"intent":"unknown","text":"me conte uma curiosidade"}
+{"intent":"unknown","text":"me conte uma piada"}
+{"intent":"unknown","text":"explique a teoria da relatividade"}
+{"intent":"unknown","text":"quais filmes você recomenda"}
+{"intent":"unknown","text":"escreva uma mensagem de aniversário"}
+{"intent":"unknown","text":"como fazer pão caseiro"}
+{"intent":"unknown","text":"fale sobre astronomia"}
+{"intent":"unknown","text":"me conte sobre a história do brasil"}
+{"intent":"unknown","text":"qual é a melhor forma de aprender"}
+{"intent":"unknown","text":"me explique o que é energia"}
+{"intent":"unknown","text":"crie uma frase inspiradora"}
