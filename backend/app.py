@@ -640,7 +640,8 @@ def chat(
         if installation_id:
             with connect_db() as db:
                 rows = execute(db, "SELECT content FROM installation_memories WHERE installation_id = ? ORDER BY id DESC LIMIT 100", (installation_id,)).fetchall()
-            personal_memories = rank_memories(message, rows, limit=5) if rows else []
+            if rows:
+                personal_memories = rank_memories(message, rows, limit=5) if rows else []
         response = run_intent_skill(message) or answer_without_provider(message, personal_memories, [])
     feedback_strategies = {role: float(score) for role, score in learned_strategy_scores().items() if role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
