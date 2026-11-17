@@ -12,6 +12,8 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
+from skills_manager import SkillsManager
+
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -121,6 +123,7 @@ class Ultron:
 
         self.client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
         self.memory = MemoryManager()
+        self.skills = SkillsManager()
         self.system_prompt = self._load_system_prompt()
         self.tools = self._define_tools()
 
@@ -222,6 +225,38 @@ class Ultron:
                         "required": []
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "list_skills",
+                    "description": "Lista skills locais disponíveis no Ultron.",
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "load_skill",
+                    "description": "Carrega instruções de uma skill local pelo nome. Não executa código.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"name": {"type": "string"}},
+                        "required": ["name"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "find_skills",
+                    "description": "Pesquisa skills externas usando Skills CLI; apenas pesquisa, não instala.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"query": {"type": "string"}},
+                        "required": ["query"]
+                    }
+                }
             }
         ]
 
@@ -254,6 +289,13 @@ class Ultron:
                 )
             elif name == "self_improve":
                 return self._self_improve(arguments.get("feedback", ""))
+            elif name == "list_skills":
+                skills = self.skills.list_skills()
+                return json.dumps(skills, ensure_ascii=False, indent=2) if skills else "Nenhuma skill local encontrada."
+            elif name == "load_skill":
+                return self.skills.load_skill(arguments.get("name", ""))
+            elif name == "find_skills":
+                return self.skills.find_external(arguments.get("query", ""))
             else:
                 return f"Ferramenta desconhecida: {name}"
         except Exception as e:
@@ -336,6 +378,15 @@ Retorne APENAS o novo system prompt completo.
         self.memory.add_message("user", user_message)
 
         messages = [{"role": "system", "content": self.system_prompt}]
+        available_skills = self.skills.list_skills()
+        if available_skills:
+            skill_index = "\\n".join(
+                f"- {item['name']}: {item['description']}" for item in available_skills
+            )
+            messages.append({
+                "role": "system",
+                "content": "Skills locais disponíveis (carregue com load_skill quando forem úteis):\\n" + skill_index
+            })
         
         relevant_facts = self.memory.search_facts(user_message, limit=3)
         if relevant_facts:
@@ -396,6 +447,9 @@ Retorne APENAS o novo system prompt completo.
                     break
                 if user_input.lower() == "melhorar":
                     print("Ultron: " + self._self_improve())
+                    continue
+                if user_input.lower() in ("skills", "skills list"):
+                    print(json.dumps(self.skills.list_skills(), ensure_ascii=False, indent=2))
                     continue
 
                 print("Ultron: ", end="", flush=True)
