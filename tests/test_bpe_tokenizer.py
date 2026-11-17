@@ -32,6 +32,7 @@ class TrainedBPETokenizerTests(unittest.TestCase):
     def test_bpe_training_pipeline_saves_matching_tokenizer_metadata(self):
         import torch
         from training.generative.train import train
+        from training.generative.train_tokenizer import train_tokenizer
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             corpus = root / "train.txt"
