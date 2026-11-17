@@ -364,7 +364,7 @@ def execute_brain_cycle(
     agents = [
         {
             "role": role,
-            "neural_priority": float(scores.get(role, 0.0)),
+            "priority": float(scores.get(role, 0.0)),
             **outputs[role],
         }
         for role in roles
@@ -605,7 +605,7 @@ def self_knowledge() -> dict[str, Any]:
     health = {
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
         "ai_configured": False,
-        "neural_core_configured": True,
+        "neural_core_configured": False,
         "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
     }
