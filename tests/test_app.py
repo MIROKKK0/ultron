@@ -41,6 +41,17 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("84", response.json()["reply"])
 
+    def test_bare_arithmetic_expression_is_calculated(self):
+        response = client.post("/chat", json={"message": "1+9"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("10", response.json()["reply"])
+
+    def test_unknown_message_asks_for_clarification_instead_of_echoing_request(self):
+        response = client.post("/chat", json={"message": "me explica uma coisa diferente"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("reformular", response.json()["reply"])
+        self.assertNotIn("Solicitação registrada", response.json()["reply"])
+
     def test_research_outage_does_not_return_server_error(self):
         with patch("backend.app.search_web", side_effect=RuntimeError("network down")):
             response = client.post("/chat", json={"message": "Pesquise sobre FlyWire"})
