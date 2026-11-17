@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum BrainPhase {
+enum BrainPhase: Equatable {
     case idle
     case processing
     case responding
@@ -43,7 +43,7 @@ struct BrainMonitorView: View {
 
                 // Concentric holographic rings.
                 for ring in 0..<3 {
-                    let ringRadius = radius * (0.62 + Double(ring) * 0.19)
+                    let ringRadius = radius * CGFloat(0.62 + Double(ring) * 0.19)
                     let rect = CGRect(
                         x: center.x - ringRadius,
                         y: center.y - ringRadius,
@@ -67,10 +67,10 @@ struct BrainMonitorView: View {
                     let fraction = Double(index) / Double(particleCount)
                     let angle = fraction * .pi * 2 + time * (0.16 + speed * 0.42)
                     let wobble = 0.82 + 0.12 * sin(time * 1.4 + Double(index) * 1.7)
-                    let radial = radius * wobble
+                    let radial = radius * CGFloat(wobble)
                     points.append(CGPoint(
-                        x: center.x + cos(angle) * radial,
-                        y: center.y + sin(angle) * radial
+                        x: center.x + CGFloat(cos(angle)) * radial,
+                        y: center.y + CGFloat(sin(angle)) * radial
                     ))
                 }
 
@@ -92,8 +92,8 @@ struct BrainMonitorView: View {
                 for vertex in 0..<6 {
                     let angle = Double(vertex) * .pi / 3 + time * 0.12 * speed
                     let point = CGPoint(
-                        x: center.x + cos(angle) * radius * 0.34 * pulse,
-                        y: center.y + sin(angle) * radius * 0.34 * pulse
+                        x: center.x + CGFloat(cos(angle)) * radius * 0.34 * CGFloat(pulse),
+                        y: center.y + CGFloat(sin(angle)) * radius * 0.34 * CGFloat(pulse)
                     )
                     if vertex == 0 { core.move(to: point) } else { core.addLine(to: point) }
                 }
@@ -104,7 +104,7 @@ struct BrainMonitorView: View {
                 context.fill(Path(ellipseIn: coreRect), with: .color(.white.opacity(0.95)))
 
                 for (index, point) in points.enumerated() {
-                    let size = index.isMultiple(of: 3) ? 3.0 : 1.8
+                    let size: CGFloat = index.isMultiple(of: 3) ? 3.0 : 1.8
                     let dot = CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
                     context.fill(Path(ellipseIn: dot), with: .color(accent.opacity(0.55 + 0.35 * pulse)))
                 }
