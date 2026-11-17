@@ -28,12 +28,15 @@ ANCHORS = {
 def _bytes(value: str) -> list[int]:
     return list(value.encode("utf-8"))
 
-def _hash_token(value: str, buckets: int) -> int:
+def _hash_bytes(raw: bytes, buckets: int) -> int:
     result = 2166136261
-    for byte in _bytes(value):
+    for byte in raw:
         result ^= byte
         result = (result * 16777619) & 0xFFFFFFFF
     return result % buckets
+
+def _hash_token(value: str, buckets: int) -> int:
+    return _hash_bytes(value.encode("utf-8"), buckets)
 
 def tokenize(text: str, buckets: int = 4096) -> dict[int, int]:
     normalized = unicodedata.normalize("NFKC", text.casefold())
@@ -46,8 +49,8 @@ def tokenize(text: str, buckets: int = 4096) -> dict[int, int]:
     padded = [94, *raw, 36]
     for size in (2, 3):
         for index in range(len(padded) - size + 1):
-            gram = bytes(padded[index:index + size]).decode("latin1")
-            token_id = _hash_token(gram, buckets)
+            gram = bytes(padded[index:index + size])
+            token_id = _hash_bytes(gram, buckets)
             features[token_id] = features.get(token_id, 0) + 1
     return features
 
