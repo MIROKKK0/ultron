@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     # Weekly deep pretraining; the lightweight intent loop runs daily.
-    - cron: "17 14 * * 0"
+    - cron: "17 15 * * 0"
   push:
     branches: ["feat/ultron-core-assistant", "feat/ultron-private-installation-memory"]
     paths:
