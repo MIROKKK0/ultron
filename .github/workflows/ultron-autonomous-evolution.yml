@@ -1,0 +1,77 @@
+name: ULTRON autonomous evolution
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub Actions uses UTC; 14:17 UTC is approximately 11:17 in Brazil (BRT).
+    - cron: "17 14 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ultron-autonomous-evolution
+  cancel-in-progress: false
+
+jobs:
+  train-evaluate-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install bounded CPU training dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r training/generative/requirements.txt --index-url https://download.pytorch.org/whl/cpu
+      - name: Rebuild the deterministic intent model
+        run: |
+          python scripts/train_intent_model.py
+          python scripts/train_intent_model.py --check
+      - name: Run the complete fast regression suite
+        run: python -m unittest discover -s tests -v
+      - name: Benchmark response routing
+        run: python scripts/benchmark_intent_model.py --iterations 1000 | tee intent-benchmark.txt
+      - name: Train ULTRON Tiny from random initialization
+        run: |
+          python -m training.generative.train \
+            --corpus training/generative/corpus_pt.txt \
+            --steps 500 --batch-size 8 --context-length 64 \
+            --width 48 --layers 2 --heads 4 \
+            --eval-interval 50 --eval-batches 5 \
+            --early-stopping-patience 5 --threads 2 \
+            --output artifacts/ultron-tiny-daily.pt | tee tiny-training-report.jsonl
+      - name: Produce machine-readable evolution report
+        run: |
+          python - <<'PY'
+          import json, platform, subprocess, time
+          from pathlib import Path
+          report = {
+              "scope": "training_and_evaluation_only",
+              "production_weights_changed": False,
+              "automatic_merge": False,
+              "automatic_deployment": False,
+              "python": platform.python_version(),
+              "platform": platform.platform(),
+              "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "intent_benchmark": Path("intent-benchmark.txt").read_text(errors="replace"),
+              "tiny_training": Path("tiny-training-report.jsonl").read_text(errors="replace"),
+              "guardrail": "Experimental checkpoint is not promoted without independent quality, safety, latency and memory evaluation."
+          }
+          Path("artifacts/evolution-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
+          PY
+      - name: Upload checkpoint and reproducibility report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultron-autonomous-evolution-${{ github.run_number }}
+          path: |
+            artifacts/ultron-tiny-daily.pt
+            artifacts/evolution-report.json
+            tiny-training-report.jsonl
+            intent-benchmark.txt
+          if-no-files-found: error
+          retention-days: 30
