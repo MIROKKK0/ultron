@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import hmac
 import json
 import operator
 import os
 import re
 import sqlite3
+import secrets
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -42,6 +45,19 @@ _ALLOWED_OPERATORS = {
     ast.USub: operator.neg,
     ast.UAdd: operator.pos,
 }
+
+
+def require_installation(authorization: str | None = Header(default=None)) -> str:
+    """Authenticate one app installation without embedding a shared server secret."""
+    scheme, _, supplied = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or len(supplied) < 32:
+        raise HTTPException(status_code=401, detail="Instalação não autenticada.")
+    token_hash = hashlib.sha256(supplied.encode("utf-8")).hexdigest()
+    with connect_db() as db:
+        row = execute(db, "SELECT installation_id FROM installations WHERE token_hash = ? AND revoked_at IS NULL", (token_hash,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=401, detail="Credencial da instalação inválida ou revogada.")
+    return str(row["installation_id"])
 
 
 def require_api_token(authorization: str | None = Header(default=None)) -> bool:
@@ -135,6 +151,11 @@ def init_db() -> None:
                 state_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )""")
+
+
+    # New isolated tables; legacy shared memory rows remain inaccessible.
+    execute(db, """CREATE TABLE IF NOT EXISTS installations (installation_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, revoked_at TEXT)""")
+    execute(db, """CREATE TABLE IF NOT EXISTS installation_memories (id BIGSERIAL PRIMARY KEY, installation_id TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)""")
 
 
 def load_associative_memory() -> None:
@@ -643,41 +664,53 @@ def runtime_status(request: Request) -> dict[str, Any]:
     }
 
 
-@app.post("/memory", dependencies=[Depends(require_api_token)])
-def add_memory(request: MemoryRequest) -> dict[str, Any]:
+@app.post("/installations/register")
+def register_installation(request: Request) -> dict[str, str]:
+    """Create an isolated installation identity; the random token is returned once."""
+    enforce_public_limit(request, "installation-register", limit=3, window_seconds=3600)
+    installation_id = str(uuid.uuid4())
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    created_at = datetime.now(timezone.utc).isoformat()
+    with connect_db() as db:
+        execute(db, "INSERT INTO installations(installation_id, token_hash, created_at, revoked_at) VALUES (?, ?, ?, NULL)", (installation_id, token_hash, created_at))
+    return {"installation_id": installation_id, "access_token": token, "token_storage": "store_in_ios_keychain", "shown_once": "true"}
+
+
+@app.delete("/installation")
+def revoke_installation(installation_id: str = Depends(require_installation)) -> dict[str, bool]:
+    """Revoke this installation and erase only its own personal memories."""
+    now = datetime.now(timezone.utc).isoformat()
+    with connect_db() as db:
+        execute(db, "DELETE FROM installation_memories WHERE installation_id = ?", (installation_id,))
+        execute(db, "UPDATE installations SET revoked_at = ? WHERE installation_id = ?", (now, installation_id))
+    return {"revoked": True, "memories_deleted": True}
+
+
+@app.post("/memory")
+def add_memory(request: MemoryRequest, installation_id: str = Depends(require_installation)) -> dict[str, Any]:
     content = request.content.strip()
     with connect_db() as db:
         if is_postgres(db):
-            cursor = execute(
-                db,
-                "INSERT INTO memories(content, created_at) VALUES (?, ?) RETURNING id",
-                (content, datetime.now(timezone.utc).isoformat()),
-            )
+            cursor = execute(db, "INSERT INTO installation_memories(installation_id, content, created_at) VALUES (?, ?, ?) RETURNING id", (installation_id, content, datetime.now(timezone.utc).isoformat()))
             memory_id = cursor.fetchone()["id"]
         else:
-            cursor = execute(
-                db,
-                "INSERT INTO memories(content, created_at) VALUES (?, ?)",
-                (content, datetime.now(timezone.utc).isoformat()),
-            )
+            cursor = execute(db, "INSERT INTO installation_memories(installation_id, content, created_at) VALUES (?, ?, ?)", (installation_id, content, datetime.now(timezone.utc).isoformat()))
             memory_id = cursor.lastrowid
     return {"id": memory_id, "content": content}
 
 
-@app.get("/memory", dependencies=[Depends(require_api_token)])
-def list_memory() -> dict[str, Any]:
+@app.get("/memory")
+def list_memory(installation_id: str = Depends(require_installation)) -> dict[str, Any]:
     with connect_db() as db:
-        rows = execute(
-            db,
-            "SELECT id, content, created_at FROM memories ORDER BY id DESC LIMIT 100",
-        ).fetchall()
+        rows = execute(db, "SELECT id, content, created_at FROM installation_memories WHERE installation_id = ? ORDER BY id DESC LIMIT 100", (installation_id,)).fetchall()
     return {"items": [dict(row) for row in rows]}
 
 
-@app.delete("/memory/{memory_id}", dependencies=[Depends(require_api_token)])
-def delete_memory(memory_id: int) -> dict[str, bool]:
+@app.delete("/memory/{memory_id}")
+def delete_memory(memory_id: int, installation_id: str = Depends(require_installation)) -> dict[str, bool]:
     with connect_db() as db:
-        cursor = execute(db, "DELETE FROM memories WHERE id = ?", (memory_id,))
+        cursor = execute(db, "DELETE FROM installation_memories WHERE id = ? AND installation_id = ?", (memory_id, installation_id))
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail="Memória não encontrada.")
     return {"deleted": True}
