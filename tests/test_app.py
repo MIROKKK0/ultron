@@ -254,6 +254,7 @@ class UltronTests(unittest.TestCase):
         second = client.post("/installations/register")
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.headers.get("cache-control"), "no-store")
         first_auth = {"Authorization": "Bearer " + first.json()["access_token"]}
         second_auth = {"Authorization": "Bearer " + second.json()["access_token"]}
         created = client.post(
