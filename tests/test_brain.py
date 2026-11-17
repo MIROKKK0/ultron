@@ -1,8 +1,21 @@
 import unittest
-from backend.brain import run_cognitive_cycle, run_multitask
+from backend.brain import run_cognitive_cycle, run_multitask, select_research_action
 
 
 class BrainTests(unittest.TestCase):
+    def test_research_action_is_selected_by_neural_priority(self):
+        high = select_research_action({"role_scores": {"researcher": 0.82}})
+        low = select_research_action({"role_scores": {"researcher": 0.20}})
+        self.assertEqual(high["action"], "web_research")
+        self.assertTrue(high["allowed"])
+        self.assertEqual(low["action"], "local_response")
+        self.assertFalse(low["allowed"])
+        self.assertEqual(high["threshold"], 0.60)
+
+    def test_research_action_fails_closed_without_neural_priority(self):
+        with self.assertRaises(RuntimeError):
+            select_research_action({"role_scores": {"planner": 0.9}})
+
     def test_multitask_preserves_order_and_collects_results(self):
         result = run_multitask(
             ["primeira tarefa", "segunda tarefa"],

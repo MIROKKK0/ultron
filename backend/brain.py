@@ -5,13 +5,36 @@ language-model dependency; callers supply local deterministic execution.
 """
 from __future__ import annotations
 
+import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from backend.fly_brain import FLY_BRAIN
 
 BRAIN_VERSION = "2.0.0"
 MAX_PARALLEL_TASKS = 5
+RESEARCH_PRIORITY_THRESHOLD = 0.60
+
+
+def select_research_action(neural_state: dict[str, Any]) -> dict[str, Any]:
+    """Let FlyBrain's researcher signal decide whether external web I/O is warranted."""
+    scores = neural_state.get("role_scores")
+    if not isinstance(scores, dict) or "researcher" not in scores:
+        raise RuntimeError("FlyBrain não retornou prioridade neural de pesquisa.")
+    try:
+        priority = float(scores["researcher"])
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("FlyBrain retornou prioridade neural de pesquisa inválida.") from exc
+    if not math.isfinite(priority):
+        raise RuntimeError("FlyBrain retornou prioridade neural de pesquisa não finita.")
+
+    allowed = priority >= RESEARCH_PRIORITY_THRESHOLD
+    return {
+        "action": "web_research" if allowed else "local_response",
+        "allowed": allowed,
+        "researcher_priority": round(priority, 4),
+        "threshold": RESEARCH_PRIORITY_THRESHOLD,
+    }
 
 
 def run_multitask(

@@ -36,11 +36,24 @@ class UltronTests(unittest.TestCase):
 
     def test_natural_language_research_does_not_need_slash_command(self):
         fixture = {"summary": "Fontes atuais: https://example.org"}
-        with patch("backend.app.search_web", return_value=fixture) as search:
-            response = client.post("/chat", json={"message": "Pesquise na internet sobre FlyWire"})
+        neural_state = {"role_scores": {"researcher": 0.82}}
+        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state):
+            with patch("backend.app.search_web", return_value=fixture) as search:
+                response = client.post("/chat", json={"message": "Pesquise na internet sobre FlyWire"})
         self.assertEqual(response.status_code, 200)
         self.assertIn("https://example.org", response.json()["reply"])
+        self.assertEqual(response.json()["action"], "web_research")
         search.assert_called_once_with("FlyWire")
+
+    def test_chat_skips_web_research_when_neural_priority_is_low(self):
+        neural_state = {"role_scores": {"researcher": 0.20}}
+        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state):
+            with patch("backend.app.search_web") as search:
+                response = client.post("/chat", json={"message": "Pesquise na internet sobre FlyWire"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["action"], "local_response")
+        self.assertIn("atenção neural priorizou resposta local", response.json()["reply"].casefold())
+        search.assert_not_called()
 
     def test_natural_language_calculation_does_not_need_slash_command(self):
         response = client.post("/chat", json={"message": "Quanto é 12 vezes (3+4)?"})
@@ -48,9 +61,12 @@ class UltronTests(unittest.TestCase):
         self.assertIn("84", response.json()["reply"])
 
     def test_research_outage_does_not_return_server_error(self):
-        with patch("backend.app.search_web", side_effect=RuntimeError("network down")):
-            response = client.post("/chat", json={"message": "Pesquise sobre FlyWire"})
+        neural_state = {"role_scores": {"researcher": 0.82}}
+        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state):
+            with patch("backend.app.search_web", side_effect=RuntimeError("network down")):
+                response = client.post("/chat", json={"message": "Pesquise sobre FlyWire"})
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["action"], "web_research")
         self.assertIn("pesquisa na internet", response.json()["reply"])
 
     def test_health(self):
@@ -177,6 +193,22 @@ class UltronTests(unittest.TestCase):
         search.assert_called_once_with("FlyWire")
         self.assertEqual(response.json()["neural_control"]["core"], "drosophila_lif_microcircuit")
         self.assertEqual(response.json()["neural_control"]["researcher_priority"], 0.82)
+        self.assertEqual(response.json()["neural_control"]["action"], "web_research")
+
+    def test_public_brain_research_respects_low_neural_priority(self):
+        neural_state = {
+            "core": "drosophila_lif_microcircuit",
+            "role_scores": {"researcher": 0.20},
+        }
+        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state) as neural:
+            with patch("backend.app.search_web") as search:
+                response = client.post("/brain/research", json={"goal": "FlyWire"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 0)
+        self.assertEqual(response.json()["neural_control"]["action"], "local_response")
+        self.assertFalse(response.json()["neural_control"]["allowed"])
+        neural.assert_called_once_with("FlyWire", [])
+        search.assert_not_called()
 
     def test_public_brain_research_fails_closed_when_flybrain_is_unavailable(self):
         with patch("backend.app.FLY_BRAIN.process", side_effect=RuntimeError("FlyBrain unavailable")) as neural:
@@ -254,16 +286,21 @@ class UltronTests(unittest.TestCase):
 
     def test_research_endpoint_returns_source_linked_results(self):
         fixture = {"query": "memória de agentes", "count": 1, "results": [{"title": "Paper", "url": "https://example.org/paper", "snippet": "Resumo"}], "summary": "Fontes"}
-        with patch("backend.app.search_web", return_value=fixture):
-            response = client.post("/brain/research", json={"goal": "Pesquisar memória de agentes"})
+        neural_state = {"role_scores": {"researcher": 0.82}}
+        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state):
+            with patch("backend.app.search_web", return_value=fixture):
+                response = client.post("/brain/research", json={"goal": "Pesquisar memória de agentes"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"][0]["url"], "https://example.org/paper")
 
     def test_chat_research_command_uses_web_search(self):
         fixture = {"summary": "Resultados com fontes: https://example.org"}
-        with patch("backend.app.search_web", return_value=fixture):
-            response = client.post("/chat", json={"message": "/research FlyWire connectome"})
+        neural_state = {"role_scores": {"researcher": 0.82}}
+        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state):
+            with patch("backend.app.search_web", return_value=fixture):
+                response = client.post("/chat", json={"message": "/research FlyWire connectome"})
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["action"], "web_research")
         self.assertIn("https://example.org", response.json()["reply"])
 
 

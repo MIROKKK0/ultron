@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
-from backend.brain import run_multitask
+from backend.brain import run_multitask, select_research_action
 from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
 from backend.flywire_runtime import status as flywire_status, runtime_loaded as flywire_runtime_loaded
 from backend.local_decoder import decode_local
@@ -498,24 +498,33 @@ def brain_flywire_simulate(request: FlyWireSimulationRequest) -> dict[str, Any]:
 @app.post("/brain/research")
 def brain_research(payload: BrainRequest, request: Request) -> dict[str, Any]:
     enforce_public_limit(request, "web-research", limit=8)
-    # Research is a cognitive action too: the mandatory neural core must run
-    # before any external search, and search must fail closed if it is unavailable.
+    # FlyBrain must select the external action, not merely decorate its result.
     try:
         neural_state = FLY_BRAIN.process(payload.goal, [])
+        decision = select_research_action(neural_state)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    neural_control = {
+        "core": neural_state.get("core"),
+        "version": neural_state.get("version"),
+        "is_full_connectome": bool(neural_state.get("is_full_connectome", False)),
+        **decision,
+    }
+    if not decision["allowed"]:
+        return {
+            "query": payload.goal,
+            "count": 0,
+            "results": [],
+            "summary": "A atenção neural priorizou resposta local; a pesquisa web não foi iniciada.",
+            "neural_control": neural_control,
+        }
+
     try:
         result = search_web(payload.goal)
-        scores = neural_state.get("role_scores", {})
-        result["neural_control"] = {
-            "core": neural_state.get("core"),
-            "version": neural_state.get("version"),
-            "is_full_connectome": bool(neural_state.get("is_full_connectome", False)),
-            "researcher_priority": round(float(scores.get("researcher", 0.0)), 4),
-        }
+        result["neural_control"] = neural_control
         return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -595,12 +604,21 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     research_query = message[10:].strip() if message.casefold().startswith("/research ") else _extract_research_query(message)
     calculation = re.match(r"^(?:quanto é|quanto dá|calcule|calcular|resultado de)\s+(.+?)\s*[?.!]*$", message, re.I)
+    selected_action = "local_response"
     if research_query:
         try:
-            research = search_web(research_query)
-            response = research["summary"]
-        except Exception:
-            response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; o núcleo FlyBrain continua ativo."
+            research_decision = select_research_action(neural_state)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        selected_action = research_decision["action"]
+        if research_decision["allowed"]:
+            try:
+                research = search_web(research_query)
+                response = research["summary"]
+            except Exception:
+                response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; o núcleo FlyBrain continua ativo."
+        else:
+            response = "A atenção neural priorizou resposta local. Não iniciei a pesquisa web desta vez."
     elif message.casefold() == "/brain" or message.casefold().startswith("/brain "):
         goal = message[6:].strip()
         if not goal:
@@ -632,7 +650,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     role_scores = neural_state.get("role_scores", {})
     feedback_strategies = {role: float(role_scores.get(role, 0.0)) for role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
-    return {"reply": response, "strategy": selected_strategy}
+    return {"reply": response, "strategy": selected_strategy, "action": selected_action}
 
 
 @app.post("/memory", dependencies=[Depends(require_api_token)])
