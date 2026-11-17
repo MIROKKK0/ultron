@@ -380,7 +380,7 @@ Retorne APENAS o novo system prompt completo.
         messages = [{"role": "system", "content": self.system_prompt}]
         available_skills = self.skills.list_skills()
         if available_skills:
-            skill_index = "\\n".join(
+            skill_index = "\u005cn".join(
                 f"- {item['name']}: {item['description']}" for item in available_skills
             )
             messages.append({
