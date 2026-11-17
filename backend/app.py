@@ -670,7 +670,7 @@ def runtime_status(request: Request) -> dict[str, Any]:
 @app.post("/installations/register")
 def register_installation(request: Request) -> dict[str, str]:
     """Create an isolated installation identity; the random token is returned once."""
-    enforce_public_limit(request, "installation-register", limit=3, window_seconds=3600)
+    enforce_public_limit(request, "installation-register", limit=10, window_seconds=3600)
     installation_id = str(uuid.uuid4())
     token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
