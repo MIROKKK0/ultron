@@ -41,7 +41,13 @@ jobs:
             --tokenizer-json artifacts/ultron-bpe-tokenizer.json \
             --eval-interval 500 --eval-batches 20 --early-stopping-patience 8 \
             --output artifacts/ultron-tiny-ptbr.pt
-      - name: Upload experimental checkpoint and provenance
+      - name: Generate fixed qualitative samples (not a factuality benchmark)
+        run: |
+          python -m training.generative.sample \
+            --checkpoint artifacts/ultron-tiny-ptbr.pt \
+            --tokenizer-json artifacts/ultron-bpe-tokenizer.json \
+            --max-new-tokens 80 --output artifacts/qualitative-samples.json
+      - name: Upload experimental checkpoint, provenance and samples
         uses: actions/upload-artifact@v4
         with:
           name: ultron-ptbr-experimental-checkpoint
@@ -50,4 +56,5 @@ jobs:
             artifacts/ultron-bpe-tokenizer.json
             artifacts/ptbr-corpus/manifest.json
             artifacts/ptbr-corpus/provenance.jsonl
+            artifacts/qualitative-samples.json
           retention-days: 14
