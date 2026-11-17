@@ -284,10 +284,12 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(client.get("/memory", headers=auth).status_code, 401)
 
 
-    def test_public_remember_command_never_writes_shared_memory(self):
-        before = client.get("/memory", headers=AUTH).json()["items"]
+    def test_public_remember_command_never_writes_private_memory(self):
+        registered = client.post("/installations/register").json()
+        auth = {"Authorization": "Bearer " + registered["access_token"]}
+        before = client.get("/memory", headers=auth).json()["items"]
         response = client.post("/chat", json={"message": "/remember segredo de teste"})
-        after = client.get("/memory", headers=AUTH).json()["items"]
+        after = client.get("/memory", headers=auth).json()["items"]
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(after), len(before))
         self.assertIn("autenticação", response.json()["reply"].lower())
