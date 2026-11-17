@@ -22,3 +22,17 @@ Before enabling inference, require held-out Portuguese evaluation, quality and
 safety thresholds, latency/RSS benchmarks under concurrency, checkpoint integrity,
 and a tested unload/fallback path. The included training corpus is a smoke-test
 corpus only and is not sufficient for a general-purpose assistant.
+
+
+## Baseline measured in GitHub CI
+
+The existing intent classifier (225 examples, 11 classes, 40,020-byte artifact)
+was measured on a GitHub-hosted Ubuntu runner at 1,000 predictions:
+- mean latency: 0.1278 ms
+- p95 latency: 0.1744 ms
+- process peak RSS: 15.92 MB
+
+These are CI-runner measurements for the intent classifier only. They are not
+Render production metrics and do not measure the optional PyTorch Transformer.
+The new `/runtime/status` endpoint must be used after deployment to inspect the
+actual web process.
