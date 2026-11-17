@@ -55,8 +55,21 @@ def train(args: argparse.Namespace) -> dict:
     torch.manual_seed(args.seed)
     torch.set_num_threads(args.threads)
     corpus = Path(args.corpus).read_text(encoding="utf-8")
-    data = torch.tensor(ByteTokenizer().encode(corpus), dtype=torch.long)
-    train_data, validation_data = split_corpus(data, args.context_length, args.validation_fraction)
+    tokenizer = ByteTokenizer()
+    data = torch.tensor(tokenizer.encode(corpus), dtype=torch.long)
+    if args.validation_corpus:
+        train_data = data
+        validation_text = Path(args.validation_corpus).read_text(encoding="utf-8")
+        validation_data = torch.tensor(tokenizer.encode(validation_text), dtype=torch.long)
+    else:
+        train_data, validation_data = split_corpus(data, args.context_length, args.validation_fraction)
+        validation_text = ""
+    test_text = Path(args.test_corpus).read_text(encoding="utf-8") if args.test_corpus else ""
+    test_data = torch.tensor(tokenizer.encode(test_text), dtype=torch.long) if test_text else None
+    if len(validation_data) <= args.context_length + 1:
+        raise ValueError("Validation corpus is too short for the configured context")
+    if test_data is not None and len(test_data) <= args.context_length + 1:
+        raise ValueError("Test corpus is too short for the configured context")
     config = ModelConfig(context_length=args.context_length, width=args.width, layers=args.layers, heads=args.heads)
     model = UltronTinyGPT(config)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
@@ -89,13 +102,17 @@ def train(args: argparse.Namespace) -> dict:
                 "validation_perplexity": round(math.exp(min(val_loss, 80)), 5)}))
     final_loss = evaluate_loss(model, validation_data, batch_size=args.batch_size,
         batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + args.steps + 1)
+    test_loss = evaluate_loss(model, test_data, batch_size=args.batch_size,
+        batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + args.steps + 2) if test_data is not None else None
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     temp = output.with_name(output.name + ".tmp")
     torch.save({"model_state": model.state_dict(), "model_config": model.config_dict(),
         "tokenizer_version": TOKENIZER_VERSION, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
         "training_steps": args.steps, "seed": args.seed, "validation_fraction": args.validation_fraction,
-        "corpus_characters": len(corpus), "learning_rate": args.learning_rate,
+        "corpus_characters": len(corpus), "validation_corpus_sha256": hashlib.sha256(validation_text.encode("utf-8")).hexdigest() if validation_text else None,
+        "test_corpus_sha256": hashlib.sha256(test_text.encode("utf-8")).hexdigest() if test_text else None,
+        "test_loss": test_loss, "learning_rate": args.learning_rate,
         "warmup_steps": warmup_steps, "min_lr_ratio": args.min_lr_ratio,
         "validation_loss": final_loss, "validation_perplexity": math.exp(min(final_loss, 80)),
         "parameter_count": model.parameter_count(), "experimental": True}, temp)
@@ -103,11 +120,14 @@ def train(args: argparse.Namespace) -> dict:
     return {"checkpoint": str(output), "parameters": model.parameter_count(), "training_steps": args.steps,
         "tokenizer": TOKENIZER_VERSION, "validation_loss": round(final_loss, 5),
         "validation_perplexity": round(math.exp(min(final_loss, 80)), 5),
+        "test_loss": round(test_loss, 5) if test_loss is not None else None,
         "warning": "Experimental model only; not a production assistant or ChatGPT-equivalent."}
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--corpus", default="training/generative/corpus_pt.txt")
+    parser.add_argument("--validation-corpus", default=None)
+    parser.add_argument("--test-corpus", default=None)
     parser.add_argument("--output", default="artifacts/ultron-tiny.pt")
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=8)
