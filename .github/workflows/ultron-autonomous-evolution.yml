@@ -51,6 +51,12 @@ jobs:
             --eval-interval 50 --eval-batches 5 \
             --early-stopping-patience 5 --threads 2 \
             --output artifacts/ultron-tiny-daily.pt | tee tiny-training-report.jsonl
+      - name: Validate checkpoint loading and CPU generation
+        run: |
+          python -m training.generative.verify_checkpoint \\
+            --checkpoint artifacts/ultron-tiny-daily.pt \\
+            --output artifacts/checkpoint-smoke-test.json \\
+            --threads 2 --tokens 24 | tee checkpoint-verification.txt
       - name: Produce machine-readable evolution report
         run: |
           python - <<'PY'
@@ -66,6 +72,7 @@ jobs:
               "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
               "intent_benchmark": Path("intent-benchmark.txt").read_text(errors="replace"),
               "tiny_training": Path("tiny-training-report.jsonl").read_text(errors="replace"),
+              "checkpoint_verification": Path("artifacts/checkpoint-smoke-test.json").read_text(errors="replace"),
               "guardrail": "Experimental checkpoint is not promoted without independent quality, safety, latency and memory evaluation."
           }
           Path("artifacts/evolution-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
@@ -77,6 +84,8 @@ jobs:
           path: |
             artifacts/ultron-tiny-daily.pt
             artifacts/evolution-report.json
+            artifacts/checkpoint-smoke-test.json
+            checkpoint-verification.txt
             tiny-training-report.jsonl
             intent-benchmark.txt
           if-no-files-found: error
