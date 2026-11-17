@@ -1,0 +1,28 @@
+name: Sync ULTRON repository settings
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync-settings:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate repository-scoped GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ultron
+
+      - name: Preview repository settings changes
+        uses: joshjohanning/bulk-github-repo-settings-sync-action@v2
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          repositories: 'MIROKKK0/ultron'
+          allow-auto-merge: true
+          dry-run: true
