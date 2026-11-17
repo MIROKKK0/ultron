@@ -63,6 +63,9 @@ def train(args: argparse.Namespace) -> dict:
         raise ValueError("Warmup must be non-negative and min LR ratio must be in (0, 1]")
     if args.early_stopping_patience < 0 or args.min_delta < 0:
         raise ValueError("Early stopping patience and min_delta must be non-negative")
+    max_eval_regression = float(getattr(args, "max_eval_regression", 0.02))
+    if max_eval_regression < 0:
+        raise ValueError("Maximum evaluation regression must be non-negative")
     torch.manual_seed(args.seed)
     torch.set_num_threads(args.threads)
     corpus = Path(args.corpus).read_text(encoding="utf-8")
@@ -88,6 +91,9 @@ def train(args: argparse.Namespace) -> dict:
     init_checkpoint_path = getattr(args, "init_checkpoint", None)
     parent_checkpoint_sha256 = None
     parent_cumulative_steps = 0
+    parent_validation_loss = None
+    parent_test_loss = None
+    comparison_seed = args.seed + 991
     if init_checkpoint_path:
         parent_path = Path(init_checkpoint_path)
         if not parent_path.is_file():
@@ -102,6 +108,11 @@ def train(args: argparse.Namespace) -> dict:
         model.load_state_dict(parent["model_state"], strict=True)
         parent_checkpoint_sha256 = hashlib.sha256(parent_path.read_bytes()).hexdigest()
         parent_cumulative_steps = int(parent.get("cumulative_training_steps", parent.get("training_steps", 0)))
+        parent_validation_loss = evaluate_loss(model, validation_data, batch_size=args.batch_size,
+            batches=max(args.eval_batches, 10), context_length=args.context_length, seed=comparison_seed)
+        if test_data is not None:
+            parent_test_loss = evaluate_loss(model, test_data, batch_size=args.batch_size,
+                batches=max(args.eval_batches, 10), context_length=args.context_length, seed=comparison_seed + 1)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     sampler = torch.Generator(device="cpu").manual_seed(args.seed + 1)
     warmup_steps = min(args.warmup_steps, max(0, args.steps - 1))
@@ -153,11 +164,18 @@ def train(args: argparse.Namespace) -> dict:
     if best_state is not None:
         model.load_state_dict(best_state)
     final_loss = evaluate_loss(model, validation_data, batch_size=args.batch_size,
-        batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + completed_steps + 1)
+        batches=max(args.eval_batches, 10), context_length=args.context_length,
+        seed=comparison_seed if init_checkpoint_path else args.seed + completed_steps + 1)
     validation_bits_per_byte = bits_per_byte(final_loss, validation_text, tokenizer)
     test_loss = evaluate_loss(model, test_data, batch_size=args.batch_size,
-        batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + completed_steps + 2) if test_data is not None else None
+        batches=max(args.eval_batches, 10), context_length=args.context_length,
+        seed=comparison_seed + 1 if init_checkpoint_path else args.seed + completed_steps + 2) if test_data is not None else None
     test_bits_per_byte = bits_per_byte(test_loss, test_text, tokenizer) if test_loss is not None else None
+    candidate_non_regression = None
+    if parent_validation_loss is not None:
+        candidate_non_regression = final_loss <= parent_validation_loss + max_eval_regression
+        if test_loss is not None and parent_test_loss is not None:
+            candidate_non_regression = candidate_non_regression and test_loss <= parent_test_loss + max_eval_regression
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     temp = output.with_name(output.name + ".tmp")
@@ -166,6 +184,8 @@ def train(args: argparse.Namespace) -> dict:
         "tokenizer_json_sha256": tokenizer_hash, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
         "training_steps": completed_steps, "cumulative_training_steps": parent_cumulative_steps + completed_steps,
         "initialized_from_checkpoint": bool(init_checkpoint_path), "parent_checkpoint_sha256": parent_checkpoint_sha256,
+        "parent_validation_loss": parent_validation_loss, "parent_test_loss": parent_test_loss,
+        "candidate_non_regression": candidate_non_regression,
         "requested_training_steps": args.steps,
         "best_step": best_step, "best_validation_loss": best_validation_loss,
         "early_stopping_patience": args.early_stopping_patience, "min_delta": args.min_delta,
@@ -182,6 +202,9 @@ def train(args: argparse.Namespace) -> dict:
         "requested_training_steps": args.steps, "best_step": best_step,
         "cumulative_training_steps": parent_cumulative_steps + completed_steps,
         "initialized_from_checkpoint": bool(init_checkpoint_path),
+        "parent_validation_loss": round(parent_validation_loss, 5) if parent_validation_loss is not None else None,
+        "parent_test_loss": round(parent_test_loss, 5) if parent_test_loss is not None else None,
+        "candidate_non_regression": candidate_non_regression,
         "tokenizer": tokenizer.version, "validation_loss": round(final_loss, 5),
         "validation_perplexity": round(math.exp(min(final_loss, 80)), 5),
         "test_loss": round(test_loss, 5) if test_loss is not None else None,
@@ -211,6 +234,7 @@ def main() -> None:
     parser.add_argument("--eval-batches", type=int, default=10)
     parser.add_argument("--early-stopping-patience", type=int, default=8)
     parser.add_argument("--min-delta", type=float, default=0.0005)
+    parser.add_argument("--max-eval-regression", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--threads", type=int, default=2)
     args = parser.parse_args()
