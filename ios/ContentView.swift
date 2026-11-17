@@ -23,7 +23,6 @@ struct ContentView: View {
                         Text(brainPhase.title).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Circle().fill(serverURL.isEmpty ? .orange : .green).frame(width: 8, height: 8)
                     Button { showSettings = true } label: {
                         Image(systemName: "slider.horizontal.3").font(.title3).padding(10)
                     }
@@ -106,11 +105,13 @@ struct ContentView: View {
         errorMessage = nil
         messages.append(ChatMessage(role: .user, text: text))
         isSending = true
-        brainPhase = .processing
+        brainPhase = .connecting
 
         Task {
             do {
-                let result = try await client.send(text, serverURL: serverURL)
+                let result = try await client.send(text, serverURL: serverURL) { phase in
+                    brainPhase = phase
+                }
                 brainPhase = .responding
                 messages.append(ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy))
             } catch {
@@ -118,8 +119,11 @@ struct ContentView: View {
                 errorMessage = error.localizedDescription
                 messages.append(ChatMessage(role: .assistant, text: "Não consegui concluir a solicitação. Confira o servidor e a conexão."))
             }
+            if brainPhase == .responding {
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                if brainPhase == .responding { brainPhase = .idle }
+            }
             isSending = false
-            if brainPhase != .error { brainPhase = .idle }
         }
     }
 }
