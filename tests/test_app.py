@@ -233,6 +233,24 @@ class UltronTests(unittest.TestCase):
         deleted = client.delete(f"/memory/{memory_id}", headers=AUTH)
         self.assertEqual(deleted.status_code, 200)
 
+    def test_public_remember_command_never_writes_shared_memory(self):
+        before = client.get("/memory", headers=AUTH).json()["items"]
+        response = client.post("/chat", json={"message": "/remember segredo de teste"})
+        after = client.get("/memory", headers=AUTH).json()["items"]
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(after), len(before))
+        self.assertIn("autenticação", response.json()["reply"].lower())
+
+    def test_native_skills_catalog_and_authenticated_runner(self):
+        catalog = client.get("/skills")
+        self.assertEqual(catalog.status_code, 200)
+        self.assertIn("safe_evolution", {item["name"] for item in catalog.json()["skills"]})
+        denied = client.post("/skills/run", json={"skill": "planner", "input": "planeje o projeto"})
+        self.assertEqual(denied.status_code, 401)
+        allowed = client.post("/skills/run", json={"skill": "planner", "input": "planeje o projeto"}, headers=AUTH)
+        self.assertEqual(allowed.status_code, 200)
+        self.assertEqual(allowed.json()["skill"], "planner")
+
     def test_normal_chat_works_without_any_ai_provider_token(self):
         response = client.post("/chat", json={"message": "oi"}, headers=AUTH)
         self.assertEqual(response.status_code, 200)

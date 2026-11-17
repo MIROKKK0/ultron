@@ -3,12 +3,14 @@ import SwiftUI
 struct ContentView: View {
     @AppStorage("ultronServerURL") private var serverURL = "https://ultron-api-c5ae.onrender.com"
     @State private var messages: [ChatMessage] = [
-        ChatMessage(role: .assistant, text: "Olá. Eu sou o ULTRON. Estou pronta. Não precisa configurar token. Comandos: /self, /plan seu objetivo, /research sua pergunta e /calc 12*(3+4). A memória privada será ativada após autenticação segura por instalação.")
+        ChatMessage(role: .assistant, text: "Olá. Sou o ULTRON. Meu classificador próprio e minhas habilidades locais estão disponíveis. Use /plan, /research, /calc, /self ou /skills. A geração livre ainda está em desenvolvimento.")
     ]
     @State private var draft = ""
     @State private var isSending = false
     @State private var showSettings = false
     @State private var errorMessage: String?
+    @State private var serverOnline = false
+    @State private var serverStatusChecked = false
 
     private let client = ChatClient()
 
@@ -23,10 +25,13 @@ struct ContentView: View {
                     .frame(width: 46, height: 46)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("ULTRON").font(.headline.weight(.bold)).tracking(1.5)
-                        Text(isSending ? "Pensando…" : "Assistente pessoal").font(.caption).foregroundStyle(.secondary)
+                        Text(isSending ? "Pensando…" : (serverOnline ? "API conectada" : (serverStatusChecked ? "API indisponível" : "Verificando API"))).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Circle().fill(serverURL.isEmpty ? .orange : .green).frame(width: 8, height: 8)
+                    Circle()
+                        .fill(serverOnline ? .green : (serverStatusChecked ? .red : .orange))
+                        .frame(width: 8, height: 8)
+                        .accessibilityLabel(serverOnline ? "API online" : (serverStatusChecked ? "API offline" : "Verificando API"))
                     Button { showSettings = true } label: {
                         Image(systemName: "slider.horizontal.3").font(.title3).padding(10)
                     }
@@ -44,7 +49,7 @@ struct ContentView: View {
                                     try await client.sendFeedback(
                                         rating,
                                         strategy: strategy,
-                                        serverURL: serverURL,
+                                        serverURL: serverURL
                                     )
                                 }
                                 .id(message.id)
@@ -100,6 +105,16 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .task { await refreshServerStatus() }
+        .onChange(of: serverURL) { _ in
+            serverStatusChecked = false
+            Task { await refreshServerStatus() }
+        }
+    }
+
+    private func refreshServerStatus() async {
+        serverOnline = await client.checkHealth(serverURL: serverURL)
+        serverStatusChecked = true
     }
 
     private func send() {
@@ -113,8 +128,12 @@ struct ContentView: View {
         Task {
             do {
                 let result = try await client.send(text, serverURL: serverURL)
+                serverOnline = true
+                serverStatusChecked = true
                 messages.append(ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy))
             } catch {
+                serverOnline = false
+                serverStatusChecked = true
                 errorMessage = error.localizedDescription
                 messages.append(ChatMessage(role: .assistant, text: "Não consegui concluir a solicitação. Confira o servidor e a conexão."))
             }

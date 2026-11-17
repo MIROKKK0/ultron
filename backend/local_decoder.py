@@ -28,16 +28,11 @@ def decode_local(
         )
     if lower in {"/help", "ajuda", "o que você faz?", "quem é você?", "quem e voce?", "o que você é?"}:
         return (
-            "ULTRON — memória local, planejamento "
-            "estruturado, cálculo seguro e reflexão. Comandos: /self, /plan objetivo, "
-            "/remember nota, /calc expressão, /brain objetivo e /multi tarefa1 || tarefa2. "
-            "O decodificador é local e determinístico; não é um LLM nem finge ser."
+            "ULTRON — classificador próprio de intenções, planejamento, cálculo seguro, pesquisa web e habilidades locais. Comandos: /self, /plan objetivo, /remember nota, /calc expressão, /brain objetivo, /multi tarefa1 || tarefa2 e /skills. A geração livre ainda é limitada."
         )
     if lower.startswith("/self") or lower in {"quem é você", "quem e voce", "me fale sobre você", "me fale sobre voce"}:
         return (
-            "Sou ULTRON. Minha arquitetura organiza tarefas com ferramentas locais; "
-            "a camada linguística local converte a intenção em respostas estruturadas. "
-            "Sem Gemini, OpenAI, Claude ou tokens externos. A camada linguística atual é determinística, não um LLM treinado."
+            "Sou ULTRON. Uso um classificador de intenções próprio, treinado do zero, com tokenizador byte/word e habilidades locais. Não uso Gemini, OpenAI, Claude, modelos pré-treinados ou tokens de provedores. Ainda não sou um LLM generativo geral."
         )
     if lower.startswith("/calc "):
         return "Use o mecanismo de cálculo seguro do ULTRON."
@@ -74,7 +69,7 @@ def decode_local(
 
     if any(word in lower for word in ("plano", "planeje", "organize", "como faço", "como fazer", "etapas", "me ajuda a planejar", "quero planejar")):
         return (
-            f"Vou priorizar a estratégia {strategy}, com uma estratégia inicial.\n"
+            f"Vou usar a estratégia local {strategy}.\n"
             f"Objetivo identificado: {text}\n"
             "1. Esclarecer o resultado esperado.\n"
             "2. Separar o trabalho em etapas verificáveis.\n"
@@ -99,10 +94,7 @@ def decode_local(
             )
     return (
         "Recebi sua solicitação e processei a entrada pela camada local. "
-        f"A atividade atual priorizou a estratégia **{strategy}**.\n\n"
-        "Consigo executar localmente cálculos, comandos de memória e planos "
-        "estruturados. Para responder conteúdo aberto com a profundidade de um "
-        "grande modelo de linguagem, ainda falta um decodificador semântico local "
-        "treinado; não vou simular inteligência que este circuito ainda não possui.\n"
+        f"A estratégia local inicial é **{strategy}**.\n\n"
+        "Consigo executar habilidades locais. Para responder qualquer assunto aberto com profundidade comparável a um grande modelo de linguagem, ainda falta um modelo generativo treinado; não vou fingir essa capacidade.\n"
         f"Solicitação registrada: {text[:1200]}"
     )

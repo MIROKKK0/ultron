@@ -19,13 +19,15 @@ from backend.brain import run_multitask
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
 from backend.public_access import enforce_public_limit
+from backend.intent_model import model_status
+from backend.skills import list_skills, run_intent_skill, run_named_skill
 from backend.web_research import search_web
 
 APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 DB_PATH = Path(os.getenv("ULTRON_DB_PATH", "ultron.db"))
 
-app = FastAPI(title=APP_NAME, version="0.4.0", description="Assistente pessoal com memória persistente e ações seguras.")
+app = FastAPI(title=APP_NAME, version="0.5.0", description="Assistente pessoal com memória persistente e ações seguras.")
 
 _ALLOWED_OPERATORS = {
     ast.Add: operator.add,
@@ -207,6 +209,11 @@ class NeuralRecallRequest(BaseModel):
     context: str = Field(min_length=1, max_length=2000)
 
 
+class SkillRunRequest(BaseModel):
+    skill: str = Field(min_length=1, max_length=80)
+    input: str = Field(min_length=1, max_length=4000)
+
+
 def _safe_math(node: ast.AST) -> float:
     if isinstance(node, ast.Expression):
         return _safe_math(node.body)
@@ -247,13 +254,7 @@ def answer_without_provider(message: str, memories: list[str] | None = None,
     if lower.startswith("/calc "):
         return f"Resultado: {calculate(normalized[6:].strip())}"
     if lower.startswith("/remember "):
-        content = normalized[10:].strip()
-        if not content:
-            return "Escreva o que devo guardar depois de /remember."
-        with connect_db() as db:
-            execute(db, "INSERT INTO memories(content, created_at) VALUES (?, ?)",
-                (content, datetime.now(timezone.utc).isoformat()))
-        return "Anotado na memória persistente do ULTRON."
+        return "A memória pessoal exige autenticação por instalação. Use a rota protegida /memory para gravar sem misturar dados entre usuários."
     if lower.startswith("/plan "):
         plan = plan_task(normalized[6:].strip())
         steps = "\n".join(f"{item['step']}. {item['action']}" for item in plan["steps"])
@@ -277,12 +278,16 @@ def answer_with_provider(message: str, memories: list[str] | None = None,
 def learned_strategy_scores() -> dict[str, float]:
     """Rank local specialist strategies using bounded explicit user feedback."""
     scores = {"planner": 1.0, "solver": 1.0, "critic": 1.0, "researcher": 0.8}
-    with connect_db() as db:
-        rows = execute(
-            db,
-            "SELECT role, AVG(reward) AS average_reward, COUNT(*) AS samples "
-            "FROM strategy_feedback GROUP BY role",
-        ).fetchall()
+    try:
+        with connect_db() as db:
+            rows = execute(
+                db,
+                "SELECT role, AVG(reward) AS average_reward, COUNT(*) AS samples "
+                "FROM strategy_feedback GROUP BY role",
+            ).fetchall()
+    except Exception:
+        # Public chat must remain responsive if the optional feedback database is down.
+        return scores
     for row in rows:
         role = str(row["role"])
         if role not in scores:
@@ -389,6 +394,20 @@ def execute_brain_cycle(
     }
 
 
+@app.get("/skills")
+def skills_catalog(request: Request) -> dict[str, Any]:
+    enforce_public_limit(request, "skills-catalog", limit=60)
+    return {"skills": list_skills(), "execution": "built_in_python_handlers_only"}
+
+
+@app.post("/skills/run", dependencies=[Depends(require_api_token)])
+def skills_run(payload: SkillRunRequest) -> dict[str, Any]:
+    try:
+        return run_named_skill(payload.skill, payload.input)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.get("/brain/status")
 def brain_status(request: Request) -> dict[str, Any]:
     enforce_public_limit(request, "brain-status", limit=60)
@@ -398,8 +417,10 @@ def brain_status(request: Request) -> dict[str, Any]:
         "neural_core_configured": False,
         "parallel_specialists": ["planner", "solver", "critic"],
         "parallel_task_limit": 5,
-        "model_configured": False,
-        "language_decoder": "local_deterministic",
+        "model_configured": True,
+        "generative_language_model_configured": False,
+        "language_decoder": "local_deterministic_with_intent_classifier",
+        "intent_model": model_status(),
         "external_ai_tokens_required": False,
         "web_research_enabled": True,
         "experimental_associative_learning": True,
@@ -489,6 +510,8 @@ def health() -> dict[str, Any]:
         "version": app.version,
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
         "ai_configured": False,
+        "intent_model": model_status(),
+        "generative_language_model_configured": False,
         "neural_core_configured": False,
         "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
@@ -507,6 +530,8 @@ def _extract_research_query(message: str) -> str | None:
         match = re.match(pattern, text, flags=re.IGNORECASE)
         if match:
             return match.group(1).strip(" \t?.!")
+    if re.match(r"^(quem é você|quem e voce|qual seu nome|me fale sobre você|me fale sobre voce|como funciona o ultron|como usar o ultron)\b", text, re.I):
+        return None
     if re.match(r"^(quem é|o que é|como funciona|qual é|quais são|quando foi|onde fica)\b", text, re.I) and len(text) >= 14:
         return text
     if re.search(r"\b(hoje|atualmente|últimas notícias|mais recente|preço atual|cotação)\b", text, re.I):
@@ -552,9 +577,9 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
         except ValueError:
             response = "Não consegui interpretar essa conta com segurança. Envie apenas a expressão matemática."
     elif message.casefold().startswith("/remember ") or re.match(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", message, re.I):
-        response = "Ainda não vou gravar isso em uma memória compartilhada. A memória pessoal precisa de identificação segura por instalação; assim seus dados não ficam misturados com os de outros usuários."
+        response = "A memória pessoal exige autenticação por instalação. O chat público não grava dados compartilhados."
     else:
-        response = answer_without_provider(message, [], [])
+        response = run_intent_skill(message) or answer_without_provider(message, [], [])
     feedback_strategies = {role: float(score) for role, score in learned_strategy_scores().items() if role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
     return {"reply": response, "strategy": selected_strategy}
@@ -605,6 +630,8 @@ def self_knowledge() -> dict[str, Any]:
     health = {
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
         "ai_configured": False,
+        "intent_model": model_status(),
+        "generative_language_model_configured": False,
         "neural_core_configured": False,
         "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),

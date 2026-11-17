@@ -17,7 +17,8 @@ class SelfModel:
     purpose: str = "Assistente pessoal que planeja, executa tarefas autorizadas e aprende com feedback."
     language: str = "Português brasileiro"
     capabilities: tuple[str, ...] = (
-        "decodificação linguística local sem tokens externos",
+        "classificador de intenções próprio treinado do zero, com tokenizador UTF-8 próprio",
+        "habilidades nativas para conversa, planejamento, diagnóstico e autoavaliação",
         "memória persistente quando o banco está disponível",
         "cálculos aritméticos restritos",
         "autoavaliação estruturada de respostas",
@@ -27,8 +28,8 @@ class SelfModel:
         "executa até cinco tarefas locais independentes em paralelo",
     )
     limitations: tuple[str, ...] = (
-        "o decodificador atual é determinístico e não equivale a um LLM treinado",
-        "não treina pesos do decodificador automaticamente",
+        "o classificador próprio roteia intenções; ainda não existe um LLM generativo geral",
+        "o classificador só é retreinado com corpus revisado e testes reproduzíveis",
         "o aprendizado atual calibra apenas prioridades de estratégia com feedback explícito",
         "não altera o próprio código em produção",
         "não acessa serviços externos sem integração e autorização",
