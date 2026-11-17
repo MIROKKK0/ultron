@@ -1,0 +1,31 @@
+name: ULTRON model training
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
+  pull_request:
+    branches: ["feat/ultron-core-assistant"]
+    paths:
+      - "training/**"
+      - "scripts/train_intent_model.py"
+      - "backend/model/**"
+
+permissions:
+  contents: read
+
+jobs:
+  reproducible-training:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Train model from ULTRON corpus
+        run: python scripts/train_intent_model.py
+      - name: Verify deterministic model artifact
+        run: python scripts/train_intent_model.py --check
+      - name: Run model and skills tests
+        run: python -m unittest tests.test_intent_model tests.test_skills -v
