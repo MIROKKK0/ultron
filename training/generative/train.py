@@ -45,6 +45,15 @@ def evaluate_loss(model, data, *, batch_size: int, batches: int, context_length:
     finally:
         model.train(was_training)
 
+def bits_per_byte(loss: float, text: str, tokenizer) -> float:
+    """Tokenizer-independent estimate of next-token cross entropy per UTF-8 byte."""
+    byte_count = len(text.encode("utf-8"))
+    token_count = len(tokenizer.encode(text, add_special_tokens=False))
+    if byte_count < 1 or token_count < 1:
+        raise ValueError("Evaluation text must contain at least one UTF-8 byte and token")
+    return float(loss) * token_count / (byte_count * math.log(2.0))
+
+
 def train(args: argparse.Namespace) -> dict:
     if args.steps < 1 or args.batch_size < 1 or args.eval_batches < 1:
         raise ValueError("Steps, batch size and evaluation batches must be positive")
@@ -66,7 +75,7 @@ def train(args: argparse.Namespace) -> dict:
         validation_data = torch.tensor(tokenizer.encode(validation_text), dtype=torch.long)
     else:
         train_data, validation_data = split_corpus(data, args.context_length, args.validation_fraction)
-        validation_text = ""
+        validation_text = tokenizer.decode(validation_data.tolist())
     test_text = Path(args.test_corpus).read_text(encoding="utf-8") if args.test_corpus else ""
     test_data = torch.tensor(tokenizer.encode(test_text), dtype=torch.long) if test_text else None
     if len(validation_data) <= args.context_length + 1:
@@ -127,8 +136,10 @@ def train(args: argparse.Namespace) -> dict:
         model.load_state_dict(best_state)
     final_loss = evaluate_loss(model, validation_data, batch_size=args.batch_size,
         batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + completed_steps + 1)
+    validation_bits_per_byte = bits_per_byte(final_loss, validation_text, tokenizer)
     test_loss = evaluate_loss(model, test_data, batch_size=args.batch_size,
         batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + completed_steps + 2) if test_data is not None else None
+    test_bits_per_byte = bits_per_byte(test_loss, test_text, tokenizer) if test_loss is not None else None
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     temp = output.with_name(output.name + ".tmp")
@@ -144,6 +155,7 @@ def train(args: argparse.Namespace) -> dict:
         "test_loss": test_loss, "learning_rate": args.learning_rate,
         "warmup_steps": warmup_steps, "min_lr_ratio": args.min_lr_ratio,
         "validation_loss": final_loss, "validation_perplexity": math.exp(min(final_loss, 80)),
+        "validation_bits_per_byte": validation_bits_per_byte, "test_bits_per_byte": test_bits_per_byte,
         "parameter_count": model.parameter_count(), "experimental": True}, temp)
     temp.replace(output)
     return {"checkpoint": str(output), "parameters": model.parameter_count(), "training_steps": completed_steps,
@@ -151,6 +163,8 @@ def train(args: argparse.Namespace) -> dict:
         "tokenizer": tokenizer.version, "validation_loss": round(final_loss, 5),
         "validation_perplexity": round(math.exp(min(final_loss, 80)), 5),
         "test_loss": round(test_loss, 5) if test_loss is not None else None,
+        "validation_bits_per_byte": round(validation_bits_per_byte, 5),
+        "test_bits_per_byte": round(test_bits_per_byte, 5) if test_bits_per_byte is not None else None,
         "warning": "Experimental model only; not a production assistant or ChatGPT-equivalent."}
 
 def main() -> None:
