@@ -95,3 +95,19 @@ Depois, instale o IPA pelo SideStore. A compilação de simulador não pode ser 
 ## Modelo próprio e treino
 
 O modelo atual é um classificador de intenções Naive Bayes com tokenizador próprio UTF-8/word n-gram, 4096 IDs hash e pesos treinados a partir de `training/intent_corpus.jsonl`. Para retreinar: `python scripts/train_intent_model.py`; para verificar que o artefato corresponde ao corpus: `python scripts/train_intent_model.py --check`. O workflow semanal verifica o treino reproduzível. Isso não é um modelo generativo geral; perguntas abertas continuam limitadas até existir treino generativo em escala adequada.
+
+
+## Monitor holográfico e integração com iPhone
+
+O cabeçalho do app usa Canvas/TimelineView para desenhar o monitor procedural do
+ULTRON. O endpoint `POST /chat/stream` informa quando o servidor está processando
+e quando a resposta chega. O app também oferece copiar, ler em voz alta,
+compartilhar e a ação "Perguntar ao ULTRON" pelo Atalhos/Siri.
+
+## Núcleo generativo experimental
+
+`training/generative/` contém um Transformer causal próprio, inicializado do
+zero, com tokenizador byte-level e corpus autoral pequeno. Ele é separado do
+classificador de intenções de produção e ainda não está integrado ao chat.
+Consulte `training/generative/README.md`; o checkpoint resultante é experimental
+e não equivale a um modelo de linguagem grande.
