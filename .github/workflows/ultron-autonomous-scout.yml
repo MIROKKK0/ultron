@@ -1,0 +1,38 @@
+name: ULTRON autonomous scout (10 minutes)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/ultron-private-installation-memory", "feat/ultron-core-assistant"]
+    paths:
+      - "scripts/ultron_autonomous_watch.py"
+      - ".github/workflows/ultron-autonomous-scout.yml"
+  schedule:
+    # UTC; GitHub schedules are best-effort and only run from the default branch.
+    - cron: "*/10 * * * *"
+
+permissions:
+  contents: read
+  actions: read
+  issues: read
+
+concurrency:
+  group: ultron-autonomous-scout
+  cancel-in-progress: true
+
+jobs:
+  inspect-and-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Audit repository and research public implementation leads
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: python scripts/ultron_autonomous_watch.py

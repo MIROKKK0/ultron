@@ -11,6 +11,7 @@ on:
       - "tests/test_bpe_tokenizer.py"
       - "tests/test_generative_sample.py"
       - ".github/workflows/generative-smoke.yml"
+      - ".github/workflows/ptbr-pretraining.yml"
 
 permissions:
   contents: read
@@ -30,5 +31,27 @@ jobs:
         run: pip install "tokenizers>=0.20,<1.0"
       - name: Test byte tokenizer, BPE tokenizer, Transformer and training utilities
         run: python -m unittest tests.test_generative_tokenizer tests.test_bpe_tokenizer tests.test_generative_model tests.test_generative_training tests.test_generative_sample tests.test_corpus_preparation -v
-      - name: Run tiny CPU training smoke test
-        run: python -m training.generative.train --steps 10 --batch-size 2 --context-length 32 --output /tmp/ultron-tiny.pt
+      - name: Run tiny byte-tokenizer CPU training smoke test
+        run: |
+          python -m training.generative.train --steps 10 --batch-size 2 --context-length 32 --output /tmp/ultron-tiny.pt
+          python -m training.generative.verify_checkpoint --checkpoint /tmp/ultron-tiny.pt --output /tmp/byte-verification.json --threads 2 --tokens 8
+      - name: Train and verify an ULTRON-owned BPE tokenizer checkpoint
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("training/generative/corpus_pt.txt").read_text(encoding="utf-8")
+          Path("/tmp/ultron-smoke-corpus.txt").write_text((source + "\n") * 128, encoding="utf-8")
+          PY
+          python -m training.generative.train_tokenizer --corpus /tmp/ultron-smoke-corpus.txt --output /tmp/ultron-smoke-tokenizer.json --vocab-size 512
+          python -m training.generative.train --corpus /tmp/ultron-smoke-corpus.txt --tokenizer-json /tmp/ultron-smoke-tokenizer.json --steps 10 --batch-size 2 --context-length 32 --width 16 --layers 1 --heads 1 --eval-interval 5 --eval-batches 1 --output /tmp/ultron-tiny-bpe.pt
+          python -m training.generative.verify_checkpoint --checkpoint /tmp/ultron-tiny-bpe.pt --tokenizer-json /tmp/ultron-smoke-tokenizer.json --output /tmp/bpe-verification.json --threads 2 --tokens 8
+          python -m training.generative.train --corpus /tmp/ultron-smoke-corpus.txt --tokenizer-json /tmp/ultron-smoke-tokenizer.json --init-checkpoint /tmp/ultron-tiny-bpe.pt --steps 3 --batch-size 2 --context-length 32 --width 16 --layers 1 --heads 1 --eval-interval 1 --eval-batches 1 --seed 21 --output /tmp/ultron-tiny-bpe-continued.pt
+          python - <<'PY'
+          import torch
+          checkpoint = torch.load("/tmp/ultron-tiny-bpe-continued.pt", map_location="cpu", weights_only=True)
+          assert checkpoint["initialized_from_checkpoint"] is True
+          assert checkpoint["cumulative_training_steps"] == 13
+          assert checkpoint["parent_checkpoint_sha256"]
+          print("Continued pretraining lineage verified:", checkpoint["cumulative_training_steps"])
+          PY
+          python -m training.generative.verify_checkpoint --checkpoint /tmp/ultron-tiny-bpe-continued.pt --tokenizer-json /tmp/ultron-smoke-tokenizer.json --output /tmp/bpe-continued-verification.json --threads 2 --tokens 8

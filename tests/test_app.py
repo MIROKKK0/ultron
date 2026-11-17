@@ -19,7 +19,7 @@ class UltronTests(unittest.TestCase):
         root = client.get("/")
         self.assertEqual(root.status_code, 200)
         self.assertEqual(root.json()["name"], "ULTRON")
-        response = client.post("/chat", json={"message": "/self"}, headers=AUTH)
+        response = client.post("/chat", json={"message": "/self"})
         self.assertEqual(response.status_code, 200)
         self.assertIn("ULTRON", response.json()["reply"])
 
@@ -127,7 +127,7 @@ class UltronTests(unittest.TestCase):
 
     def test_chat_returns_only_a_feedback_supported_strategy(self):
         with patch("backend.app.answer_without_provider", return_value="resposta"):
-            response = client.post("/chat", json={"message": "oi"}, headers=AUTH)
+            response = client.post("/chat", json={"message": "oi"})
         self.assertEqual(response.status_code, 200)
         self.assertIn(response.json()["strategy"], {"planner", "solver", "critic"})
 
@@ -249,23 +249,72 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["completed"], 2)
 
-    def test_memory_crud(self):
+    def test_memory_is_isolated_per_installation(self):
+        first = client.post("/installations/register")
+        second = client.post("/installations/register")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.headers.get("cache-control"), "no-store")
+        first_auth = {"Authorization": "Bearer " + first.json()["access_token"]}
+        second_auth = {"Authorization": "Bearer " + second.json()["access_token"]}
         created = client.post(
             "/memory",
-            json={"content": "Lembrar de testar o ULTRON"},
-            headers=AUTH,
+            json={"content": "Memória privada da primeira instalação"},
+            headers=first_auth,
         )
         self.assertEqual(created.status_code, 200)
         memory_id = created.json()["id"]
-        listed = client.get("/memory", headers=AUTH)
-        self.assertTrue(any(item["id"] == memory_id for item in listed.json()["items"]))
-        deleted = client.delete(f"/memory/{memory_id}", headers=AUTH)
+        first_items = client.get("/memory", headers=first_auth).json()["items"]
+        second_items = client.get("/memory", headers=second_auth).json()["items"]
+        self.assertTrue(any(item["id"] == memory_id for item in first_items))
+        self.assertFalse(any(item["id"] == memory_id for item in second_items))
+        denied = client.get("/memory", headers=AUTH)
+        self.assertEqual(denied.status_code, 401)
+        cross_delete = client.delete(f"/memory/{memory_id}", headers=second_auth)
+        self.assertEqual(cross_delete.status_code, 404)
+        deleted = client.delete(f"/memory/{memory_id}", headers=first_auth)
         self.assertEqual(deleted.status_code, 200)
 
-    def test_public_remember_command_never_writes_shared_memory(self):
-        before = client.get("/memory", headers=AUTH).json()["items"]
+    def test_installation_revocation_erases_only_that_installations_memory(self):
+        registered = client.post("/installations/register").json()
+        auth = {"Authorization": "Bearer " + registered["access_token"]}
+        client.post("/memory", json={"content": "remover"}, headers=auth)
+        revoked = client.delete("/installation", headers=auth)
+        self.assertEqual(revoked.status_code, 200)
+        self.assertTrue(revoked.json()["revoked"])
+        self.assertEqual(client.get("/memory", headers=auth).status_code, 401)
+
+
+    def test_chat_recalls_only_the_authenticated_installations_memories(self):
+        first = client.post("/installations/register").json()
+        second = client.post("/installations/register").json()
+        first_auth = {"Authorization": "Bearer " + first["access_token"]}
+        second_auth = {"Authorization": "Bearer " + second["access_token"]}
+        client.post("/memory", json={"content": "projeto pessoal reservado"}, headers=first_auth)
+        with patch("backend.app.rank_memories", return_value=["projeto pessoal reservado"]) as rank:
+            with patch("backend.app.run_intent_skill", return_value=None):
+                with patch("backend.app.answer_without_provider", return_value="contexto usado") as answer:
+                    own = client.post("/chat", json={"message": "continue o projeto"}, headers=first_auth)
+                    self.assertEqual(own.status_code, 200)
+                    other = client.post("/chat", json={"message": "continue o projeto"}, headers=second_auth)
+                    self.assertEqual(other.status_code, 200)
+                    public = client.post("/chat", json={"message": "continue o projeto"})
+                    self.assertEqual(public.status_code, 200)
+                    self.assertEqual(answer.call_args_list[0].args[1], ["projeto pessoal reservado"])
+                    self.assertEqual(answer.call_args_list[1].args[1], [])
+                    self.assertEqual(answer.call_args_list[2].args[1], [])
+        self.assertEqual(rank.call_count, 1)
+
+    def test_chat_rejects_a_supplied_invalid_installation_token(self):
+        response = client.post("/chat", json={"message": "oi"}, headers={"Authorization": "Bearer " + "x" * 48})
+        self.assertEqual(response.status_code, 401)
+
+    def test_public_remember_command_never_writes_private_memory(self):
+        registered = client.post("/installations/register").json()
+        auth = {"Authorization": "Bearer " + registered["access_token"]}
+        before = client.get("/memory", headers=auth).json()["items"]
         response = client.post("/chat", json={"message": "/remember segredo de teste"})
-        after = client.get("/memory", headers=AUTH).json()["items"]
+        after = client.get("/memory", headers=auth).json()["items"]
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(after), len(before))
         self.assertIn("autenticação", response.json()["reply"].lower())
@@ -281,7 +330,7 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(allowed.json()["skill"], "planner")
 
     def test_normal_chat_works_without_any_ai_provider_token(self):
-        response = client.post("/chat", json={"message": "oi"}, headers=AUTH)
+        response = client.post("/chat", json={"message": "oi"})
         self.assertEqual(response.status_code, 200)
         self.assertIn("ULTRON", response.json()["reply"])
 

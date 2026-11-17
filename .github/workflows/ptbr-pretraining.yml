@@ -2,14 +2,24 @@ name: ULTRON PT-BR from-scratch pretraining
 
 on:
   workflow_dispatch:
+  schedule:
+    # Weekly deep pretraining; the lightweight intent loop runs daily.
+    - cron: "17 15 * * 0"
   push:
-    branches: ["feat/ultron-core-assistant"]
+    branches: ["main"]
     paths:
-      - "training/generative/**"
+      - "training/generative/*.py"
+      - "training/generative/corpus_pt.txt"
+      - "training/generative/requirements*.txt"
       - ".github/workflows/ptbr-pretraining.yml"
 
 permissions:
   contents: read
+  actions: read
+
+concurrency:
+  group: ultron-ptbr-pretraining
+  cancel-in-progress: false
 
 jobs:
   ptbr-pretraining:
@@ -17,37 +27,113 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Install CPU training and dataset tools
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install CPU training and dataset tools
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r training/generative/requirements.txt --index-url https://download.pytorch.org/whl/cpu
           pip install -r training/generative/requirements-data.txt
-      - name: Prepare bounded CC0 PT-BR corpus with provenance
-        run: python -m training.generative.prepare_corpus --max-chars 5000000 --output-dir artifacts/ptbr-corpus
-      - name: Train ULTRON BPE tokenizer from the training split
+      - name: Restore last successful checkpoint and tokenizer
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/previous
+          PREVIOUS_RUN_ID="$(gh run list --workflow ptbr-pretraining.yml --repo "$GITHUB_REPOSITORY" --branch "$GITHUB_REF_NAME" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -n "$PREVIOUS_RUN_ID" ] && gh run download "$PREVIOUS_RUN_ID" --repo "$GITHUB_REPOSITORY" --name ultron-ptbr-experimental-checkpoint --dir artifacts/previous; then
+            if [ -s artifacts/previous/ultron-tiny-ptbr.pt ] && [ -s artifacts/previous/ultron-bpe-tokenizer.json ]; then
+              cp artifacts/previous/ultron-bpe-tokenizer.json artifacts/ultron-bpe-tokenizer.json
+              echo "resume=true" >> "$GITHUB_OUTPUT"
+              echo "previous_run_id=$PREVIOUS_RUN_ID" >> "$GITHUB_OUTPUT"
+            else
+              echo "resume=false" >> "$GITHUB_OUTPUT"
+              echo "No compatible prior checkpoint artifact; bootstrapping from scratch."
+            fi
+          else
+            echo "resume=false" >> "$GITHUB_OUTPUT"
+            echo "No previous successful checkpoint; bootstrapping from scratch."
+          fi
+      - name: Prepare expanding bounded CC0 PT-BR corpus with provenance
+        run: |
+          MAX_CHARS=$((5000000 + (GITHUB_RUN_NUMBER - 1) * 500000))
+          if [ "$MAX_CHARS" -gt 20000000 ]; then MAX_CHARS=20000000; fi
+          echo "Preparing up to $MAX_CHARS characters."
+          python -m training.generative.prepare_corpus --max-chars "$MAX_CHARS" --output-dir artifacts/ptbr-corpus
+      - name: Train ULTRON BPE tokenizer on first run only
+        if: steps.previous.outputs.resume != 'true'
         run: python -m training.generative.train_tokenizer --corpus artifacts/ptbr-corpus/train.txt --output artifacts/ultron-bpe-tokenizer.json --vocab-size 2048
       - name: Verify trained BPE tokenizer
         run: python -m unittest tests.test_bpe_tokenizer -v
-      - name: Train ULTRON Tiny from random initialization
+      - name: Continue ULTRON Tiny from last checkpoint or initialize fresh
+        env:
+          RESUME: ${{ steps.previous.outputs.resume }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
-          python -m training.generative.train \
-            --corpus artifacts/ptbr-corpus/train.txt \
-            --validation-corpus artifacts/ptbr-corpus/validation.txt \
-            --test-corpus artifacts/ptbr-corpus/test.txt \
-            --steps 10000 --batch-size 8 --context-length 128 \
-            --tokenizer-json artifacts/ultron-bpe-tokenizer.json \
-            --eval-interval 500 --eval-batches 20 --early-stopping-patience 8 \
+          ARGS=(
+            --corpus artifacts/ptbr-corpus/train.txt
+            --validation-corpus artifacts/ptbr-corpus/validation.txt
+            --test-corpus artifacts/ptbr-corpus/test.txt
+            --steps 10000 --batch-size 8 --context-length 128
+            --tokenizer-json artifacts/ultron-bpe-tokenizer.json
+            --eval-interval 500 --eval-batches 20 --early-stopping-patience 8
+            --seed "$((17 + RUN_NUMBER))"
             --output artifacts/ultron-tiny-ptbr.pt
+          )
+          if [ "$RESUME" = "true" ]; then
+            ARGS+=(--init-checkpoint artifacts/previous/ultron-tiny-ptbr.pt)
+          fi
+          python -m training.generative.train "${ARGS[@]}"
+          echo "previous_run_id=${{ steps.previous.outputs.previous_run_id }}" > artifacts/lineage.txt
+      - name: Reject regressive candidate and keep the best checkpoint lineage
+        if: steps.previous.outputs.resume == 'true'
+        env:
+          PREVIOUS_RUN_ID: ${{ steps.previous.outputs.previous_run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+          import torch
+
+          candidate_path = Path("artifacts/ultron-tiny-ptbr.pt")
+          parent_path = Path("artifacts/previous/ultron-tiny-ptbr.pt")
+          candidate = torch.load(candidate_path, map_location="cpu", weights_only=True)
+          accepted = candidate.get("candidate_non_regression") is True
+          lineage = {
+              "previous_run_id": "${{ steps.previous.outputs.previous_run_id }}",
+              "candidate_accepted_for_next_cycle": accepted,
+              "parent_validation_loss": candidate.get("parent_validation_loss"),
+              "candidate_validation_loss": candidate.get("validation_loss"),
+              "parent_test_loss": candidate.get("parent_test_loss"),
+              "candidate_test_loss": candidate.get("test_loss"),
+              "reason": "held-out validation and test must not regress beyond the configured tolerance",
+          }
+          if not accepted:
+              shutil.copy2(candidate_path, "artifacts/rejected-candidate.pt")
+              shutil.copy2(parent_path, candidate_path)
+              lineage["rollback"] = "previous checkpoint retained"
+          else:
+              lineage["rollback"] = None
+          Path("artifacts/lineage.txt").write_text(json.dumps(lineage, ensure_ascii=False, indent=2), encoding="utf-8")
+          print(json.dumps(lineage, ensure_ascii=False))
+          PY
+      - name: Verify BPE checkpoint loading and CPU generation
+        run: |
+          python -m training.generative.verify_checkpoint \
+            --checkpoint artifacts/ultron-tiny-ptbr.pt \
+            --tokenizer-json artifacts/ultron-bpe-tokenizer.json \
+            --output artifacts/checkpoint-verification.json \
+            --threads 2 --tokens 24
       - name: Generate fixed qualitative samples (not a factuality benchmark)
         run: |
           python -m training.generative.sample \
             --checkpoint artifacts/ultron-tiny-ptbr.pt \
             --tokenizer-json artifacts/ultron-bpe-tokenizer.json \
             --max-new-tokens 80 --output artifacts/qualitative-samples.json
-      - name: Upload experimental checkpoint, provenance and samples
+      - name: Upload continued checkpoint, tokenizer, provenance and reports
         uses: actions/upload-artifact@v4
         with:
           name: ultron-ptbr-experimental-checkpoint
@@ -56,5 +142,10 @@ jobs:
             artifacts/ultron-bpe-tokenizer.json
             artifacts/ptbr-corpus/manifest.json
             artifacts/ptbr-corpus/provenance.jsonl
+            artifacts/ptbr-corpus/train.txt
+            artifacts/ptbr-corpus/validation.txt
+            artifacts/ptbr-corpus/test.txt
             artifacts/qualitative-samples.json
+            artifacts/checkpoint-verification.json
+            artifacts/lineage.txt
           retention-days: 14

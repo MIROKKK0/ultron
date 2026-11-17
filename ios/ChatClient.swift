@@ -25,6 +25,20 @@ private struct ChatStreamEvent: Decodable {
     let strategy: String?
     let status: Int?
 }
+private struct InstallationRegistration: Decodable {
+    let installation_id: String
+    let access_token: String
+}
+
+private struct MemoryRequest: Encodable { let content: String }
+private struct MemoryCreated: Decodable { let id: Int }
+private struct MemoryItem: Decodable {
+    let id: Int
+    let content: String
+    let created_at: String
+}
+private struct MemoryList: Decodable { let items: [MemoryItem] }
+
 private struct FeedbackRequest: Encodable {
     let rating: Int
     let strategy: String
@@ -94,6 +108,9 @@ struct ChatClient {
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(ChatRequest(message: message))
+        if let token = try? InstallationCredentialStore.read() {
+            request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")
+        }
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
@@ -117,6 +134,9 @@ struct ChatClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.httpBody = try JSONEncoder().encode(ChatRequest(message: message))
+        if let token = try? InstallationCredentialStore.read() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
@@ -155,6 +175,76 @@ struct ChatClient {
             }
         }
         throw ChatClientError.invalidResponse
+    }
+
+
+    private func installationToken(serverURL: String) async throws -> String {
+        if let existing = try InstallationCredentialStore.read() { return existing }
+        guard let url = endpoint("/installations/register", serverURL: serverURL) else {
+            throw ChatClientError.invalidServerURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw InstallationCredentialError.serverError(http.statusCode)
+        }
+        let registration = try JSONDecoder().decode(InstallationRegistration.self, from: data)
+        try InstallationCredentialStore.save(registration.access_token)
+        return registration.access_token
+    }
+
+    private func memoryRequest(
+        path: String,
+        method: String,
+        serverURL: String,
+        body: MemoryRequest? = nil
+    ) async throws -> Data {
+        guard let url = endpoint(path, serverURL: serverURL) else {
+            throw ChatClientError.invalidServerURL
+        }
+        let token = try await installationToken(serverURL: serverURL)
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 20
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(body)
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw InstallationCredentialError.serverError(http.statusCode)
+        }
+        return data
+    }
+
+    func remember(_ content: String, serverURL: String) async throws -> Int {
+        let data = try await memoryRequest(
+            path: "/memory",
+            method: "POST",
+            serverURL: serverURL,
+            body: MemoryRequest(content: content)
+        )
+        return try JSONDecoder().decode(MemoryCreated.self, from: data).id
+    }
+
+    func listMemories(serverURL: String) async throws -> [String] {
+        let data = try await memoryRequest(path: "/memory", method: "GET", serverURL: serverURL)
+        let result = try JSONDecoder().decode(MemoryList.self, from: data)
+        return result.items.map { "[\($0.id)] \($0.content)" }
+    }
+
+    func forgetMemory(_ id: Int, serverURL: String) async throws {
+        _ = try await memoryRequest(path: "/memory/\(id)", method: "DELETE", serverURL: serverURL)
+    }
+
+    func revokeInstallation(serverURL: String) async throws {
+        _ = try await memoryRequest(path: "/installation", method: "DELETE", serverURL: serverURL)
+        try InstallationCredentialStore.delete()
     }
 
     func sendFeedback(_ rating: Int, strategy: String, serverURL: String) async throws {

@@ -51,6 +51,39 @@ Não usar datasets compostos por licenças incompatíveis ou saídas de modelos 
 5. **Limites de modelos pequenos.** TinyStories e outros experimentos demonstram que modelos pequenos podem aprender padrões coerentes em domínios estreitos, mas também que um modelo base sem instruction tuning não é um assistente factual.  
    https://arxiv.org/abs/2305.07759
 
+## Evidência recente sobre evolução contínua (2025–2026)
+
+A revisão da literatura reforça quatro decisões práticas para o ULTRON:
+
+1. **Replay para evitar esquecimento.** O benchmark TiC-LM (ACL 2025) mostra que treinamento contínuo precisa misturar dados antigos e novos em proporção controlada; sem replay, aprender novos dados pode degradar habilidades anteriores. O corpus do ULTRON deve manter os splits antigos e ampliar a amostra de forma versionada, não substituir o conjunto a cada ciclo.  
+   https://aclanthology.org/2025.acl-long.1551/  
+   https://machinelearning.apple.com/research/tic-lm-web-scale
+2. **Medir esquecimento por exemplo.** O trabalho ICLR 2026 *Mapping Post-Training Forgetting in Language Models at Scale* argumenta que médias agregadas escondem exemplos que passaram de corretos para incorretos. A próxima bateria do ULTRON deve registrar resultados por caso e contar regressões, não apenas a média da loss.  
+   https://proceedings.iclr.cc/paper_files/paper/2026/hash/bc1c5e5fb8ed1ef9b9b5abced2022e40-Abstract-Conference.html
+3. **Preservar comportamento em replay.** O estudo EMNLP 2026 *Beyond One-Hot Replay* investiga replay supervisionado por distribuição do modelo anterior. O ULTRON poderia testar uma cópia congelada do próprio checkpoint anterior como professor, sem importar pesos externos; isso é pesquisa futura, ainda não implementada e precisa de avaliação de custo/benefício.  
+   https://aclanthology.org/2026.findings-emnlp.1299/
+4. **Qualidade de dados acima de volume bruto.** A pesquisa recente sobre continued pretraining relata que um subconjunto curado pode superar grandes misturas de baixa qualidade. O pipeline atual preserva licença, hash, deduplicação e splits, mas ainda precisa melhorar a revisão de PII, near-duplicates, qualidade linguística e diversidade de gêneros.
+
+**Mudanças aplicadas no pipeline:** o pré-treino semanal agora guarda train/validation/test no artefato; o treino diário continua o checkpoint BPE com o mesmo tokenizer e os mesmos splits. Se não existir um baseline semanal validado, o treino diário fica em espera em vez de treinar repetidamente o corpus didático de 1,8 KB. A comparação de checkpoint pai/candidato é apenas uma barreira contra regressão de loss; ainda não mede capacidade de diálogo e não autoriza promoção para produção.
+
+## Execução nativa no iPhone: caminho Core ML
+
+O modelo próprio ainda não está integrado ao runtime do aplicativo. Para evitar confundir IPA compilado com inferência local, a integração deve seguir etapas mensuráveis:
+
+1. Exportar somente um checkpoint ULTRON treinado e validado, com arquitetura, tokenizer e hash registrados.
+2. Colocar o modelo em `eval()`, capturar o grafo PyTorch com TorchScript (`torch.jit.trace`) ou `torch.export`, e converter com Core ML Tools. A documentação Apple recomenda o fluxo TorchScript como opção estável de conversão.
+3. Começar com pesos FP16 e depois comparar quantização de pesos 8-bit/4-bit; medir tamanho, latência, RSS, consumo de energia e regressões no conjunto retido.
+4. Não assumir que INT8 de ativações na Neural Engine estará disponível em todos os iPhones: a documentação Core ML indica suporte específico a partir do iPhone 15 Pro para esse caminho. No iPhone 11 Pro, testar CPU/GPU/ANE no aparelho e escolher o melhor caminho real.
+5. Só integrar o modelo ao app depois de comparar a saída Core ML com PyTorch, validar tokenização e geração incremental, e medir a memória do processo no dispositivo.
+
+Referências primárias:
+- Conversão PyTorch → Core ML: https://apple.github.io/coremltools/docs-guides/source/convert-pytorch-workflow.html
+- Quantização Core ML: https://apple.github.io/coremltools/docs-guides/source/opt-quantization-api.html
+- Compressão e limites de tamanho do app: https://developer.apple.com/documentation/coreml/reducing-the-size-of-your-core-ml-app
+- Otimizações e trade-offs Apple Silicon: https://developer.apple.com/videos/play/wwdc2024/10159/
+
+**Estado atual:** o workflow gera um IPA arm64 sem assinatura, mas isso não significa que o modelo generativo já esteja embarcado ou executando no iPhone. Core ML é uma etapa futura de implantação do cérebro próprio, não um provedor externo nem pesos pré-treinados.
+
 ## Arquitetura cognitiva pretendida
 
 A analogia útil com um cérebro é funcional, não biológica. O sistema deve separar:
