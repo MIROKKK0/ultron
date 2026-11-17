@@ -168,6 +168,7 @@ load_associative_memory()
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
+    history: list[str] = Field(default_factory=list, max_length=8)
 
 
 class MemoryRequest(BaseModel):
@@ -586,7 +587,9 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     elif message.casefold().startswith("/remember ") or re.match(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", message, re.I):
         response = "A memória pessoal exige autenticação por instalação. O chat público não grava dados compartilhados."
     else:
-        response = run_intent_skill(message) or answer_without_provider(message, [], [])
+        # Ephemeral context comes from this app request; never load shared server history.
+        recent_history = [item.strip()[:1000] for item in payload.history[-8:] if item.strip()]
+        response = run_intent_skill(message) or answer_without_provider(message, [], recent_history)
     feedback_strategies = {role: float(score) for role, score in learned_strategy_scores().items() if role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
     return {"reply": response, "strategy": selected_strategy}

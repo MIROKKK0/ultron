@@ -120,12 +120,13 @@ struct ContentView: View {
         draft = ""
         errorMessage = nil
         messages.append(ChatMessage(role: .user, text: text))
+        let recentHistory = messages.suffix(9).dropLast().map { "\($0.role.rawValue): \($0.text)" }
         isSending = true
         brainPhase = .connecting
 
         Task {
             do {
-                let result = try await client.send(text, serverURL: serverURL) { phase in
+                let result = try await client.send(text, serverURL: serverURL, history: recentHistory) { phase in
                     brainPhase = phase
                 }
                 serverOnline = true
@@ -194,7 +195,7 @@ private struct MessageBubble: View {
                 }
                 if message.role == .assistant, let strategy = message.strategy {
                     HStack(spacing: 12) {
-                        Text("Estratégia neural: \(strategy)")
+                        Text("Estratégia local: \(strategy)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -235,7 +236,7 @@ private struct MessageBubble: View {
                     }
                     .padding(.horizontal, 8)
                     if let feedbackError {
-                        Text("Falha no feedback: \\(feedbackError)")
+                        Text("Falha no feedback: \(feedbackError)")
                             .font(.caption2)
                             .foregroundStyle(.red)
                             .padding(.horizontal, 8)

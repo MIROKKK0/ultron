@@ -125,6 +125,17 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(mocked.call_args.args[1], [])
         self.assertEqual(mocked.call_args.args[2], [])
 
+    def test_chat_uses_only_client_supplied_ephemeral_history(self):
+        history = ["user: Quero planejar o estudo", "assistant: Vamos dividir em etapas."]
+        with patch("backend.app.answer_without_provider", return_value="continuação") as mocked:
+            response = client.post("/chat", json={"message": "continue", "history": history})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mocked.call_args.args[2], history)
+
+    def test_chat_rejects_more_than_eight_history_items(self):
+        response = client.post("/chat", json={"message": "continue", "history": ["x"] * 9})
+        self.assertEqual(response.status_code, 422)
+
     def test_chat_returns_only_a_feedback_supported_strategy(self):
         with patch("backend.app.answer_without_provider", return_value="resposta"):
             response = client.post("/chat", json={"message": "oi"}, headers=AUTH)

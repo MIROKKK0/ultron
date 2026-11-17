@@ -16,7 +16,15 @@ struct ChatMessage: Identifiable, Codable {
     }
 }
 
-private struct ChatRequest: Encodable { let message: String }
+private struct ChatRequest: Encodable {
+    let message: String
+    let history: [String]
+
+    init(message: String, history: [String] = []) {
+        self.message = message
+        self.history = Array(history.suffix(8)).map { String($0.prefix(1000)) }
+    }
+}
 private struct ChatResponse: Decodable { let reply: String; let strategy: String? }
 private struct ChatStreamEvent: Decodable {
     let type: String
@@ -85,7 +93,7 @@ struct ChatClient {
         return false
     }
 
-    private func sendLegacy(_ message: String, serverURL: String) async throws -> ChatResult {
+    private func sendLegacy(_ message: String, history: [String], serverURL: String) async throws -> ChatResult {
         guard let url = endpoint("/chat", serverURL: serverURL) else {
             throw ChatClientError.invalidServerURL
         }
@@ -93,7 +101,7 @@ struct ChatClient {
         request.httpMethod = "POST"
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(ChatRequest(message: message))
+        request.httpBody = try JSONEncoder().encode(ChatRequest(message: message, history: history))
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
@@ -106,6 +114,7 @@ struct ChatClient {
     func send(
         _ message: String,
         serverURL: String,
+        history: [String] = [],
         onPhase: @MainActor @escaping (BrainPhase) -> Void = { _ in }
     ) async throws -> ChatResult {
         guard let url = endpoint("/chat/stream", serverURL: serverURL) else {
@@ -116,7 +125,7 @@ struct ChatClient {
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.httpBody = try JSONEncoder().encode(ChatRequest(message: message))
+        request.httpBody = try JSONEncoder().encode(ChatRequest(message: message, history: history))
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
@@ -125,7 +134,7 @@ struct ChatClient {
         // which exists in the previous production API and returns the same payload.
         if http.statusCode == 404 {
             await onPhase(.processing)
-            let result = try await sendLegacy(message, serverURL: serverURL)
+            let result = try await sendLegacy(message, history: history, serverURL: serverURL)
             await onPhase(.responding)
             return result
         }

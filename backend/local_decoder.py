@@ -95,11 +95,29 @@ def decode_local(
     # A deterministic decoder must not pretend that echoing the prompt is an answer.
     recent_context = [str(item).strip() for item in history if str(item).strip()]
     if recent_context:
+        last_user = next(
+            (item.split(":", 1)[1].strip() for item in reversed(recent_context)
+             if item.casefold().startswith("user:") and ":" in item),
+            "",
+        )
+        last_assistant = next(
+            (item.split(":", 1)[1].strip() for item in reversed(recent_context)
+             if item.casefold().startswith("assistant:") and ":" in item),
+            "",
+        )
+        if re.search(r"^(continue|continua|continue daí|e esse\??|e isso\??|por quê\??|porque\??|explique melhor|mais detalhes)\W*$", lower):
+            anchor = last_user or last_assistant
+            if anchor:
+                excerpt = anchor[:240].rstrip()
+                return (
+                    f"Você quer continuar sobre este ponto: “{excerpt}”. "
+                    "Ainda não tenho geração livre suficiente para deduzir o detalhe com segurança. "
+                    "Diga qual parte quer aprofundar; posso planejar, calcular ou pesquisar com fontes."
+                )
         return (
-            "Quero continuar a partir do contexto anterior, mas minha camada de linguagem "
-            "ainda não consegue inferir com segurança o que você quis dizer. "
-            "Pode explicar qual resultado espera ou qual parte devo resolver? "
-            "Posso executar cálculos, planejamento estruturado, pesquisa web e habilidades locais."
+            "Recebi o contexto recente desta conversa, mas ainda não consigo inferir "
+            "uma resposta aberta com segurança. Diga qual resultado espera ou qual parte "
+            "devo resolver. Posso executar cálculos, planejamento, pesquisa web e habilidades locais."
         )
     return (
         "Ainda não consegui interpretar essa solicitação com segurança. "
