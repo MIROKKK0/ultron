@@ -11,13 +11,14 @@ from pathlib import Path
 import torch
 
 from .model import ModelConfig, UltronTinyGPT
-from .tokenizer import ByteTokenizer
+from .tokenizer import BOS_ID, ByteTokenizer, TrainedBPETokenizer
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--tokenizer-json", default=None)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--tokens", type=int, default=24)
     args = parser.parse_args()
@@ -27,15 +28,26 @@ def main() -> None:
     torch.set_num_threads(args.threads)
     checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
     config = ModelConfig(**checkpoint["model_config"])
-    if checkpoint.get("tokenizer_version") != ByteTokenizer.version:
-        raise RuntimeError("This verifier currently expects the versioned byte tokenizer")
+    if args.tokenizer_json:
+        import hashlib
+        tokenizer = TrainedBPETokenizer(args.tokenizer_json)
+        tokenizer_hash = hashlib.sha256(Path(args.tokenizer_json).read_bytes()).hexdigest()
+        if checkpoint.get("tokenizer_json_sha256") != tokenizer_hash:
+            raise RuntimeError("Tokenizer checksum does not match the checkpoint")
+        prompt_ids = [tokenizer.bos_id, *tokenizer.encode(prompt, add_special_tokens=False)]
+    else:
+        tokenizer = ByteTokenizer()
+        if checkpoint.get("tokenizer_version") != tokenizer.version:
+            raise RuntimeError("Checkpoint requires its matching tokenizer JSON")
+        prompt_ids = tokenizer.encode(prompt)
+    if config.vocab_size != tokenizer.vocab_size:
+        raise RuntimeError("Checkpoint and tokenizer vocabulary sizes differ")
     model = UltronTinyGPT(config)
     model.load_state_dict(checkpoint["model_state"], strict=True)
     model.eval()
 
-    tokenizer = ByteTokenizer()
     prompt = "O ULTRON aprende com testes e dados de qualidade."
-    input_ids = torch.tensor([tokenizer.encode(prompt)], dtype=torch.long)
+    input_ids = torch.tensor([prompt_ids], dtype=torch.long)
     started = time.perf_counter()
     with torch.inference_mode():
         generated = model.generate(input_ids, max_new_tokens=args.tokens, temperature=0)
@@ -50,7 +62,7 @@ def main() -> None:
         "checkpoint": str(args.checkpoint),
         "valid_state_dict": True,
         "generation_smoke_test": "passed",
-        "tokenizer": checkpoint["tokenizer_version"],
+        "tokenizer": tokenizer.version,
         "parameters": model.parameter_count(),
         "training_steps": checkpoint.get("training_steps"),
         "validation_loss": checkpoint.get("validation_loss"),
