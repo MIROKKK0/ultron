@@ -19,7 +19,7 @@ class UltronTests(unittest.TestCase):
         root = client.get("/")
         self.assertEqual(root.status_code, 200)
         self.assertEqual(root.json()["name"], "ULTRON")
-        response = client.post("/chat", json={"message": "/self"}, headers=AUTH)
+        response = client.post("/chat", json={"message": "/self"})
         self.assertEqual(response.status_code, 200)
         self.assertIn("ULTRON", response.json()["reply"])
 
@@ -127,7 +127,7 @@ class UltronTests(unittest.TestCase):
 
     def test_chat_returns_only_a_feedback_supported_strategy(self):
         with patch("backend.app.answer_without_provider", return_value="resposta"):
-            response = client.post("/chat", json={"message": "oi"}, headers=AUTH)
+            response = client.post("/chat", json={"message": "oi"})
         self.assertEqual(response.status_code, 200)
         self.assertIn(response.json()["strategy"], {"planner", "solver", "critic"})
 
@@ -329,7 +329,7 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(allowed.json()["skill"], "planner")
 
     def test_normal_chat_works_without_any_ai_provider_token(self):
-        response = client.post("/chat", json={"message": "oi"}, headers=AUTH)
+        response = client.post("/chat", json={"message": "oi"})
         self.assertEqual(response.status_code, 200)
         self.assertIn("ULTRON", response.json()["reply"])
 
