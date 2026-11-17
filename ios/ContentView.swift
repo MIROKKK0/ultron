@@ -181,6 +181,11 @@ private struct MessageBubble: View {
                         ShareLink(item: message.text) {
                             Label("Compartilhar", systemImage: "square.and.arrow.up")
                         }
+                        if let url = DeviceActions.firstHTTPSURL(in: message.text) {
+                            Link(destination: url) {
+                                Label("Abrir link", systemImage: "safari")
+                            }
+                        }
                     }
                     .font(.caption)
                     .buttonStyle(.borderless)
