@@ -116,10 +116,10 @@ def resolve_intent(text: str) -> dict:
         intent = "plan"
     elif re.search(r"\b(evolu|melhor|autoavalia|autoaperfei|bugs?|revise sua|diagnóstico interno|diagnostico interno)\w*", lowered):
         intent = "improve"
-    elif lowered in {"ajuda", "help", "/help", "o que você faz", "o que voce faz", "como funciona o ultron", "como usar o ultron"} or re.search(r"\b(ajuda|comandos|capacidades|recursos|funções|funcoes|como usar)\b", lowered):
-        intent = "help"
     elif re.search(r"\b(obrigad|valeu|agrade|brigad|thanks)\w*", lowered):
         intent = "thanks"
+    elif lowered in {"ajuda", "help", "/help", "o que você faz", "o que voce faz", "como funciona o ultron", "como usar o ultron"} or re.search(r"\b(ajuda|comandos|capacidades|recursos|funções|funcoes|como usar)\b", lowered):
+        intent = "help"
     elif re.match(r"^(oi|olá|ola|bom dia|boa tarde|boa noite|e aí|eai|saudações)\b", lowered):
         intent = "greeting"
     elif re.search(r"\b(quem é você|quem e voce|seu nome|qual seu nome|identidade|apresente-se|arquitetura)\b", lowered):
