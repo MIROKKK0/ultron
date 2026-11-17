@@ -93,12 +93,19 @@ def main() -> int:
         report["errors"].append(f"issues_api: {type(exc).__name__}: {exc}")
 
     # Search public repositories for implementation techniques, never model weights.
-    query = urllib.parse.urlencode({
-        "q": "language:python transformer",
-        "sort": "stars", "order": "desc", "per_page": 8,
-    })
     try:
-        found = get_json(f"{API}/search/repositories?{query}").get("items", [])
+        found = []
+        selected_query = None
+        for candidate_query in ("transformer", "tokenizer", "language:python llm"):
+            query = urllib.parse.urlencode({
+                "q": candidate_query,
+                "sort": "stars", "order": "desc", "per_page": 8,
+            })
+            found = get_json(f"{API}/search/repositories?{query}").get("items", [])
+            if found:
+                selected_query = candidate_query
+                break
+        report["research_query"] = selected_query
         report["research_leads"] = [
             {
                 "name": item.get("full_name"),
