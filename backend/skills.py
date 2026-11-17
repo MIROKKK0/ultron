@@ -13,6 +13,7 @@ SKILLS = {
     "memory": {"title": "Memória protegida", "intents": ["remember"], "risk": "medium"},
     "self_review": {"title": "Autoavaliação", "intents": ["improve"], "risk": "low"},
     "safe_evolution": {"title": "Autoevolução segura", "intents": ["improve"], "risk": "review_required"},
+    "iphone_actions": {"title": "Ações seguras no iPhone", "intents": ["user_invoked_shortcut"], "risk": "permission_required"},
 }
 
 def list_skills() -> list[dict]:
@@ -60,6 +61,17 @@ def run_intent_skill(message: str) -> str | None:
 def run_named_skill(name: str, input_text: str) -> dict:
     if name not in SKILLS:
         raise ValueError("Habilidade desconhecida.")
+    if name == "iphone_actions":
+        return {
+            "skill": name,
+            "response": (
+                "Use o app Atalhos ou Siri para chamar Perguntar ao ULTRON. "
+                "O app também pode copiar, ler e compartilhar respostas após toque. "
+                "Ações em outros apps continuam limitadas pelas permissões públicas do iOS."
+            ),
+            "model": predict_intent(input_text),
+            "execution_policy": "user_initiated_only",
+        }
     response = run_intent_skill(input_text)
     if response is None:
         response = f"A habilidade {name} está instalada, mas a mensagem não corresponde a uma ação suportada."
