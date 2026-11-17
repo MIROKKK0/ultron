@@ -45,6 +45,24 @@ class TinyTransformerTests(unittest.TestCase):
         model.generate(torch.tensor([[1, 2]]), max_new_tokens=1)
         self.assertTrue(model.training)
 
+    def test_sampling_generation_is_reproducible_with_seeded_generator(self):
+        from training.generative.model import ModelConfig, UltronTinyGPT
+        model = UltronTinyGPT(ModelConfig(context_length=16, width=32, layers=1, heads=4))
+        seed_a = torch.Generator().manual_seed(123)
+        seed_b = torch.Generator().manual_seed(123)
+        prompt = torch.tensor([[1, 2, 3]])
+        first = model.generate(prompt.clone(), max_new_tokens=5, temperature=0.8, top_k=12, generator=seed_a)
+        second = model.generate(prompt.clone(), max_new_tokens=5, temperature=0.8, top_k=12, generator=seed_b)
+        self.assertTrue(torch.equal(first, second))
+
+    def test_generation_rejects_invalid_sampling_parameters(self):
+        from training.generative.model import ModelConfig, UltronTinyGPT
+        model = UltronTinyGPT(ModelConfig(context_length=16, width=32, layers=1, heads=4))
+        with self.assertRaises(ValueError):
+            model.generate(torch.tensor([[1]]), temperature=-1)
+        with self.assertRaises(ValueError):
+            model.generate(torch.tensor([[1]]), temperature=1, top_k=0)
+
     def test_rejects_mismatched_targets(self):
         from training.generative.model import ModelConfig, UltronTinyGPT
         model = UltronTinyGPT(ModelConfig(context_length=16, width=32, layers=1, heads=4))

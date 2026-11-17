@@ -93,16 +93,39 @@ class UltronTinyGPT(nn.Module):
         return logits, loss
 
     @torch.no_grad()
-    def generate(self, input_ids: torch.Tensor, max_new_tokens: int = 64) -> torch.Tensor:
+    def generate(
+        self,
+        input_ids: torch.Tensor,
+        max_new_tokens: int = 64,
+        *,
+        temperature: float = 0.0,
+        top_k: int | None = None,
+        generator: torch.Generator | None = None,
+    ) -> torch.Tensor:
+        """Generate greedily by default, or sample with temperature/top-k."""
         if input_ids.ndim != 2 or input_ids.shape[0] < 1 or input_ids.shape[1] < 1:
             raise ValueError("Generation requires a non-empty [batch, sequence] tensor")
+        if temperature < 0:
+            raise ValueError("Temperature cannot be negative")
+        if top_k is not None and top_k < 1:
+            raise ValueError("top_k must be positive when provided")
         was_training = self.training
         try:
             self.eval()
             for _ in range(max(0, min(max_new_tokens, 256))):
                 context = input_ids[:, -self.config.context_length:]
                 logits, _ = self(context)
-                next_token = torch.argmax(logits[:, -1, :], dim=-1, keepdim=True)
+                next_logits = logits[:, -1, :]
+                if temperature == 0:
+                    next_token = torch.argmax(next_logits, dim=-1, keepdim=True)
+                else:
+                    next_logits = next_logits / temperature
+                    if top_k is not None:
+                        keep = min(top_k, next_logits.size(-1))
+                        threshold = torch.topk(next_logits, keep, dim=-1).values[:, -1, None]
+                        next_logits = next_logits.masked_fill(next_logits < threshold, float("-inf"))
+                    probabilities = F.softmax(next_logits, dim=-1)
+                    next_token = torch.multinomial(probabilities, 1, generator=generator)
                 input_ids = torch.cat((input_ids, next_token), dim=1)
             return input_ids
         finally:

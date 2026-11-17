@@ -24,7 +24,7 @@ jobs:
           python-version: "3.12"
       - name: Install isolated training dependency
         run: pip install -r training/generative/requirements.txt --index-url https://download.pytorch.org/whl/cpu
-      - name: Test tokenizer and Transformer
-        run: python -m unittest tests.test_generative_tokenizer tests.test_generative_model -v
+      - name: Test tokenizer, Transformer and training utilities
+        run: python -m unittest tests.test_generative_tokenizer tests.test_generative_model tests.test_generative_training -v
       - name: Run tiny CPU training smoke test
         run: python -m training.generative.train --steps 10 --batch-size 2 --context-length 32 --output /tmp/ultron-tiny.pt
