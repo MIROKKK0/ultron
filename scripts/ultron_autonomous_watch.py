@@ -94,8 +94,8 @@ def main() -> int:
 
     # Search public repositories for implementation techniques, never model weights.
     query = urllib.parse.urlencode({
-        "q": "language:python (topic:transformer OR topic:llm) training tokenizer inference",
-        "sort": "updated", "order": "desc", "per_page": 8,
+        "q": "language:python transformer",
+        "sort": "stars", "order": "desc", "per_page": 8,
     })
     try:
         found = get_json(f"{API}/search/repositories?{query}").get("items", [])
