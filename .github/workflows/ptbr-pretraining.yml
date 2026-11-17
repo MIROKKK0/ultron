@@ -85,6 +85,39 @@ jobs:
           fi
           python -m training.generative.train "${ARGS[@]}"
           echo "previous_run_id=${{ steps.previous.outputs.previous_run_id }}" > artifacts/lineage.txt
+      - name: Reject regressive candidate and keep the best checkpoint lineage
+        if: steps.previous.outputs.resume == 'true'
+        env:
+          PREVIOUS_RUN_ID: ${{ steps.previous.outputs.previous_run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+          import torch
+
+          candidate_path = Path("artifacts/ultron-tiny-ptbr.pt")
+          parent_path = Path("artifacts/previous/ultron-tiny-ptbr.pt")
+          candidate = torch.load(candidate_path, map_location="cpu", weights_only=True)
+          accepted = candidate.get("candidate_non_regression") is True
+          lineage = {
+              "previous_run_id": "${{ steps.previous.outputs.previous_run_id }}",
+              "candidate_accepted_for_next_cycle": accepted,
+              "parent_validation_loss": candidate.get("parent_validation_loss"),
+              "candidate_validation_loss": candidate.get("validation_loss"),
+              "parent_test_loss": candidate.get("parent_test_loss"),
+              "candidate_test_loss": candidate.get("test_loss"),
+              "reason": "held-out validation and test must not regress beyond the configured tolerance",
+          }
+          if not accepted:
+              shutil.copy2(candidate_path, "artifacts/rejected-candidate.pt")
+              shutil.copy2(parent_path, candidate_path)
+              lineage["rollback"] = "previous checkpoint retained"
+          else:
+              lineage["rollback"] = None
+          Path("artifacts/lineage.txt").write_text(json.dumps(lineage, ensure_ascii=False, indent=2), encoding="utf-8")
+          print(json.dumps(lineage, ensure_ascii=False))
+          PY
       - name: Verify BPE checkpoint loading and CPU generation
         run: |
           python -m training.generative.verify_checkpoint \
