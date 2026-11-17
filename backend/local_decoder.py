@@ -99,7 +99,7 @@ def decode_local(
             )
     return (
         "Recebi sua solicitação e processei a entrada pela camada local. "
-        f"A atividade atual priorizou a estratégia **{strategy}**.\n\n"
+        f"A estratégia local inicial é **{strategy}**.\n\n"
         "Consigo executar localmente cálculos, comandos de memória e planos "
         "estruturados. Para responder conteúdo aberto com a profundidade de um "
         "grande modelo de linguagem, ainda falta um decodificador semântico local "
