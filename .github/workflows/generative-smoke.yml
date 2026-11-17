@@ -11,6 +11,7 @@ on:
       - "tests/test_bpe_tokenizer.py"
       - "tests/test_generative_sample.py"
       - ".github/workflows/generative-smoke.yml"
+      - ".github/workflows/ptbr-pretraining.yml"
 
 permissions:
   contents: read
