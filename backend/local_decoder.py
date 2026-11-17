@@ -92,9 +92,18 @@ def decode_local(
                 "relacionadas:\n" + "\n".join(f"- {item}" for item in query_matches[:4]) +
                 "\n\nPosso usar esse contexto para estruturar a próxima etapa."
             )
+    # A deterministic decoder must not pretend that echoing the prompt is an answer.
+    recent_context = [str(item).strip() for item in history if str(item).strip()]
+    if recent_context:
+        return (
+            "Quero continuar a partir do contexto anterior, mas minha camada de linguagem "
+            "ainda não consegue inferir com segurança o que você quis dizer. "
+            "Pode explicar qual resultado espera ou qual parte devo resolver? "
+            "Posso executar cálculos, planejamento estruturado, pesquisa web e habilidades locais."
+        )
     return (
-        "Recebi sua solicitação e processei a entrada pela camada local. "
-        f"A estratégia local inicial é **{strategy}**.\n\n"
-        "Consigo executar habilidades locais. Para responder qualquer assunto aberto com profundidade comparável a um grande modelo de linguagem, ainda falta um modelo generativo treinado; não vou fingir essa capacidade.\n"
-        f"Solicitação registrada: {text[:1200]}"
+        "Ainda não consegui interpretar essa solicitação com segurança. "
+        "Pode reformular em uma frase ou dizer qual resultado espera? "
+        "Consigo executar cálculos, planejamento estruturado, pesquisa web e habilidades locais. "
+        "Minha geração de linguagem aberta ainda é experimental; não vou inventar uma resposta."
     )
