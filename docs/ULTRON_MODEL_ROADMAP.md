@@ -66,6 +66,24 @@ A revisão da literatura reforça quatro decisões práticas para o ULTRON:
 
 **Mudanças aplicadas no pipeline:** o pré-treino semanal agora guarda train/validation/test no artefato; o treino diário continua o checkpoint BPE com o mesmo tokenizer e os mesmos splits. Se não existir um baseline semanal validado, o treino diário fica em espera em vez de treinar repetidamente o corpus didático de 1,8 KB. A comparação de checkpoint pai/candidato é apenas uma barreira contra regressão de loss; ainda não mede capacidade de diálogo e não autoriza promoção para produção.
 
+## Execução nativa no iPhone: caminho Core ML
+
+O modelo próprio ainda não está integrado ao runtime do aplicativo. Para evitar confundir IPA compilado com inferência local, a integração deve seguir etapas mensuráveis:
+
+1. Exportar somente um checkpoint ULTRON treinado e validado, com arquitetura, tokenizer e hash registrados.
+2. Colocar o modelo em `eval()`, capturar o grafo PyTorch com TorchScript (`torch.jit.trace`) ou `torch.export`, e converter com Core ML Tools. A documentação Apple recomenda o fluxo TorchScript como opção estável de conversão.
+3. Começar com pesos FP16 e depois comparar quantização de pesos 8-bit/4-bit; medir tamanho, latência, RSS, consumo de energia e regressões no conjunto retido.
+4. Não assumir que INT8 de ativações na Neural Engine estará disponível em todos os iPhones: a documentação Core ML indica suporte específico a partir do iPhone 15 Pro para esse caminho. No iPhone 11 Pro, testar CPU/GPU/ANE no aparelho e escolher o melhor caminho real.
+5. Só integrar o modelo ao app depois de comparar a saída Core ML com PyTorch, validar tokenização e geração incremental, e medir a memória do processo no dispositivo.
+
+Referências primárias:
+- Conversão PyTorch → Core ML: https://apple.github.io/coremltools/docs-guides/source/convert-pytorch-workflow.html
+- Quantização Core ML: https://apple.github.io/coremltools/docs-guides/source/opt-quantization-api.html
+- Compressão e limites de tamanho do app: https://developer.apple.com/documentation/coreml/reducing-the-size-of-your-core-ml-app
+- Otimizações e trade-offs Apple Silicon: https://developer.apple.com/videos/play/wwdc2024/10159/
+
+**Estado atual:** o workflow gera um IPA arm64 sem assinatura, mas isso não significa que o modelo generativo já esteja embarcado ou executando no iPhone. Core ML é uma etapa futura de implantação do cérebro próprio, não um provedor externo nem pesos pré-treinados.
+
 ## Arquitetura cognitiva pretendida
 
 A analogia útil com um cérebro é funcional, não biológica. O sistema deve separar:
