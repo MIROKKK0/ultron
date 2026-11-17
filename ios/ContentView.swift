@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @AppStorage("ultronServerURL") private var serverURL = "https://ultron-api-c5ae.onrender.com"
     @State private var messages: [ChatMessage] = [
-        ChatMessage(role: .assistant, text: "Olá. Eu sou o ULTRON. Estou pronta. Não precisa configurar token. Comandos: /self, /plan seu objetivo, /research sua pergunta e /calc 12*(3+4). A memória privada será ativada após autenticação segura por instalação.")
+        ChatMessage(role: .assistant, text: "Olá. Sou o ULTRON. Meu classificador próprio e minhas habilidades locais estão disponíveis. Use /plan, /research, /calc, /self ou /skills. A geração livre ainda está em desenvolvimento.")
     ]
     @State private var draft = ""
     @State private var isSending = false
@@ -44,7 +44,7 @@ struct ContentView: View {
                                     try await client.sendFeedback(
                                         rating,
                                         strategy: strategy,
-                                        serverURL: serverURL,
+                                        serverURL: serverURL
                                     )
                                 }
                                 .id(message.id)
