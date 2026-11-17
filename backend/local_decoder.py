@@ -42,9 +42,10 @@ def decode_local(
     if lower in {"/help", "ajuda", "o que você faz?", "quem é você?", "quem e voce?", "o que você é?"}:
         return (
             "ULTRON — núcleo FlyBrain obrigatório, memória local, planejamento "
-            "estruturado, cálculo seguro e reflexão. Comandos: /self, /plan objetivo, "
+            "estruturado, cálculo seguro e reflexão. Você pode conversar normalmente, "
+            "sem comandos especiais. Também existem atalhos opcionais: /self, /plan objetivo, "
             "/remember nota, /calc expressão, /brain objetivo e /multi tarefa1 || tarefa2. "
-            "O decodificador é local e determinístico; não é um LLM nem finge ser."
+            "O decodificador local é determinístico; ainda não equivale a um LLM."
         )
     if lower.startswith("/self") or lower in {"quem é você", "quem e voce", "me fale sobre você", "me fale sobre voce"}:
         return (
