@@ -8,7 +8,6 @@ on:
       - "project.yml"
       - ".github/workflows/ios-build.yml"
   pull_request:
-    branches: ["main", "feat/ultron-core-assistant"]
     paths:
       - "ios/**"
       - "project.yml"
