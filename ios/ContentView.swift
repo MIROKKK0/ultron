@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @AppStorage("ultronServerURL") private var serverURL = "https://ultron-api-c5ae.onrender.com"
     @State private var messages: [ChatMessage] = [
-        ChatMessage(role: .assistant, text: "Olá. Sou o ULTRON. Meu classificador próprio e minhas habilidades locais estão disponíveis. Use /plan, /research, /calc, /self ou /skills. A geração livre ainda está em desenvolvimento.")
+        ChatMessage(role: .assistant, text: "Olá. Sou o ULTRON. Use /plan, /research, /calc, /self e /skills. Memória privada: /remember texto, /memories ou /forget ID. A geração livre ainda está em desenvolvimento.")
     ]
     @State private var draft = ""
     @State private var isSending = false
@@ -125,6 +125,42 @@ struct ContentView: View {
 
         Task {
             do {
+                if text.lowercased().hasPrefix("/remember ") {
+                    let content = String(text.dropFirst("/remember ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !content.isEmpty else { throw ChatClientError.invalidResponse }
+                    let id = try await client.remember(content, serverURL: serverURL)
+                    serverOnline = true
+                    serverStatusChecked = true
+                    brainPhase = .responding
+                    messages.append(ChatMessage(role: .assistant, text: "Memória privada salva com sucesso. ID: \(id)"))
+                    isSending = false
+                    return
+                }
+                if text.lowercased() == "/memories" {
+                    let items = try await client.listMemories(serverURL: serverURL)
+                    serverOnline = true
+                    serverStatusChecked = true
+                    brainPhase = .responding
+                    let output = items.isEmpty ? "Ainda não há memórias privadas salvas." : "Suas memórias privadas:\n" + items.joined(separator: "\n")
+                    messages.append(ChatMessage(role: .assistant, text: output))
+                    isSending = false
+                    return
+                }
+                if text.lowercased().hasPrefix("/forget ") {
+                    let rawID = String(text.dropFirst("/forget ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard let id = Int(rawID), id > 0 else {
+                        messages.append(ChatMessage(role: .assistant, text: "Use /forget seguido do ID numérico da memória."))
+                        isSending = false
+                        return
+                    }
+                    try await client.forgetMemory(id, serverURL: serverURL)
+                    serverOnline = true
+                    serverStatusChecked = true
+                    brainPhase = .responding
+                    messages.append(ChatMessage(role: .assistant, text: "Memória \(id) apagada."))
+                    isSending = false
+                    return
+                }
                 let result = try await client.send(text, serverURL: serverURL) { phase in
                     brainPhase = phase
                 }
@@ -194,7 +230,7 @@ private struct MessageBubble: View {
                 }
                 if message.role == .assistant, let strategy = message.strategy {
                     HStack(spacing: 12) {
-                        Text("Estratégia neural: \(strategy)")
+                        Text("Estratégia local: \(strategy)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Spacer()
