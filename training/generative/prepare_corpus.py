@@ -45,8 +45,8 @@ def clean_document(value: str) -> str | None:
 
 
 def prepare(output: Path, max_bytes: int, max_documents: int) -> dict:
-    if max_bytes < 100_000 or max_documents < 1:
-        raise ValueError("max_bytes must be >=100000 and max_documents must be positive")
+    if not 100_000 <= max_bytes <= 50_000_000 or not 1 <= max_documents <= 100_000:
+        raise ValueError("max_bytes must be 100KB..50MB and max_documents must be 1..100000")
     try:
         from datasets import load_dataset
     except ImportError as exc:
