@@ -9,7 +9,7 @@
 O workflow `.github/workflows/ultron-autonomous-evolution.yml` separa validação de PR do treinamento diário real:
 
 1. Em PR, reproduz o classificador de intenções, executa a suíte de testes e faz apenas um smoke training curto no corpus didático pequeno. Esse checkpoint de smoke não é publicado como modelo diário.
-2. Na branch padrão, procura primeiro o último checkpoint diário bem-sucedido; se não houver, tenta o último checkpoint semanal BPE PT-BR.
+2. Na branch padrão, compara a data do último checkpoint diário com a do último pré-treino semanal e escolhe o artefato mais recente. Assim, uma expansão semanal do corpus não fica escondida por um checkpoint diário antigo.
 3. Exige que o checkpoint, o tokenizer e os splits licenciados train/validation/test estejam presentes e compatíveis. Se não houver baseline PT-BR, registra `waiting_for_validated_ptbr_baseline` e não finge evolução treinando repetidamente no corpus de 1,8 KB.
 4. Continua os pesos com o mesmo BPE, corpus e splits, mede validação e teste em janelas comparáveis e mantém o checkpoint pai quando o candidato regredir.
 5. Recarrega o checkpoint, verifica geração em CPU, produz amostras fixas, mede latência e RSS do runner e guarda a linhagem em artefatos.
