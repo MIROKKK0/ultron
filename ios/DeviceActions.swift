@@ -23,7 +23,7 @@ enum DeviceActions {
 
     /// Return the first explicit HTTPS link in a message for a user-tapped SwiftUI Link.
     static func firstHTTPSURL(in text: String) -> URL? {
-        guard let expression = try? NSRegularExpression(pattern: #"https://[^\\s<>()]+"#) else {
+        guard let expression = try? NSRegularExpression(pattern: #"https://[^\s<>()]+"#) else {
             return nil
         }
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
