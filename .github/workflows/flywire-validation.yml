@@ -3,7 +3,6 @@ name: FlyWire Full Connectome Validation
 on:
   workflow_dispatch:
   pull_request:
-    branches: ["feat/ultron-core-assistant"]
     paths:
       - "backend/flywire_runtime.py"
       - "backend/fly_brain.py"
