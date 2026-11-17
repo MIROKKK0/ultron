@@ -40,7 +40,25 @@ enum ChatClientError: LocalizedError {
     }
 }
 
+private struct HealthResponse: Decodable { let status: String }
+
 struct ChatClient {
+    func checkHealth(serverURL: String) async -> Bool {
+        guard let base = URL(string: serverURL), base.scheme == "https",
+              let url = URL(string: "/health", relativeTo: base) else { return false }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 12
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode) else { return false }
+            return (try? JSONDecoder().decode(HealthResponse.self, from: data).status) == "online"
+        } catch {
+            return false
+        }
+    }
+
     func send(_ message: String, serverURL: String) async throws -> ChatResult {
         guard let base = URL(string: serverURL), base.scheme == "https",
               let url = URL(string: "/chat", relativeTo: base) else {
