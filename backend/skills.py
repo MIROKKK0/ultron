@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from backend.agent_core import SELF_MODEL, improvement_proposal, plan_task
-from backend.intent_model import predict_intent, model_status
+from backend.intent_model import predict_intent, resolve_intent, model_status
 
 SKILLS = {
     "conversation": {"title": "Conversa", "intents": ["greeting", "thanks"], "risk": "low"},
@@ -26,7 +26,7 @@ def _format_plan(goal: str) -> str:
     return "\n".join(lines)
 
 def run_intent_skill(message: str) -> str | None:
-    prediction = predict_intent(message)
+    prediction = resolve_intent(message)
     intent = prediction["intent"]
     if intent == "greeting":
         return "Oi! Sou o ULTRON. Meu núcleo leve está ativo; posso planejar, calcular, pesquisar e usar habilidades locais."
