@@ -7,6 +7,7 @@ struct ContentView: View {
     ]
     @State private var draft = ""
     @State private var isSending = false
+    @State private var brainPhase: BrainPhase = .idle
     @State private var showSettings = false
     @State private var errorMessage: String?
     @State private var serverOnline = false
@@ -18,14 +19,10 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    ZStack {
-                        Circle().fill(Color.cyan.opacity(0.15))
-                        Image(systemName: "sparkles").font(.system(size: 22, weight: .semibold)).foregroundStyle(.cyan)
-                    }
-                    .frame(width: 46, height: 46)
+                    BrainMonitorView(phase: brainPhase)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("ULTRON").font(.headline.weight(.bold)).tracking(1.5)
-                        Text(isSending ? "Pensando…" : (serverOnline ? "API conectada" : (serverStatusChecked ? "API indisponível" : "Verificando API"))).font(.caption).foregroundStyle(.secondary)
+                        Text(isSending ? brainPhase.title : (serverOnline ? "API conectada" : (serverStatusChecked ? "API indisponível" : "Verificando API"))).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Circle()
@@ -124,18 +121,27 @@ struct ContentView: View {
         errorMessage = nil
         messages.append(ChatMessage(role: .user, text: text))
         isSending = true
+        brainPhase = .connecting
 
         Task {
             do {
-                let result = try await client.send(text, serverURL: serverURL)
+                let result = try await client.send(text, serverURL: serverURL) { phase in
+                    brainPhase = phase
+                }
                 serverOnline = true
                 serverStatusChecked = true
+                brainPhase = .responding
                 messages.append(ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy))
             } catch {
                 serverOnline = false
                 serverStatusChecked = true
+                brainPhase = .error
                 errorMessage = error.localizedDescription
                 messages.append(ChatMessage(role: .assistant, text: "Não consegui concluir a solicitação. Confira o servidor e a conexão."))
+            }
+            if brainPhase == .responding {
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                if brainPhase == .responding { brainPhase = .idle }
             }
             isSending = false
         }
@@ -161,6 +167,26 @@ private struct MessageBubble: View {
                         message.role == .user ? Color.cyan : Color(.secondarySystemBackground),
                         in: RoundedRectangle(cornerRadius: 19)
                     )
+                if message.role == .assistant {
+                    HStack(spacing: 14) {
+                        Button { DeviceActions.copy(message.text) } label: {
+                            Label("Copiar", systemImage: "doc.on.doc")
+                        }
+                        Button { DeviceActions.speak(message.text) } label: {
+                            Label("Ouvir", systemImage: "speaker.wave.2")
+                        }
+                        Button { DeviceActions.stopSpeaking() } label: {
+                            Image(systemName: "stop.fill")
+                        }
+                        ShareLink(item: message.text) {
+                            Label("Compartilhar", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                    .font(.caption)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.cyan)
+                    .padding(.horizontal, 8)
+                }
                 if message.role == .assistant, let strategy = message.strategy {
                     HStack(spacing: 12) {
                         Text("Estratégia neural: \(strategy)")
