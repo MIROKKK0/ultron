@@ -134,6 +134,9 @@ struct ChatClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.httpBody = try JSONEncoder().encode(ChatRequest(message: message))
+        if let token = try? InstallationCredentialStore.read() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
