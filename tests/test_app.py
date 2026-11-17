@@ -249,18 +249,40 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["completed"], 2)
 
-    def test_memory_crud(self):
+    def test_memory_is_isolated_per_installation(self):
+        first = client.post("/installations/register")
+        second = client.post("/installations/register")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        first_auth = {"Authorization": "Bearer " + first.json()["access_token"]}
+        second_auth = {"Authorization": "Bearer " + second.json()["access_token"]}
         created = client.post(
             "/memory",
-            json={"content": "Lembrar de testar o ULTRON"},
-            headers=AUTH,
+            json={"content": "Memória privada da primeira instalação"},
+            headers=first_auth,
         )
         self.assertEqual(created.status_code, 200)
         memory_id = created.json()["id"]
-        listed = client.get("/memory", headers=AUTH)
-        self.assertTrue(any(item["id"] == memory_id for item in listed.json()["items"]))
-        deleted = client.delete(f"/memory/{memory_id}", headers=AUTH)
+        first_items = client.get("/memory", headers=first_auth).json()["items"]
+        second_items = client.get("/memory", headers=second_auth).json()["items"]
+        self.assertTrue(any(item["id"] == memory_id for item in first_items))
+        self.assertFalse(any(item["id"] == memory_id for item in second_items))
+        denied = client.get("/memory", headers=AUTH)
+        self.assertEqual(denied.status_code, 401)
+        cross_delete = client.delete(f"/memory/{memory_id}", headers=second_auth)
+        self.assertEqual(cross_delete.status_code, 404)
+        deleted = client.delete(f"/memory/{memory_id}", headers=first_auth)
         self.assertEqual(deleted.status_code, 200)
+
+    def test_installation_revocation_erases_only_that_installations_memory(self):
+        registered = client.post("/installations/register").json()
+        auth = {"Authorization": "Bearer " + registered["access_token"]}
+        client.post("/memory", json={"content": "remover"}, headers=auth)
+        revoked = client.delete("/installation", headers=auth)
+        self.assertEqual(revoked.status_code, 200)
+        self.assertTrue(revoked.json()["revoked"])
+        self.assertEqual(client.get("/memory", headers=auth).status_code, 401)
+
 
     def test_public_remember_command_never_writes_shared_memory(self):
         before = client.get("/memory", headers=AUTH).json()["items"]
