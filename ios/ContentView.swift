@@ -161,6 +161,10 @@ private struct MessageBubble: View {
                             Image(systemName: "stop.fill")
                         }
                         .accessibilityLabel("Parar leitura")
+                        ShareLink(item: message.text) {
+                            Label("Compartilhar", systemImage: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("Compartilhar resposta do ULTRON")
                     }
                     .font(.caption)
                     .buttonStyle(.borderless)
