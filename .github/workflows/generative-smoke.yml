@@ -9,6 +9,7 @@ on:
       - "tests/test_generative_tokenizer.py"
       - "tests/test_generative_model.py"
       - "tests/test_bpe_tokenizer.py"
+      - "tests/test_generative_sample.py"
       - ".github/workflows/generative-smoke.yml"
 
 permissions:
@@ -28,6 +29,6 @@ jobs:
       - name: Install tokenizer implementation
         run: pip install "tokenizers>=0.20,<1.0"
       - name: Test byte tokenizer, BPE tokenizer, Transformer and training utilities
-        run: python -m unittest tests.test_generative_tokenizer tests.test_bpe_tokenizer tests.test_generative_model tests.test_generative_training tests.test_corpus_preparation -v
+        run: python -m unittest tests.test_generative_tokenizer tests.test_bpe_tokenizer tests.test_generative_model tests.test_generative_training tests.test_generative_sample tests.test_corpus_preparation -v
       - name: Run tiny CPU training smoke test
         run: python -m training.generative.train --steps 10 --batch-size 2 --context-length 32 --output /tmp/ultron-tiny.pt
