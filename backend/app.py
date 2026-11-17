@@ -155,7 +155,10 @@ def init_db() -> None:
 
     # New isolated tables; legacy shared memory rows remain inaccessible.
     execute(db, """CREATE TABLE IF NOT EXISTS installations (installation_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, revoked_at TEXT)""")
-    execute(db, """CREATE TABLE IF NOT EXISTS installation_memories (id BIGSERIAL PRIMARY KEY, installation_id TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)""")
+    if is_postgres(db):
+        execute(db, """CREATE TABLE IF NOT EXISTS installation_memories (id BIGSERIAL PRIMARY KEY, installation_id TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)""")
+    else:
+        execute(db, """CREATE TABLE IF NOT EXISTS installation_memories (id INTEGER PRIMARY KEY AUTOINCREMENT, installation_id TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)""")
 
 
 def load_associative_memory() -> None:
