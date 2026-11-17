@@ -39,8 +39,12 @@ class GenerativeSamplingTests(unittest.TestCase):
             self.assertEqual(len(result["samples"]), 1)
             self.assertIn("checkpoint_sha256", result)
             self.assertTrue(result["experimental"])
+            second_corpus = root / "second.txt"
+            second_corpus.write_text(("Outro texto português para criar outro vocabulário.\n" * 3000), encoding="utf-8")
+            second_tokenizer = root / "second-tokenizer.json"
+            train_tokenizer(str(second_corpus), str(second_tokenizer), vocab_size=512)
             with self.assertRaises(ValueError):
-                generate_samples(str(checkpoint_path), ["Olá"], tokenizer_json=str(corpus), max_new_tokens=4)
+                generate_samples(str(checkpoint_path), ["Olá"], tokenizer_json=str(second_tokenizer), max_new_tokens=4)
 
 
 if __name__ == "__main__":
