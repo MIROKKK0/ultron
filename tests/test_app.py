@@ -47,6 +47,24 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("pesquisa na internet", response.json()["reply"])
 
+    def test_chat_stream_emits_processing_responding_and_final_events(self):
+        response = client.post("/chat/stream", json={"message": "oi"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.headers["content-type"].startswith("text/event-stream"))
+        self.assertIn('"stage":"processing"', response.text)
+        self.assertIn('"stage":"responding"', response.text)
+        self.assertIn('"type":"final"', response.text)
+        self.assertIn('"reply"', response.text)
+
+    def test_runtime_status_reports_512mb_budget_and_model_limits(self):
+        response = client.get("/runtime/status")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["memory"]["budget_mb"], 512)
+        self.assertFalse(payload["generative_model_configured"])
+        self.assertFalse(payload["external_ai_providers"])
+        self.assertIn("intent_model", payload)
+
     def test_health(self):
         response = client.get("/health")
         self.assertEqual(response.status_code, 200)
