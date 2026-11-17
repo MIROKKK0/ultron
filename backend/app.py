@@ -21,6 +21,7 @@ from backend.brain import run_multitask
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
 from backend.public_access import enforce_public_limit
+from backend.runtime_diagnostics import memory_snapshot
 from backend.web_research import search_web
 
 APP_NAME = "ULTRON"
@@ -594,6 +595,21 @@ async def chat_stream(payload: ChatRequest, request: Request) -> StreamingRespon
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/runtime/status")
+def runtime_status(request: Request) -> dict[str, Any]:
+    """Expose low-cost memory telemetry without importing heavyweight ML runtimes."""
+    enforce_public_limit(request, "runtime-status", limit=60)
+    return {
+        "name": APP_NAME,
+        "memory": memory_snapshot(
+            budget_mb=int(os.getenv("ULTRON_MEMORY_BUDGET_MB", "512"))
+        ),
+        "language_engine": "local_deterministic",
+        "generative_model_configured": False,
+        "external_ai_providers": False,
+    }
 
 
 @app.post("/memory", dependencies=[Depends(require_api_token)])
