@@ -48,7 +48,7 @@ struct ChatClient {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 60
+        request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(ChatRequest(message: message))
         let (data, response) = try await URLSession.shared.data(for: request)
