@@ -31,6 +31,33 @@ class TinyTransformerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             model(torch.ones((1, 9), dtype=torch.long))
 
+    def test_attention_is_causal(self):
+        from training.generative.model import ModelConfig, UltronTinyGPT
+
+        torch.manual_seed(4)
+        model = UltronTinyGPT(ModelConfig(context_length=16, width=32, layers=1, heads=4))
+        model.eval()
+        first = torch.tensor([[10, 11, 12, 13, 14, 15]])
+        changed_future = torch.tensor([[10, 11, 12, 13, 99, 98]])
+        first_logits, _ = model(first)
+        changed_logits, _ = model(changed_future)
+        self.assertTrue(torch.allclose(first_logits[:, :4], changed_logits[:, :4], atol=1e-6))
+
+    def test_generate_restores_training_mode(self):
+        from training.generative.model import ModelConfig, UltronTinyGPT
+
+        model = UltronTinyGPT(ModelConfig(context_length=16, width=32, layers=1, heads=4))
+        model.train()
+        model.generate(torch.tensor([[1, 2]]), max_new_tokens=1)
+        self.assertTrue(model.training)
+
+    def test_rejects_mismatched_targets(self):
+        from training.generative.model import ModelConfig, UltronTinyGPT
+
+        model = UltronTinyGPT(ModelConfig(context_length=16, width=32, layers=1, heads=4))
+        with self.assertRaises(ValueError):
+            model(torch.ones((1, 4), dtype=torch.long), torch.ones((1, 3), dtype=torch.long))
+
 
 if __name__ == "__main__":
     unittest.main()
