@@ -1,0 +1,30 @@
+name: ULTRON generative core smoke test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: ["feat/ultron-core-assistant"]
+    paths:
+      - "training/generative/**"
+      - "tests/test_generative_tokenizer.py"
+      - "tests/test_generative_model.py"
+      - ".github/workflows/generative-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  tiny-transformer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install isolated training dependency
+        run: pip install -r training/generative/requirements.txt --index-url https://download.pytorch.org/whl/cpu
+      - name: Test tokenizer and Transformer
+        run: python -m unittest tests.test_generative_tokenizer tests.test_generative_model -v
+      - name: Run tiny CPU training smoke test
+        run: python -m training.generative.train --steps 10 --batch-size 2 --context-length 32 --output /tmp/ultron-tiny.pt
