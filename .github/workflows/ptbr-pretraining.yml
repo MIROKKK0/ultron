@@ -2,6 +2,9 @@ name: ULTRON PT-BR from-scratch pretraining
 
 on:
   workflow_dispatch:
+  schedule:
+    # Weekly deep pretraining; the lightweight intent loop runs daily.
+    - cron: "17 14 * * 0"
   push:
     branches: ["feat/ultron-core-assistant"]
     paths:
@@ -10,6 +13,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ultron-ptbr-pretraining
+  cancel-in-progress: false
 
 jobs:
   ptbr-pretraining:
@@ -41,6 +48,13 @@ jobs:
             --tokenizer-json artifacts/ultron-bpe-tokenizer.json \
             --eval-interval 500 --eval-batches 20 --early-stopping-patience 8 \
             --output artifacts/ultron-tiny-ptbr.pt
+      - name: Verify BPE checkpoint loading and CPU generation
+        run: |
+          python -m training.generative.verify_checkpoint \\
+            --checkpoint artifacts/ultron-tiny-ptbr.pt \\
+            --tokenizer-json artifacts/ultron-bpe-tokenizer.json \\
+            --output artifacts/checkpoint-verification.json \\
+            --threads 2 --tokens 24
       - name: Generate fixed qualitative samples (not a factuality benchmark)
         run: |
           python -m training.generative.sample \
@@ -57,4 +71,5 @@ jobs:
             artifacts/ptbr-corpus/manifest.json
             artifacts/ptbr-corpus/provenance.jsonl
             artifacts/qualitative-samples.json
+            artifacts/checkpoint-verification.json
           retention-days: 14
