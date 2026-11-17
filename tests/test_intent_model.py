@@ -28,6 +28,10 @@ class IntentModelTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(resolve_intent(text)["intent"], expected)
 
+    def test_help_and_thanks_are_not_confused(self):
+        self.assertEqual(resolve_intent("ajuda")["intent"], "help")
+        self.assertEqual(resolve_intent("obrigado pela ajuda")["intent"], "thanks")
+
     def test_unknown_open_question_is_not_misrouted_to_skill(self):
         result = predict_intent("conte uma história sobre dragões")
         self.assertEqual(result["intent"], "unknown")
