@@ -17,8 +17,11 @@ BUCKETS = 4096
 ALPHA = 0.25
 
 def token_id(value: str) -> int:
+    return token_bytes(value.encode("utf-8"))
+
+def token_bytes(raw: bytes) -> int:
     result = 2166136261
-    for byte in value.encode("utf-8"):
+    for byte in raw:
         result ^= byte
         result = (result * 16777619) & 0xFFFFFFFF
     return result % BUCKETS
@@ -33,8 +36,8 @@ def tokenize(text: str) -> dict[int, int]:
     padded = [94, *normalized.encode("utf-8"), 36]
     for size in (2, 3):
         for start in range(len(padded) - size + 1):
-            gram = bytes(padded[start:start + size]).decode("latin1")
-            idx = token_id(gram)
+            gram = bytes(padded[start:start + size])
+            idx = token_bytes(gram)
             result[idx] = result.get(idx, 0) + 1
     return result
 
@@ -105,7 +108,8 @@ def main() -> int:
     model = train(data)
     rendered = json.dumps(model, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n"
     if args.check:
-        if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != rendered:
+        existing = json.loads(OUTPUT.read_text(encoding="utf-8")) if OUTPUT.exists() else None
+        if existing != model:
             raise SystemExit("Modelo versionado difere do corpus; execute o treino e revise o diff.")
         print(f"Modelo verificado: {model['training_examples']} exemplos, {len(model['classes'])} classes.")
         return 0
