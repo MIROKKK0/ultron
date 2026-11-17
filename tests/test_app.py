@@ -221,6 +221,37 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["parallel_task_limit"], 5)
 
+    def test_public_brain_research_is_gated_by_flybrain_and_reports_neural_control(self):
+        neural_state = {
+            "core": "drosophila_lif_microcircuit",
+            "version": "0.1.0",
+            "is_full_connectome": False,
+            "role_scores": {"researcher": 0.82},
+        }
+        fixture = {
+            "query": "FlyWire",
+            "count": 1,
+            "results": [{"title": "FlyWire", "url": "https://example.org", "snippet": "Fonte"}],
+            "summary": "Resultado de teste",
+        }
+        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state) as neural:
+            with patch("backend.app.search_web", return_value=fixture) as search:
+                response = client.post("/brain/research", json={"goal": "FlyWire"})
+        self.assertEqual(response.status_code, 200)
+        neural.assert_called_once_with("FlyWire", [])
+        search.assert_called_once_with("FlyWire")
+        self.assertEqual(response.json()["neural_control"]["core"], "drosophila_lif_microcircuit")
+        self.assertEqual(response.json()["neural_control"]["researcher_priority"], 0.82)
+
+    def test_public_brain_research_fails_closed_when_flybrain_is_unavailable(self):
+        with patch("backend.app.FLY_BRAIN.process", side_effect=RuntimeError("FlyBrain unavailable")) as neural:
+            with patch("backend.app.search_web") as search:
+                response = client.post("/brain/research", json={"goal": "FlyWire"})
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("FlyBrain unavailable", response.json()["detail"])
+        neural.assert_called_once_with("FlyWire", [])
+        search.assert_not_called()
+
     def test_brain_run_uses_parallel_specialists_and_mandatory_flybrain(self):
         neural_state = {
             "core": "drosophila_lif_microcircuit",
