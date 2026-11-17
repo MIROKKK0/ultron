@@ -15,7 +15,7 @@ class AgentCoreTests(unittest.TestCase):
     def test_self_model_is_honest_about_limits(self):
         model = SELF_MODEL.public_dict()
         self.assertEqual(model["name"], "ULTRON")
-        self.assertTrue(any("não treina pesos" in item for item in model["limitations"]))
+        self.assertTrue(any("corpus revisado" in item for item in model["limitations"]))
 
     def test_system_instructions_include_relevant_memory(self):
         prompt = system_instructions(["Prefere respostas em português"])
