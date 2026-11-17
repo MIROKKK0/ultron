@@ -6,7 +6,7 @@ on:
     # Weekly deep pretraining; the lightweight intent loop runs daily.
     - cron: "17 15 * * 0"
   push:
-    branches: ["feat/ultron-core-assistant", "feat/ultron-private-installation-memory"]
+    branches: ["main", "feat/ultron-core-assistant", "feat/ultron-private-installation-memory"]
     paths:
       - "training/**"
       - ".github/workflows/ptbr-pretraining.yml"
@@ -140,6 +140,9 @@ jobs:
             artifacts/ultron-bpe-tokenizer.json
             artifacts/ptbr-corpus/manifest.json
             artifacts/ptbr-corpus/provenance.jsonl
+            artifacts/ptbr-corpus/train.txt
+            artifacts/ptbr-corpus/validation.txt
+            artifacts/ptbr-corpus/test.txt
             artifacts/qualitative-samples.json
             artifacts/checkpoint-verification.json
             artifacts/lineage.txt
