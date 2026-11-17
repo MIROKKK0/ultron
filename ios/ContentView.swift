@@ -120,12 +120,13 @@ struct ContentView: View {
         draft = ""
         errorMessage = nil
         messages.append(ChatMessage(role: .user, text: text))
+        let recentHistory = messages.suffix(9).dropLast().map { "($0.role.rawValue): ($0.text)" }
         isSending = true
         brainPhase = .connecting
 
         Task {
             do {
-                let result = try await client.send(text, serverURL: serverURL) { phase in
+                let result = try await client.send(text, serverURL: serverURL, history: recentHistory) { phase in
                     brainPhase = phase
                 }
                 serverOnline = true
