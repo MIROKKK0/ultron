@@ -36,12 +36,15 @@ jobs:
           python -m pip install -r training/generative/requirements.txt -r training/generative/requirements-data.txt
       - name: Validate bounded training budget
         shell: bash
+        env:
+          STEPS: "${{ inputs.steps }}"
+          MAX_BYTES: "${{ inputs.max_bytes }}"
         run: |
           set -euo pipefail
-          [[ "${{ inputs.steps }}" =~ ^[0-9]+$ ]]
-          (( inputs.steps >= 1 && inputs.steps <= 20000 ))
-          [[ "${{ inputs.max_bytes }}" =~ ^[0-9]+$ ]]
-          (( inputs.max_bytes >= 100000 && inputs.max_bytes <= 50000000 ))
+          [[ "$STEPS" =~ ^[0-9]+$ ]]
+          (( STEPS >= 1 && STEPS <= 20000 ))
+          [[ "$MAX_BYTES" =~ ^[0-9]+$ ]]
+          (( MAX_BYTES >= 100000 && MAX_BYTES <= 50000000 ))
       - name: Prepare bounded licensed Portuguese corpus
         run: |
           python -m training.generative.prepare_corpus \
