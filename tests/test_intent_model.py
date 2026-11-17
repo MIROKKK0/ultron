@@ -1,6 +1,6 @@
 import unittest
 
-from backend.intent_model import load_model, model_status, predict_intent, tokenize
+from backend.intent_model import load_model, model_status, predict_intent, resolve_intent, tokenize
 
 class IntentModelTests(unittest.TestCase):
     def test_model_is_original_small_and_loaded(self):
@@ -26,7 +26,7 @@ class IntentModelTests(unittest.TestCase):
         }
         for text, expected in cases.items():
             with self.subTest(text=text):
-                self.assertEqual(predict_intent(text)["intent"], expected)
+                self.assertEqual(resolve_intent(text)["intent"], expected)
 
     def test_unknown_open_question_is_not_misrouted_to_skill(self):
         result = predict_intent("conte uma história sobre dragões")
