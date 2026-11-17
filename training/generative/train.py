@@ -4,7 +4,7 @@ import argparse, hashlib, json, math
 from pathlib import Path
 import torch
 from .model import ModelConfig, UltronTinyGPT
-from .tokenizer import ByteTokenizer, TOKENIZER_VERSION
+from .tokenizer import ByteTokenizer, TrainedBPETokenizer
 
 def sample_batch(data: torch.Tensor, batch_size: int, context_length: int, *, generator=None):
     """Vectorized next-token windows; avoids Python slicing/stacking per sample."""
@@ -45,6 +45,15 @@ def evaluate_loss(model, data, *, batch_size: int, batches: int, context_length:
     finally:
         model.train(was_training)
 
+def bits_per_byte(loss: float, text: str, tokenizer) -> float:
+    """Tokenizer-independent estimate of next-token cross entropy per UTF-8 byte."""
+    byte_count = len(text.encode("utf-8"))
+    token_count = len(tokenizer.encode(text, add_special_tokens=False))
+    if byte_count < 1 or token_count < 1:
+        raise ValueError("Evaluation text must contain at least one UTF-8 byte and token")
+    return float(loss) * token_count / (byte_count * math.log(2.0))
+
+
 def train(args: argparse.Namespace) -> dict:
     if args.steps < 1 or args.batch_size < 1 or args.eval_batches < 1:
         raise ValueError("Steps, batch size and evaluation batches must be positive")
@@ -52,10 +61,13 @@ def train(args: argparse.Namespace) -> dict:
         raise ValueError("Evaluation interval must be positive and threads must be 1..4")
     if args.warmup_steps < 0 or not 0.0 < args.min_lr_ratio <= 1.0:
         raise ValueError("Warmup must be non-negative and min LR ratio must be in (0, 1]")
+    if args.early_stopping_patience < 0 or args.min_delta < 0:
+        raise ValueError("Early stopping patience and min_delta must be non-negative")
     torch.manual_seed(args.seed)
     torch.set_num_threads(args.threads)
     corpus = Path(args.corpus).read_text(encoding="utf-8")
-    tokenizer = ByteTokenizer()
+    tokenizer_json_path = getattr(args, "tokenizer_json", None)
+    tokenizer = TrainedBPETokenizer(tokenizer_json_path) if tokenizer_json_path else ByteTokenizer()
     data = torch.tensor(tokenizer.encode(corpus), dtype=torch.long)
     if args.validation_corpus:
         train_data = data
@@ -63,14 +75,14 @@ def train(args: argparse.Namespace) -> dict:
         validation_data = torch.tensor(tokenizer.encode(validation_text), dtype=torch.long)
     else:
         train_data, validation_data = split_corpus(data, args.context_length, args.validation_fraction)
-        validation_text = ""
+        validation_text = tokenizer.decode(validation_data.tolist())
     test_text = Path(args.test_corpus).read_text(encoding="utf-8") if args.test_corpus else ""
     test_data = torch.tensor(tokenizer.encode(test_text), dtype=torch.long) if test_text else None
     if len(validation_data) <= args.context_length + 1:
         raise ValueError("Validation corpus is too short for the configured context")
     if test_data is not None and len(test_data) <= args.context_length + 1:
         raise ValueError("Test corpus is too short for the configured context")
-    config = ModelConfig(context_length=args.context_length, width=args.width, layers=args.layers, heads=args.heads)
+    config = ModelConfig(vocab_size=tokenizer.vocab_size, context_length=args.context_length, width=args.width, layers=args.layers, heads=args.heads)
     model = UltronTinyGPT(config)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     sampler = torch.Generator(device="cpu").manual_seed(args.seed + 1)
@@ -83,6 +95,11 @@ def train(args: argparse.Namespace) -> dict:
         return args.min_lr_ratio + (1.0 - args.min_lr_ratio) * cosine
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, learning_rate_scale)
     model.train()
+    best_validation_loss = float("inf")
+    best_step = 0
+    best_state = None
+    stale_evaluations = 0
+    completed_steps = 0
     for step in range(args.steps):
         inputs, targets = sample_batch(train_data, args.batch_size, args.context_length, generator=sampler)
         _, loss = model(inputs, targets)
@@ -93,34 +110,61 @@ def train(args: argparse.Namespace) -> dict:
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
         scheduler.step()
-        if step == 0 or (step + 1) % args.eval_interval == 0 or step + 1 == args.steps:
+        completed_steps = step + 1
+        if step == 0 or completed_steps % args.eval_interval == 0 or completed_steps == args.steps:
             val_loss = evaluate_loss(model, validation_data, batch_size=args.batch_size,
-                batches=args.eval_batches, context_length=args.context_length, seed=args.seed + step + 1)
-            print(json.dumps({"step": step + 1, "train_loss": round(float(loss.item()), 5),
+                batches=args.eval_batches, context_length=args.context_length, seed=args.seed + completed_steps)
+            improved = val_loss < best_validation_loss - args.min_delta
+            if improved:
+                best_validation_loss = val_loss
+                best_step = completed_steps
+                best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+                stale_evaluations = 0
+            else:
+                stale_evaluations += 1
+            print(json.dumps({"step": completed_steps, "train_loss": round(float(loss.item()), 5),
                 "learning_rate": round(optimizer.param_groups[0]["lr"], 8),
                 "validation_loss": round(val_loss, 5),
+                "best_validation_loss": round(best_validation_loss, 5),
+                "best_step": best_step,
                 "validation_perplexity": round(math.exp(min(val_loss, 80)), 5)}))
+            if args.early_stopping_patience and stale_evaluations >= args.early_stopping_patience:
+                print(json.dumps({"early_stopping": True, "step": completed_steps,
+                    "patience": args.early_stopping_patience, "best_step": best_step}))
+                break
+    if best_state is not None:
+        model.load_state_dict(best_state)
     final_loss = evaluate_loss(model, validation_data, batch_size=args.batch_size,
-        batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + args.steps + 1)
+        batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + completed_steps + 1)
+    validation_bits_per_byte = bits_per_byte(final_loss, validation_text, tokenizer)
     test_loss = evaluate_loss(model, test_data, batch_size=args.batch_size,
-        batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + args.steps + 2) if test_data is not None else None
+        batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + completed_steps + 2) if test_data is not None else None
+    test_bits_per_byte = bits_per_byte(test_loss, test_text, tokenizer) if test_loss is not None else None
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     temp = output.with_name(output.name + ".tmp")
     torch.save({"model_state": model.state_dict(), "model_config": model.config_dict(),
-        "tokenizer_version": TOKENIZER_VERSION, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
-        "training_steps": args.steps, "seed": args.seed, "validation_fraction": args.validation_fraction,
+        "tokenizer_version": tokenizer.version, "tokenizer_vocab_size": tokenizer.vocab_size,
+        "tokenizer_json_sha256": hashlib.sha256(Path(tokenizer_json_path).read_bytes()).hexdigest() if tokenizer_json_path else None, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
+        "training_steps": completed_steps, "requested_training_steps": args.steps,
+        "best_step": best_step, "best_validation_loss": best_validation_loss,
+        "early_stopping_patience": args.early_stopping_patience, "min_delta": args.min_delta,
+        "seed": args.seed, "validation_fraction": args.validation_fraction,
         "corpus_characters": len(corpus), "validation_corpus_sha256": hashlib.sha256(validation_text.encode("utf-8")).hexdigest() if validation_text else None,
         "test_corpus_sha256": hashlib.sha256(test_text.encode("utf-8")).hexdigest() if test_text else None,
         "test_loss": test_loss, "learning_rate": args.learning_rate,
         "warmup_steps": warmup_steps, "min_lr_ratio": args.min_lr_ratio,
         "validation_loss": final_loss, "validation_perplexity": math.exp(min(final_loss, 80)),
+        "validation_bits_per_byte": validation_bits_per_byte, "test_bits_per_byte": test_bits_per_byte,
         "parameter_count": model.parameter_count(), "experimental": True}, temp)
     temp.replace(output)
-    return {"checkpoint": str(output), "parameters": model.parameter_count(), "training_steps": args.steps,
-        "tokenizer": TOKENIZER_VERSION, "validation_loss": round(final_loss, 5),
+    return {"checkpoint": str(output), "parameters": model.parameter_count(), "training_steps": completed_steps,
+        "requested_training_steps": args.steps, "best_step": best_step,
+        "tokenizer": tokenizer.version, "validation_loss": round(final_loss, 5),
         "validation_perplexity": round(math.exp(min(final_loss, 80)), 5),
         "test_loss": round(test_loss, 5) if test_loss is not None else None,
+        "validation_bits_per_byte": round(validation_bits_per_byte, 5),
+        "test_bits_per_byte": round(test_bits_per_byte, 5) if test_bits_per_byte is not None else None,
         "warning": "Experimental model only; not a production assistant or ChatGPT-equivalent."}
 
 def main() -> None:
@@ -129,6 +173,7 @@ def main() -> None:
     parser.add_argument("--validation-corpus", default=None)
     parser.add_argument("--test-corpus", default=None)
     parser.add_argument("--output", default="artifacts/ultron-tiny.pt")
+    parser.add_argument("--tokenizer-json", default=None)
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--context-length", type=int, default=128)
@@ -141,6 +186,8 @@ def main() -> None:
     parser.add_argument("--validation-fraction", type=float, default=0.1)
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--eval-batches", type=int, default=10)
+    parser.add_argument("--early-stopping-patience", type=int, default=8)
+    parser.add_argument("--min-delta", type=float, default=0.0005)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--threads", type=int, default=2)
     args = parser.parse_args()

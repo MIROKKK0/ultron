@@ -14,7 +14,7 @@ permissions:
 jobs:
   ptbr-pretraining:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,14 +26,20 @@ jobs:
           pip install -r training/generative/requirements.txt --index-url https://download.pytorch.org/whl/cpu
           pip install -r training/generative/requirements-data.txt
       - name: Prepare bounded CC0 PT-BR corpus with provenance
-        run: python -m training.generative.prepare_corpus --max-chars 500000 --output-dir artifacts/ptbr-corpus
+        run: python -m training.generative.prepare_corpus --max-chars 5000000 --output-dir artifacts/ptbr-corpus
+      - name: Train ULTRON BPE tokenizer from the training split
+        run: python -m training.generative.train_tokenizer --corpus artifacts/ptbr-corpus/train.txt --output artifacts/ultron-bpe-tokenizer.json --vocab-size 2048
+      - name: Verify trained BPE tokenizer
+        run: python -m unittest tests.test_bpe_tokenizer -v
       - name: Train ULTRON Tiny from random initialization
         run: |
           python -m training.generative.train \
             --corpus artifacts/ptbr-corpus/train.txt \
             --validation-corpus artifacts/ptbr-corpus/validation.txt \
             --test-corpus artifacts/ptbr-corpus/test.txt \
-            --steps 2000 --batch-size 8 --context-length 128 \
+            --steps 10000 --batch-size 8 --context-length 128 \
+            --tokenizer-json artifacts/ultron-bpe-tokenizer.json \
+            --eval-interval 500 --eval-batches 20 --early-stopping-patience 8 \
             --output artifacts/ultron-tiny-ptbr.pt
       - name: Upload experimental checkpoint and provenance
         uses: actions/upload-artifact@v4
@@ -41,6 +47,7 @@ jobs:
           name: ultron-ptbr-experimental-checkpoint
           path: |
             artifacts/ultron-tiny-ptbr.pt
+            artifacts/ultron-bpe-tokenizer.json
             artifacts/ptbr-corpus/manifest.json
             artifacts/ptbr-corpus/provenance.jsonl
           retention-days: 14

@@ -34,3 +34,10 @@ medir qualidade em português, segurança, latência, RSS e carga concorrente.
 - Checkpoint registra tamanho do corpus e parâmetros de agenda de aprendizagem.
 
 Essas mudanças melhoram o pipeline, não a capacidade por si só. O corpus atual continua didático e pequeno; qualquer saída do Tiny GPT continua experimental e não deve substituir o decodificador/skills de produção sem avaliação.
+
+
+## BPE próprio e avaliação comparável
+
+A linha BPE (ultron-bpe-v1) é treinada apenas no split de treino do corpus licenciado. O checkpoint registra versão/hash do tokenizador e tamanho do vocabulário; o treino seleciona o melhor estado pela validação e avalia o teste separado apenas após a seleção. Perplexidade é útil dentro da mesma tokenização, mas não deve ser comparada diretamente entre tokenizadores. Por isso, o pipeline também calcula bits-per-byte (BPB), uma métrica normalizada pelo tamanho UTF-8 do texto. BPB ainda mede apenas previsão do próximo token: não prova qualidade de diálogo, factualidade, segurança ou uso de ferramentas.
+
+O corpus dataseek/ptbr-books-publicos declara CC0-1.0 e contém livros de domínio público. A própria ficha informa que a fonte não foi sanitizada de PII e pode conter nomes, contatos ou conteúdo enviesado; a limpeza por regex do ULTRON é apenas uma mitigação incompleta. Não publique amostras/checkpoints com dados suspeitos sem revisão adicional.
