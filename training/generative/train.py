@@ -4,7 +4,7 @@ import argparse, hashlib, json, math
 from pathlib import Path
 import torch
 from .model import ModelConfig, UltronTinyGPT
-from .tokenizer import ByteTokenizer, TOKENIZER_VERSION, TrainedBPETokenizer
+from .tokenizer import ByteTokenizer, TrainedBPETokenizer
 
 def sample_batch(data: torch.Tensor, batch_size: int, context_length: int, *, generator=None):
     """Vectorized next-token windows; avoids Python slicing/stacking per sample."""
@@ -57,7 +57,8 @@ def train(args: argparse.Namespace) -> dict:
     torch.manual_seed(args.seed)
     torch.set_num_threads(args.threads)
     corpus = Path(args.corpus).read_text(encoding="utf-8")
-    tokenizer = TrainedBPETokenizer(args.tokenizer_json) if args.tokenizer_json else ByteTokenizer()
+    tokenizer_json_path = getattr(args, "tokenizer_json", None)
+    tokenizer = TrainedBPETokenizer(tokenizer_json_path) if tokenizer_json_path else ByteTokenizer()
     data = torch.tensor(tokenizer.encode(corpus), dtype=torch.long)
     if args.validation_corpus:
         train_data = data
@@ -132,7 +133,7 @@ def train(args: argparse.Namespace) -> dict:
     output.parent.mkdir(parents=True, exist_ok=True)
     temp = output.with_name(output.name + ".tmp")
     torch.save({"model_state": model.state_dict(), "model_config": model.config_dict(),
-        "tokenizer_version": tokenizer.version, "tokenizer_vocab_size": tokenizer.vocab_size,\n        "tokenizer_json_sha256": hashlib.sha256(Path(args.tokenizer_json).read_bytes()).hexdigest() if args.tokenizer_json else None, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
+        "tokenizer_version": tokenizer.version, "tokenizer_vocab_size": tokenizer.vocab_size,\n        "tokenizer_json_sha256": hashlib.sha256(Path(tokenizer_json_path).read_bytes()).hexdigest() if tokenizer_json_path else None, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
         "training_steps": completed_steps, "requested_training_steps": args.steps,
         "best_step": best_step, "best_validation_loss": best_validation_loss,
         "early_stopping_patience": args.early_stopping_patience, "min_delta": args.min_delta,
