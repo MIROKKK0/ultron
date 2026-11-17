@@ -2,8 +2,6 @@ name: ULTRON model training
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "17 14 * * *"
   pull_request:
     branches: ["feat/ultron-core-assistant"]
     paths:
