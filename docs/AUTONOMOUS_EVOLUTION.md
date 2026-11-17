@@ -2,6 +2,10 @@
 
 ## O que a automação faz
 
+- `ultron-autonomous-scout.yml`: auditoria leve e pesquisa de repositórios públicos a cada 10 minutos (`*/10 * * * *`). Verifica falhas recentes do Actions, issues abertas, marcadores TODO/FIXME e encontra pistas públicas sobre treinamento, tokenização e inferência. É somente leitura: não executa código externo, não altera branches nem abre PRs.
+- `ios-build.yml`: compila um IPA iOS sem assinatura diariamente às 14:47 UTC (11:47 em UTC-3), além de compilar sob demanda e em alterações iOS. A compilação do simulador é ignorada no evento diário para economizar tempo.
+- O app já oferece pesquisa web sob demanda: `/research sua consulta`, além do endpoint `/brain/research`. Os resultados incluem links; a pesquisa não significa que o ULTRON já tenha um LLM capaz de sintetizar qualquer assunto com qualidade humana.
+
 O workflow `.github/workflows/ultron-autonomous-evolution.yml` executa treinamento e avaliação em runners efêmeros do GitHub Actions. O fluxo atual:
 
 1. Reproduz o modelo determinístico de intenções.
@@ -16,8 +20,13 @@ O workflow separado `ptbr-pretraining.yml` prepara um corpus de livros brasileir
 
 ## Limites deliberados
 
+- Todos os eventos `schedule` só rodam quando o arquivo está na branch padrão `main`; schedules não são ativados enquanto as alterações estiverem apenas neste PR/branch. O scout também tem `push` para validar sua execução antes do merge.
+- O cron de 10 minutos é aceito pelo GitHub (o menor intervalo permitido é 5 minutos), mas é best-effort: pode atrasar ou ser ignorado em períodos de carga. Não é um relógio garantido.
+- Como o repositório é público, runners padrão hospedados pelo GitHub não consomem a franquia mensal de minutos; isso não elimina limites de concorrência, atrasos ou custos de armazenamento. A frequência gera até 144 execuções diárias, então o scout é deliberadamente curto e não treina o modelo a cada ciclo.
+- O IPA diário é um artefato sem assinatura, pronto para ser assinado pelo SideStore; não é instalado automaticamente no iPhone nem substitui teste físico.
+
 - Um checkpoint experimental nunca substitui automaticamente pesos de produção.
-- O workflow não altera código, não faz merge e não faz deploy.
+- O workflow de treinamento não altera código, não faz merge e não faz deploy. O scout de 10 minutos é somente leitura.
 - A continuação semanal depende da retenção do artefato anterior (14 dias) e da compatibilidade da arquitetura/tokenizador. Se não houver artefato anterior, o fluxo inicia um novo treinamento; se houver incompatibilidade, falha em vez de carregar pesos incorretos.
 - O benchmark de RAM/latência é medido no runner Linux; não representa o iPhone nem o serviço de hospedagem.
 - A execução diária de `schedule` só ocorre quando o workflow está presente na branch padrão (`main`). Execuções de PR validam a proposta, mas não ativam o cron.
