@@ -9,7 +9,7 @@ on:
       - "scripts/train_intent_model.py"
       - ".github/workflows/ultron-autonomous-evolution.yml"
   schedule:
-    # 14:17 UTC is approximately 11:17 in Brazil (UTC-3).
+    # Daily; GitHub schedules are best-effort and only run from the default branch.
     - cron: "17 14 * * *"
 
 permissions:
@@ -35,62 +35,87 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r training/generative/requirements.txt --index-url https://download.pytorch.org/whl/cpu
-      - name: Restore the last successful daily checkpoint (main branch only)
-        id: previous
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          echo "resume=false" >> "$GITHUB_OUTPUT"
-          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
-            echo "PR validation uses a fresh isolated training run."
-            exit 0
-          fi
-          mkdir -p artifacts/previous
-          PREVIOUS_RUN_ID="$(gh run list --workflow ultron-autonomous-evolution.yml --repo "$GITHUB_REPOSITORY" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
-          if [ -n "$PREVIOUS_RUN_ID" ] && gh run download "$PREVIOUS_RUN_ID" --repo "$GITHUB_REPOSITORY" --name ultron-autonomous-evolution-checkpoint --dir artifacts/previous; then
-            if [ -s artifacts/previous/ultron-tiny-daily.pt ]; then
-              echo "resume=true" >> "$GITHUB_OUTPUT"
-              echo "previous_run_id=$PREVIOUS_RUN_ID" >> "$GITHUB_OUTPUT"
-            fi
-          fi
-      - name: Rebuild the deterministic intent model
+      - name: Rebuild and verify deterministic intent model
         run: |
           python scripts/train_intent_model.py
           python scripts/train_intent_model.py --check
-      - name: Run the complete fast regression suite
+      - name: Run the complete regression suite
         run: python -m unittest discover -s tests -v
-      - name: Benchmark response routing
+      - name: Benchmark lightweight intent routing
         run: python scripts/benchmark_intent_model.py --iterations 1000 | tee intent-benchmark.txt
-      - name: Continue ULTRON Tiny or bootstrap from scratch
-        env:
-          RESUME: ${{ steps.previous.outputs.resume }}
+      - name: Pull request smoke training (not a production checkpoint)
+        if: github.event_name == 'pull_request'
         run: |
-          ARGS=(
-            --corpus training/generative/corpus_pt.txt
-            --steps 500 --batch-size 8 --context-length 64
-            --width 48 --layers 2 --heads 4
-            --eval-interval 50 --eval-batches 5
-            --early-stopping-patience 5 --threads 2
-            --output artifacts/ultron-tiny-daily.pt
-          )
-          if [ "$RESUME" = "true" ]; then
-            ARGS+=(--init-checkpoint artifacts/previous/ultron-tiny-daily.pt)
+          python -m training.generative.train \
+            --corpus training/generative/corpus_pt.txt \
+            --steps 50 --batch-size 4 --context-length 64 \
+            --width 48 --layers 2 --heads 4 \
+            --eval-interval 10 --eval-batches 2 \
+            --early-stopping-patience 3 --threads 2 \
+            --output artifacts/pr-smoke.pt | tee tiny-training-report.jsonl
+          python -m training.generative.verify_checkpoint \
+            --checkpoint artifacts/pr-smoke.pt \
+            --output artifacts/pr-smoke-verification.json \
+            --threads 2 --tokens 8
+      - name: Restore the latest daily checkpoint, or weekly PT-BR baseline
+        id: previous
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          mkdir -p artifacts/previous
+          DAILY_RUN="$(gh run list --workflow ultron-autonomous-evolution.yml --repo "$GITHUB_REPOSITORY" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -n "$DAILY_RUN" ] && gh run download "$DAILY_RUN" --repo "$GITHUB_REPOSITORY" --name ultron-autonomous-evolution-checkpoint --dir artifacts/previous; then
+            if [ -s artifacts/previous/ultron-tiny-ptbr.pt ] && [ -s artifacts/previous/ultron-bpe-tokenizer.json ] && [ -s artifacts/previous/ptbr-corpus/train.txt ]; then
+              echo "ready=true" >> "$GITHUB_OUTPUT"
+              echo "source=daily" >> "$GITHUB_OUTPUT"
+              echo "source_run_id=$DAILY_RUN" >> "$GITHUB_OUTPUT"
+            fi
           fi
-          python -m training.generative.train "${ARGS[@]}" | tee tiny-training-report.jsonl
+          if [ "$(cat "$GITHUB_OUTPUT" | grep -c 'ready=true' || true)" -eq 0 ]; then
+            rm -rf artifacts/previous/*
+            WEEKLY_RUN="$(gh run list --workflow ptbr-pretraining.yml --repo "$GITHUB_REPOSITORY" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+            if [ -n "$WEEKLY_RUN" ] && gh run download "$WEEKLY_RUN" --repo "$GITHUB_REPOSITORY" --name ultron-ptbr-experimental-checkpoint --dir artifacts/previous; then
+              if [ -s artifacts/previous/ultron-tiny-ptbr.pt ] && [ -s artifacts/previous/ultron-bpe-tokenizer.json ] && [ -s artifacts/previous/ptbr-corpus/train.txt ]; then
+                echo "ready=true" >> "$GITHUB_OUTPUT"
+                echo "source=weekly-bootstrap" >> "$GITHUB_OUTPUT"
+                echo "source_run_id=$WEEKLY_RUN" >> "$GITHUB_OUTPUT"
+              fi
+            fi
+          fi
+          if [ "${{ steps.previous.outputs.ready }}" != "true" ] && [ "$(grep -c 'ready=true' "$GITHUB_OUTPUT" || true)" -eq 0 ]; then
+            echo "No validated PT-BR BPE checkpoint is available yet. Daily model training is safely skipped; the small didactic corpus is only used for PR smoke tests."
+          fi
+      - name: Continue training from the validated PT-BR checkpoint
+        if: steps.previous.outputs.ready == 'true'
+        run: |
+          mkdir -p artifacts
+          python -m training.generative.train \
+            --corpus artifacts/previous/ptbr-corpus/train.txt \
+            --validation-corpus artifacts/previous/ptbr-corpus/validation.txt \
+            --test-corpus artifacts/previous/ptbr-corpus/test.txt \
+            --tokenizer-json artifacts/previous/ultron-bpe-tokenizer.json \
+            --init-checkpoint artifacts/previous/ultron-tiny-ptbr.pt \
+            --steps 1000 --batch-size 8 --context-length 128 \
+            --width 64 --layers 2 --heads 4 \
+            --eval-interval 100 --eval-batches 10 \
+            --early-stopping-patience 8 --threads 2 \
+            --output artifacts/ultron-tiny-ptbr.pt | tee tiny-training-report.jsonl
       - name: Keep the previous checkpoint if held-out quality regresses
-        if: steps.previous.outputs.resume == 'true'
+        if: steps.previous.outputs.ready == 'true'
         run: |
           python - <<'PY'
           import json, shutil
           from pathlib import Path
           report = json.loads(Path("tiny-training-report.jsonl").read_text().strip().splitlines()[-1])
-          candidate = Path("artifacts/ultron-tiny-daily.pt")
-          parent = Path("artifacts/previous/ultron-tiny-daily.pt")
+          candidate = Path("artifacts/ultron-tiny-ptbr.pt")
+          parent = Path("artifacts/previous/ultron-tiny-ptbr.pt")
           accepted = report.get("candidate_non_regression") is True
           if not accepted:
               shutil.copy2(candidate, "artifacts/rejected-daily-candidate.pt")
               shutil.copy2(parent, candidate)
-          Path("artifacts/promotion-decision.json").write_text(json.dumps({
+          decision = {
               "candidate_accepted": accepted,
               "production_weights_changed": False,
               "fallback": "previous checkpoint retained" if not accepted else None,
@@ -98,51 +123,77 @@ jobs:
               "parent_validation_loss": report.get("parent_validation_loss"),
               "test_loss": report.get("test_loss"),
               "parent_test_loss": report.get("parent_test_loss"),
-              "note": "Only non-regressive experimental candidates are carried forward; production is never changed by this workflow."
-          }, indent=2))
+              "source_checkpoint_sha256": report.get("parent_checkpoint_sha256"),
+              "note": "The daily job only continues a licensed PT-BR checkpoint; it never promotes production weights."
+          }
+          Path("artifacts/promotion-decision.json").write_text(json.dumps(decision, ensure_ascii=False, indent=2))
           PY
-      - name: Mark first-run bootstrap as experimental
-        if: steps.previous.outputs.resume != 'true'
-        run: |
-          echo '{"candidate_accepted":false,"production_weights_changed":false,"fallback":null,"note":"Initial checkpoint only; independent quality evaluation required."}' > artifacts/promotion-decision.json
-      - name: Validate checkpoint loading and CPU generation
+      - name: Verify continued checkpoint and generate fixed samples
+        if: steps.previous.outputs.ready == 'true'
         run: |
           python -m training.generative.verify_checkpoint \
-            --checkpoint artifacts/ultron-tiny-daily.pt \
-            --output artifacts/checkpoint-smoke-test.json \
-            --threads 2 --tokens 24 | tee checkpoint-verification.txt
-      - name: Produce machine-readable evolution report
+            --checkpoint artifacts/ultron-tiny-ptbr.pt \
+            --tokenizer-json artifacts/previous/ultron-bpe-tokenizer.json \
+            --output artifacts/checkpoint-verification.json \
+            --threads 2 --tokens 24
+          python -m training.generative.sample \
+            --checkpoint artifacts/ultron-tiny-ptbr.pt \
+            --tokenizer-json artifacts/previous/ultron-bpe-tokenizer.json \
+            --max-new-tokens 80 --output artifacts/qualitative-samples.json
+      - name: Write explicit waiting report when no PT-BR baseline exists
+        if: github.event_name != 'pull_request' && steps.previous.outputs.ready != 'true'
+        run: |
+          mkdir -p artifacts
+          echo '{"status":"waiting_for_validated_ptbr_baseline","production_weights_changed":false,"reason":"The weekly licensed-corpus pretraining has not yet produced a successful checkpoint artifact."}' > artifacts/evolution-report.json
+      - name: Build daily lineage report
+        if: steps.previous.outputs.ready == 'true'
+        env:
+          SOURCE: ${{ steps.previous.outputs.source }}
+          SOURCE_RUN_ID: ${{ steps.previous.outputs.source_run_id }}
         run: |
           python - <<'PY'
           import json, platform, subprocess
           from pathlib import Path
           report = {
-              "scope": "training_and_evaluation_only",
+              "status": "trained_and_evaluated",
+              "scope": "continued_training_on_licensed_ptbr_corpus",
               "production_weights_changed": False,
               "automatic_merge": False,
               "automatic_deployment": False,
+              "source": "${{ steps.previous.outputs.source }}",
+              "source_run_id": "${{ steps.previous.outputs.source_run_id }}",
               "python": platform.python_version(),
-              "platform": platform.platform(),
               "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
               "intent_benchmark": Path("intent-benchmark.txt").read_text(errors="replace"),
-              "tiny_training": Path("tiny-training-report.jsonl").read_text(errors="replace"),
+              "training": Path("tiny-training-report.jsonl").read_text(errors="replace"),
               "promotion_decision": Path("artifacts/promotion-decision.json").read_text(errors="replace"),
-              "checkpoint_verification": Path("artifacts/checkpoint-smoke-test.json").read_text(errors="replace"),
-              "guardrail": "Experimental checkpoint is not promoted to production without independent quality, safety, latency and memory evaluation."
+              "checkpoint_verification": Path("artifacts/checkpoint-verification.json").read_text(errors="replace"),
+              "guardrail": "No production promotion without instruction-following, safety, latency, memory and human quality evaluation."
           }
           Path("artifacts/evolution-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
           PY
-      - name: Upload checkpoint and reproducibility report
+      - name: Upload next checkpoint, tokenizer, corpus splits and report
+        if: github.event_name != 'pull_request' && steps.previous.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ultron-autonomous-evolution-checkpoint
           path: |
-            artifacts/ultron-tiny-daily.pt
+            artifacts/ultron-tiny-ptbr.pt
+            artifacts/previous/ultron-bpe-tokenizer.json
+            artifacts/previous/ptbr-corpus/
             artifacts/evolution-report.json
             artifacts/promotion-decision.json
-            artifacts/checkpoint-smoke-test.json
-            checkpoint-verification.txt
+            artifacts/checkpoint-verification.json
+            artifacts/qualitative-samples.json
             tiny-training-report.jsonl
             intent-benchmark.txt
           if-no-files-found: error
           retention-days: 14
+      - name: Upload waiting report
+        if: github.event_name != 'pull_request' && steps.previous.outputs.ready != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultron-autonomous-evolution-waiting
+          path: artifacts/evolution-report.json
+          if-no-files-found: error
+          retention-days: 7
