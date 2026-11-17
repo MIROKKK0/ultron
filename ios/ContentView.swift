@@ -7,6 +7,7 @@ struct ContentView: View {
     ]
     @State private var draft = ""
     @State private var isSending = false
+    @State private var brainPhase: BrainPhase = .idle
     @State private var showSettings = false
     @State private var errorMessage: String?
 
@@ -16,14 +17,10 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    ZStack {
-                        Circle().fill(Color.cyan.opacity(0.15))
-                        Image(systemName: "sparkles").font(.system(size: 22, weight: .semibold)).foregroundStyle(.cyan)
-                    }
-                    .frame(width: 46, height: 46)
+                    BrainMonitorView(phase: brainPhase)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("ULTRON").font(.headline.weight(.bold)).tracking(1.5)
-                        Text(isSending ? "Pensando…" : "Assistente pessoal").font(.caption).foregroundStyle(.secondary)
+                        Text(brainPhase.title).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Circle().fill(serverURL.isEmpty ? .orange : .green).frame(width: 8, height: 8)
@@ -109,16 +106,20 @@ struct ContentView: View {
         errorMessage = nil
         messages.append(ChatMessage(role: .user, text: text))
         isSending = true
+        brainPhase = .processing
 
         Task {
             do {
                 let result = try await client.send(text, serverURL: serverURL)
+                brainPhase = .responding
                 messages.append(ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy))
             } catch {
+                brainPhase = .error
                 errorMessage = error.localizedDescription
                 messages.append(ChatMessage(role: .assistant, text: "Não consegui concluir a solicitação. Confira o servidor e a conexão."))
             }
             isSending = false
+            if brainPhase != .error { brainPhase = .idle }
         }
     }
 }
