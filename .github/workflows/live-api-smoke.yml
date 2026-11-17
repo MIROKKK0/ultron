@@ -54,3 +54,18 @@ jobs:
           grep -q '"stage":"processing"' /tmp/ultron-stream.log
           grep -q '"stage":"responding"' /tmp/ultron-stream.log
           grep -q '"type":"final"' /tmp/ultron-stream.log
+
+      - name: Verify natural arithmetic and ephemeral follow-up context
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            -H "Content-Type: application/json" \
+            --data '{"message":"1+9"}' \
+            "$ULTRON_BASE_URL/chat" | tee /tmp/ultron-math.json
+          grep -q '"10"' /tmp/ultron-math.json
+          curl --fail --silent --show-error \
+            -H "Content-Type: application/json" \
+            --data '{"message":"continua","history":["user: Quero planejar o estudo"]}' \
+            "$ULTRON_BASE_URL/chat" | tee /tmp/ultron-context.json
+          grep -q 'Quero continuar sobre este ponto' /tmp/ultron-context.json
