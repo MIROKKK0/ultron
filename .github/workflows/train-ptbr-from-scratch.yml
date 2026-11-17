@@ -1,0 +1,60 @@
+name: ULTRON licensed PT-BR model training
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_bytes:
+        description: Maximum prepared corpus size in bytes (bounded)
+        required: true
+        default: "20000000"
+        type: string
+      steps:
+        description: Training steps for the experimental model
+        required: true
+        default: "10000"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  train-from-scratch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            training/generative/requirements.txt
+            training/generative/requirements-data.txt
+      - name: Install CPU training and streaming data dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r training/generative/requirements.txt -r training/generative/requirements-data.txt
+      - name: Prepare bounded licensed Portuguese corpus
+        run: |
+          python -m training.generative.prepare_corpus \
+            --output artifacts/ptbr-corpus.txt \
+            --max-bytes "${{ inputs.max_bytes }}" \
+            --max-documents 100000
+      - name: Train ULTRON Tiny from random initialization
+        run: |
+          python -m training.generative.train \
+            --corpus artifacts/ptbr-corpus.txt \
+            --output artifacts/ultron-tiny-ptbr.pt \
+            --steps "${{ inputs.steps }}" \
+            --batch-size 8 --context-length 128 \
+            --width 64 --layers 2 --heads 4 \
+            --eval-interval 500 --eval-batches 20 \
+            --threads 2
+      - name: Upload model, corpus manifest and training evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultron-tiny-ptbr-experimental
+          path: |
+            artifacts/ultron-tiny-ptbr.pt
+            artifacts/ptbr-corpus.txt.manifest.json
+          retention-days: 14
