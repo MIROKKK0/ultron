@@ -11,7 +11,7 @@ from pathlib import Path
 import torch
 
 from .model import ModelConfig, UltronTinyGPT
-from .tokenizer import BOS_ID, ByteTokenizer, TrainedBPETokenizer
+from .tokenizer import ByteTokenizer, TrainedBPETokenizer
 
 
 def main() -> None:
@@ -28,6 +28,7 @@ def main() -> None:
     torch.set_num_threads(args.threads)
     checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
     config = ModelConfig(**checkpoint["model_config"])
+    prompt = "O ULTRON aprende com testes e dados de qualidade."
     if args.tokenizer_json:
         import hashlib
         tokenizer = TrainedBPETokenizer(args.tokenizer_json)
@@ -46,7 +47,6 @@ def main() -> None:
     model.load_state_dict(checkpoint["model_state"], strict=True)
     model.eval()
 
-    prompt = "O ULTRON aprende com testes e dados de qualidade."
     input_ids = torch.tensor([prompt_ids], dtype=torch.long)
     started = time.perf_counter()
     with torch.inference_mode():
