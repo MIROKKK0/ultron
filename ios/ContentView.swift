@@ -125,49 +125,20 @@ struct ContentView: View {
 
         Task {
             do {
-                if text.lowercased().hasPrefix("/remember ") {
-                    let content = String(text.dropFirst("/remember ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !content.isEmpty else { throw ChatClientError.invalidResponse }
-                    let id = try await client.remember(content, serverURL: serverURL)
+                if let memoryReply = try await handleMemoryCommand(text) {
                     serverOnline = true
                     serverStatusChecked = true
                     brainPhase = .responding
-                    messages.append(ChatMessage(role: .assistant, text: "Memória privada salva com sucesso. ID: \(id)"))
-                    isSending = false
-                    return
-                }
-                if text.lowercased() == "/memories" {
-                    let items = try await client.listMemories(serverURL: serverURL)
-                    serverOnline = true
-                    serverStatusChecked = true
-                    brainPhase = .responding
-                    let output = items.isEmpty ? "Ainda não há memórias privadas salvas." : "Suas memórias privadas:\n" + items.joined(separator: "\n")
-                    messages.append(ChatMessage(role: .assistant, text: output))
-                    isSending = false
-                    return
-                }
-                if text.lowercased().hasPrefix("/forget ") {
-                    let rawID = String(text.dropFirst("/forget ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard let id = Int(rawID), id > 0 else {
-                        messages.append(ChatMessage(role: .assistant, text: "Use /forget seguido do ID numérico da memória."))
-                        isSending = false
-                        return
+                    messages.append(ChatMessage(role: .assistant, text: memoryReply))
+                } else {
+                    let result = try await client.send(text, serverURL: serverURL) { phase in
+                        brainPhase = phase
                     }
-                    try await client.forgetMemory(id, serverURL: serverURL)
                     serverOnline = true
                     serverStatusChecked = true
                     brainPhase = .responding
-                    messages.append(ChatMessage(role: .assistant, text: "Memória \(id) apagada."))
-                    isSending = false
-                    return
+                    messages.append(ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy))
                 }
-                let result = try await client.send(text, serverURL: serverURL) { phase in
-                    brainPhase = phase
-                }
-                serverOnline = true
-                serverStatusChecked = true
-                brainPhase = .responding
-                messages.append(ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy))
             } catch {
                 serverOnline = false
                 serverStatusChecked = true
@@ -182,6 +153,30 @@ struct ContentView: View {
             isSending = false
         }
     }
+
+    private func handleMemoryCommand(_ text: String) async throws -> String? {
+        let command = text.lowercased()
+        if command.hasPrefix("/remember ") {
+            let content = String(text.dropFirst("/remember ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !content.isEmpty else { return "Informe o conteúdo: /remember texto." }
+            let id = try await client.remember(content, serverURL: serverURL)
+            return "Memória privada salva com sucesso. ID: \(id)"
+        }
+        if command == "/memories" {
+            let items = try await client.listMemories(serverURL: serverURL)
+            return items.isEmpty ? "Ainda não há memórias privadas salvas." : "Suas memórias privadas:\n" + items.joined(separator: "\n")
+        }
+        if command.hasPrefix("/forget ") {
+            let rawID = String(text.dropFirst("/forget ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let id = Int(rawID), id > 0 else {
+                return "Use /forget seguido do ID numérico da memória."
+            }
+            try await client.forgetMemory(id, serverURL: serverURL)
+            return "Memória \(id) apagada."
+        }
+        return nil
+    }
+
 }
 
 private struct MessageBubble: View {
