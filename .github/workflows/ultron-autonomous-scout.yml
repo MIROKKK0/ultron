@@ -2,6 +2,11 @@ name: ULTRON autonomous scout (10 minutes)
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["feat/ultron-private-installation-memory", "feat/ultron-core-assistant"]
+    paths:
+      - "scripts/ultron_autonomous_watch.py"
+      - ".github/workflows/ultron-autonomous-scout.yml"
   schedule:
     # UTC; GitHub schedules are best-effort and only run from the default branch.
     - cron: "*/10 * * * *"
