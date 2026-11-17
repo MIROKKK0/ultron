@@ -22,3 +22,7 @@ npx skills add <owner/repo@skill> --agent codex
 ```
 
 Confirme o caminho de instalação apresentado pelo CLI e faça revisão do diff antes de aceitar. Nunca instale em massa nem execute scripts de terceiros sem inspeção.
+
+
+- **tdd-loop** — aplica Red → Green → Refactor com testes de regressão e preservação dos contratos do núcleo.
+- **ultron-autonomous-evolution** — ciclo semanal limitado: audita, escolhe uma melhoria comprovada, implementa com TDD e abre PR para revisão humana.
