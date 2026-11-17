@@ -172,6 +172,11 @@ jobs:
           }
           Path("artifacts/evolution-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
           PY
+      - name: Stage matching tokenizer and licensed corpus for the next daily cycle
+        if: steps.previous.outputs.ready == 'true'
+        run: |
+          cp artifacts/previous/ultron-bpe-tokenizer.json artifacts/ultron-bpe-tokenizer.json
+          cp -R artifacts/previous/ptbr-corpus artifacts/ptbr-corpus
       - name: Upload next checkpoint, tokenizer, corpus splits and report
         if: github.event_name != 'pull_request' && steps.previous.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
@@ -179,8 +184,8 @@ jobs:
           name: ultron-autonomous-evolution-checkpoint
           path: |
             artifacts/ultron-tiny-ptbr.pt
-            artifacts/previous/ultron-bpe-tokenizer.json
-            artifacts/previous/ptbr-corpus/
+            artifacts/ultron-bpe-tokenizer.json
+            artifacts/ptbr-corpus/
             artifacts/evolution-report.json
             artifacts/promotion-decision.json
             artifacts/checkpoint-verification.json
