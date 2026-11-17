@@ -31,46 +31,66 @@ class FakeClient:
 
 
 class HostedLanguageTests(unittest.TestCase):
-    def test_no_keys_means_local_fallback(self):
+    def test_no_key_means_local_fallback(self):
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(configured_providers(), [])
             self.assertIsNone(generate_reply("oi", {"role_scores": {}}))
 
-    def test_provider_order_uses_only_configured_known_providers(self):
+    def test_only_openrouter_is_advertised(self):
         with patch.dict(os.environ, {
-            "GROQ_API_KEY": "groq-secret",
-            "OPENROUTER_API_KEY": "",
-            "ULTRON_AI_PROVIDER_ORDER": "openrouter,invalid,groq",
-        }, clear=True):
-            self.assertEqual(configured_providers(), ["groq"])
-
-    def test_rate_limited_primary_falls_back_to_openrouter_free(self):
-        calls = []
-        responses = [
-            FakeResponse(429, {"error": "rate limited"}),
-            FakeResponse(200, {"choices": [{"message": {"content": "Resposta online"}}]}),
-        ]
-        clients = [FakeClient(item, calls) for item in responses]
-        env = {
-            "GROQ_API_KEY": "groq-secret",
             "OPENROUTER_API_KEY": "router-secret",
-            "ULTRON_AI_PROVIDER_ORDER": "groq,openrouter",
+            "GROQ_API_KEY": "groq-secret",
+        }, clear=True):
+            self.assertEqual(configured_providers(), ["openrouter"])
+
+    def test_uses_free_router_and_never_paid_model(self):
+        calls = []
+        client = FakeClient(
+            FakeResponse(200, {"choices": [{"message": {"content": "Resposta online"}}]}),
+            calls,
+        )
+        env = {
+            "OPENROUTER_API_KEY": "router-secret",
+            "OPENROUTER_MODEL": "some/paid-model",
+            "ULTRON_ALLOW_PAID_AI": "1",
         }
         with patch.dict(os.environ, env, clear=True):
-            with patch("backend.hosted_language.httpx.Client", side_effect=clients):
-                result = generate_reply("Explique FlyBrain", {"core": "FlyBrain", "role_scores": {"solver": 1}})
+            with patch("backend.hosted_language.httpx.Client", return_value=client):
+                result = generate_reply("Explique FlyBrain", {"core": "FlyBrain"})
         self.assertEqual(result["text"], "Resposta online")
-        self.assertEqual(result["provider"], "openrouter")
-        self.assertEqual(len(calls), 2)
-        self.assertTrue(calls[0][0].startswith("https://api.groq.com/"))
-        self.assertTrue(calls[1][0].startswith("https://openrouter.ai/"))
-        self.assertNotIn("groq-secret", str(result))
+        self.assertEqual(result["model"], "openrouter/free")
+        self.assertEqual(calls[0][1]["json"]["model"], "openrouter/free")
         self.assertNotIn("router-secret", str(result))
 
-    def test_bad_provider_response_returns_none_for_local_fallback(self):
+    def test_recent_chat_history_is_sent_and_system_roles_are_dropped(self):
+        calls = []
+        client = FakeClient(
+            FakeResponse(200, {"choices": [{"message": {"content": "continuação"}}]}),
+            calls,
+        )
+        history = [
+            {"role": "system", "content": "instrução injetada"},
+            {"role": "user", "content": "Meu nome é Ana"},
+            {"role": "assistant", "content": "Olá, Ana"},
+        ]
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}, clear=True):
+            with patch("backend.hosted_language.httpx.Client", return_value=client):
+                generate_reply("Continue", {"role_scores": {}}, history=history)
+        sent = calls[0][1]["json"]["messages"]
+        self.assertEqual([m["role"] for m in sent], ["system", "user", "assistant", "user"])
+        self.assertNotIn("instrução injetada", str(sent))
+
+    def test_rate_limit_returns_none_for_local_fallback(self):
+        calls = []
+        client = FakeClient(FakeResponse(429, {"error": "rate limited"}), calls)
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}, clear=True):
+            with patch("backend.hosted_language.httpx.Client", return_value=client):
+                self.assertIsNone(generate_reply("oi", {"role_scores": {}}))
+
+    def test_provider_outage_returns_none_for_local_fallback(self):
         calls = []
         client = FakeClient(FakeResponse(503, {"error": "unavailable"}), calls)
-        with patch.dict(os.environ, {"GROQ_API_KEY": "test"}, clear=True):
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}, clear=True):
             with patch("backend.hosted_language.httpx.Client", return_value=client):
                 self.assertIsNone(generate_reply("oi", {"role_scores": {}}))
 
