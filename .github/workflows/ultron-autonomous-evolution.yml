@@ -53,9 +53,9 @@ jobs:
             --output artifacts/ultron-tiny-daily.pt | tee tiny-training-report.jsonl
       - name: Validate checkpoint loading and CPU generation
         run: |
-          python -m training.generative.verify_checkpoint \\
-            --checkpoint artifacts/ultron-tiny-daily.pt \\
-            --output artifacts/checkpoint-smoke-test.json \\
+          python -m training.generative.verify_checkpoint \
+            --checkpoint artifacts/ultron-tiny-daily.pt \
+            --output artifacts/checkpoint-smoke-test.json \
             --threads 2 --tokens 24 | tee checkpoint-verification.txt
       - name: Produce machine-readable evolution report
         run: |
