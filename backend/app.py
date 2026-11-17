@@ -670,7 +670,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
             research = search_web(research_query)
             response = research["summary"]
             language_started = time.perf_counter()
-            hosted = generate_reply(message, neural_state, research_context=research["summary"])
+            hosted = generate_reply(message, neural_state, research_context=research["summary"], history=payload.history)
             language_ms = (time.perf_counter() - language_started) * 1000.0
             if hosted:
                 response = hosted["text"]
