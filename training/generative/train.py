@@ -148,7 +148,7 @@ def train(args: argparse.Namespace) -> dict:
     temp.replace(output)
     return {"checkpoint": str(output), "parameters": model.parameter_count(), "training_steps": completed_steps,
         "requested_training_steps": args.steps, "best_step": best_step,
-        "tokenizer": TOKENIZER_VERSION, "validation_loss": round(final_loss, 5),
+        "tokenizer": tokenizer.version, "validation_loss": round(final_loss, 5),
         "validation_perplexity": round(math.exp(min(final_loss, 80)), 5),
         "test_loss": round(test_loss, 5) if test_loss is not None else None,
         "warning": "Experimental model only; not a production assistant or ChatGPT-equivalent."}
