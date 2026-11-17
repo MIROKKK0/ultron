@@ -29,6 +29,8 @@ jobs:
         run: python -m training.generative.prepare_corpus --max-chars 5000000 --output-dir artifacts/ptbr-corpus
       - name: Train ULTRON BPE tokenizer from the training split
         run: python -m training.generative.train_tokenizer --corpus artifacts/ptbr-corpus/train.txt --output artifacts/ultron-bpe-tokenizer.json --vocab-size 2048
+      - name: Verify trained BPE tokenizer
+        run: python -m unittest tests.test_bpe_tokenizer -v
       - name: Train ULTRON Tiny from random initialization
         run: |
           python -m training.generative.train \
