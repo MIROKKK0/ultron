@@ -16,14 +16,8 @@ A tabela legada `memories` não é exposta por essas rotas novas e não é atrib
 
 As tabelas `installations` e `installation_memories` são criadas na inicialização. SQLite e PostgreSQL são suportados. O backend nunca envia a credencial compartilhada `ULTRON_API_TOKEN` para o aplicativo.
 
-## Próxima integração iOS
+## Integração iOS implementada nesta PR
 
-O backend está preparado, mas o app iOS ainda precisa:
-1. registrar a instalação uma vez;
-2. persistir o token no Keychain, sem UserDefaults nem logs;
-3. adicionar telas/ações de lembrar, listar e apagar;
-4. enviar o token somente nas rotas `/memory`;
-5. apagar token local quando a instalação for revogada;
-6. testar reinstalação, restauração, perda de rede e token revogado.
+O app registra a instalação apenas quando o usuário pede para salvar uma memória, guarda o token em Keychain com `ThisDeviceOnly` e disponibiliza `/remember texto`, `/memories` e `/forget ID`. Quando existe token, o app o envia no chat; o backend injeta somente memórias daquela instalação no contexto local. Chat sem token continua público e não lê memória privada.
 
-Não afirmar que a memória pessoal está pronta no iPhone até essa integração e os testes físicos serem concluídos.
+Ainda pendente: testar no iPhone físico, validar ciclo de vida do Keychain em reinstalação/restauração, adicionar UI visual de gestão de memória e monitorar rate limit de registro em múltiplas instâncias. O token é gerado pelo servidor e não deve aparecer em logs.
