@@ -1,8 +1,4 @@
-"""Local semantic decoder controlled by ULTRON's mandatory neural core.
-
-This is a deterministic, token-free language interface, not a pretrained LLM.
-The FlyBrain state selects the response strategy; no cloud provider is called.
-"""
+"""Local deterministic language interface; not a pretrained LLM."""
 from __future__ import annotations
 
 import re
@@ -17,38 +13,30 @@ def decode_local(
     message: str,
     memories: Iterable[str] = (),
     history: Iterable[str] = (),
-    neural_state: dict | None = None,
 ) -> str:
     text = message.strip()
     lower = text.casefold()
-    state = neural_state or {}
-    scores = state.get("role_scores", {})
-    # Neural activity controls which cognitive strategy gets priority.
-    strategy = max(
-        ("planner", "solver", "critic"),
-        key=lambda role: float(scores.get(role, 0.0)),
-        default="solver",
-    )
+    strategy = "solver"
     memory_list = [str(item).strip() for item in memories if str(item).strip()]
     terms = _tokens(text)
 
     if re.search(r"\b(oi|olá|ola|e aí|eai|bom dia|boa tarde|boa noite)\b", lower):
         return (
-            "Oi! Sou o ULTRON. Meu núcleo neural local está ativo e controla "
+            "Oi! Sou o ULTRON. a camada local está ativa e "
             "a prioridade desta resposta. Posso conversar, organizar objetivos, "
             "planejar tarefas, calcular e consultar minhas memórias. Não uso "
             "tokens nem APIs de IA externas."
         )
     if lower in {"/help", "ajuda", "o que você faz?", "quem é você?", "quem e voce?", "o que você é?"}:
         return (
-            "ULTRON — núcleo FlyBrain obrigatório, memória local, planejamento "
+            "ULTRON — memória local, planejamento "
             "estruturado, cálculo seguro e reflexão. Comandos: /self, /plan objetivo, "
             "/remember nota, /calc expressão, /brain objetivo e /multi tarefa1 || tarefa2. "
             "O decodificador é local e determinístico; não é um LLM nem finge ser."
         )
     if lower.startswith("/self") or lower in {"quem é você", "quem e voce", "me fale sobre você", "me fale sobre voce"}:
         return (
-            "Sou ULTRON. O núcleo neural FlyBrain controla atenção e prioridade; "
+            "Sou ULTRON. Minha arquitetura organiza tarefas com ferramentas locais; "
             "a camada linguística local converte a intenção em respostas estruturadas. "
             "Sem Gemini, OpenAI, Claude ou tokens externos. O circuito atual é um "
             "microcircuito LIF de 48 neurônios, não o conectoma FlyWire completo."
@@ -60,8 +48,8 @@ def decode_local(
         if not goal:
             return "Informe o objetivo após /plan."
         return (
-            f"Plano neural para: {goal}\n"
-            f"Estratégia priorizada pelo cérebro: {strategy}.\n"
+            f"Plano para: {goal}\n"
+            f"Estratégia inicial: {strategy}.\n"
             "1. Definir o resultado observável.\n"
             "2. Dividir em etapas pequenas e reversíveis.\n"
             "3. Identificar dependências e riscos.\n"
@@ -72,7 +60,7 @@ def decode_local(
     if lower.startswith("/remember "):
         return "Use /remember texto para gravar uma memória persistente."
     if lower.startswith("/brain "):
-        return decode_local(text[7:].strip(), memory_list, history, state)
+        return decode_local(text[7:].strip(), memory_list, history)
     if lower.startswith("/multi "):
         tasks = [part.strip() for part in text[7:].split("||") if part.strip()]
         if not tasks:
@@ -99,7 +87,7 @@ def decode_local(
     if any(word in lower for word in ("obrigado", "obrigada", "valeu", "agradeço", "agradeco")):
         return "Por nada! Estou aqui. Pode continuar falando comigo normalmente, sem comandos especiais."
     if any(word in lower for word in ("tudo bem", "como você está", "como voce esta")):
-        return "Estou funcionando dentro dos recursos locais disponíveis. Meu núcleo FlyBrain processa a entrada; posso ajudar com planejamento, cálculos e pesquisa quando a internet estiver disponível."
+        return "Estou funcionando dentro dos recursos locais disponíveis. A camada local processa a entrada; posso ajudar com planejamento, cálculos e pesquisa quando a internet estiver disponível."
     if memory_list:
         query_matches = [
             item for item in memory_list
@@ -107,12 +95,12 @@ def decode_local(
         ]
         if query_matches:
             return (
-                "Considerei a atividade do núcleo neural e recuperei estas memórias "
+                "Recuperei estas memórias "
                 "relacionadas:\n" + "\n".join(f"- {item}" for item in query_matches[:4]) +
                 "\n\nPosso usar esse contexto para estruturar a próxima etapa."
             )
     return (
-        "Recebi sua solicitação e processei a entrada pelo núcleo neural local. "
+        "Recebi sua solicitação e processei a entrada pela camada local. "
         f"A atividade atual priorizou a estratégia **{strategy}**.\n\n"
         "Consigo executar localmente cálculos, comandos de memória e planos "
         "estruturados. Para responder conteúdo aberto com a profundidade de um "
