@@ -6,9 +6,11 @@ on:
     # Weekly deep pretraining; the lightweight intent loop runs daily.
     - cron: "17 15 * * 0"
   push:
-    branches: ["main", "feat/ultron-core-assistant", "feat/ultron-private-installation-memory"]
+    branches: ["main"]
     paths:
-      - "training/**"
+      - "training/generative/*.py"
+      - "training/generative/corpus_pt.txt"
+      - "training/generative/requirements*.txt"
       - ".github/workflows/ptbr-pretraining.yml"
 
 permissions:
