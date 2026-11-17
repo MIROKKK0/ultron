@@ -16,7 +16,7 @@ class TrainedBPETokenizerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             corpus = root / "train.txt"
-            corpus.write_text(("Olá, ULTRON! A inteligência artificial aprende português.\n" * 1000), encoding="utf-8")
+            corpus.write_text(("Olá, ULTRON! A inteligência artificial aprende português.\n" * 3000), encoding="utf-8")
             output = root / "tokenizer.json"
             metadata = train_tokenizer(str(corpus), str(output), vocab_size=512, min_frequency=2)
             tokenizer = TrainedBPETokenizer(str(output))
