@@ -16,8 +16,6 @@ from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_multitask
-from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
-from backend.flywire_runtime import status as flywire_status, runtime_loaded as flywire_runtime_loaded
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
 from backend.public_access import enforce_public_limit
@@ -195,11 +193,6 @@ class BrainRequest(BaseModel):
     goal: str = Field(min_length=1, max_length=4000)
 
 
-class FlyWireSimulationRequest(BaseModel):
-    stimulus: Literal["sugar", "p9"]
-    duration_sec: float = Field(default=0.1, ge=0.01, le=0.1)
-
-
 class MultiTaskRequest(BaseModel):
     tasks: list[str] = Field(min_length=1, max_length=5)
 
@@ -247,7 +240,7 @@ def save_conversation(role: str, content: str) -> None:
 
 
 def answer_without_provider(message: str, memories: list[str] | None = None,
-    history: list[str] | None = None, neural_state: dict[str, Any] | None = None) -> str:
+    history: list[str] | None = None) -> str:
     """Token-free local answer path; no hosted model is called."""
     normalized = message.strip()
     lower = normalized.lower()
@@ -270,57 +263,42 @@ def answer_without_provider(message: str, memories: list[str] | None = None,
         return str(SELF_MODEL.public_dict())
     if lower.startswith("/propose "):
         return str(improvement_proposal(normalized[9:].strip()))
-    return decode_local(normalized, memories or [], history or [], neural_state or {})
+    return decode_local(normalized, memories or [], history or [])
 
 
 def answer_with_provider(message: str, memories: list[str] | None = None,
-    history: list[str] | None = None, grounded_search: bool = False,
-    neural_state: dict[str, Any] | None = None) -> str:
+    history: list[str] | None = None, grounded_search: bool = False) -> str:
     """Legacy compatibility shim; intentionally has no provider integration."""
     if grounded_search:
         raise HTTPException(status_code=503, detail="Pesquisa web indisponível no modo local sem tokens.")
-    return answer_without_provider(message, memories, history, neural_state)
+    return answer_without_provider(message, memories, history)
 
 
-def apply_learned_strategy_policy(neural_state: dict[str, Any]) -> dict[str, Any]:
-    """Calibrate strategy priorities from explicit user ratings, within safe bounds.
-
-    This never changes FlyWire synapses, model weights, security rules, or code.
-    """
+def learned_strategy_scores() -> dict[str, float]:
+    """Rank local specialist strategies using bounded explicit user feedback."""
+    scores = {"planner": 1.0, "solver": 1.0, "critic": 1.0, "researcher": 0.8}
     with connect_db() as db:
         rows = execute(
             db,
             "SELECT role, AVG(reward) AS average_reward, COUNT(*) AS samples "
             "FROM strategy_feedback GROUP BY role",
         ).fetchall()
-    adjustments: dict[str, float] = {}
-    scores = neural_state.get("role_scores", {})
     for row in rows:
         role = str(row["role"])
         if role not in scores:
             continue
         samples = int(row["samples"])
-        average_reward = float(row["average_reward"])
         confidence = samples / (samples + 5.0)
-        adjustment = max(-0.15, min(0.15, average_reward * 0.15 * confidence))
-        scores[role] = round(max(0.0, float(scores[role]) * (1.0 + adjustment)), 4)
-        adjustments[role] = round(adjustment, 4)
-    neural_state["policy_learning"] = {
-        "method": "bounded_explicit_feedback_calibration",
-        "samples_by_strategy": {str(row["role"]): int(row["samples"]) for row in rows},
-        "applied_adjustments": adjustments,
-        "synaptic_weights_changed": False,
-        "self_modifying_code": False,
-    }
-    return neural_state
+        adjustment = max(-0.15, min(0.15, float(row["average_reward"]) * 0.15 * confidence))
+        scores[role] = round(max(0.0, scores[role] * (1.0 + adjustment)), 4)
+    return scores
 
 
 def execute_task_with_memory(task: str) -> str:
     with connect_db() as db:
         rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
     memories = rank_memories(task, rows, limit=5)
-    neural_state = FLY_BRAIN.process(task, memories)
-    return answer_without_provider(task, memories, neural_state=neural_state)
+    return answer_without_provider(task, memories)
 
 
 def execute_brain_cycle(
@@ -328,12 +306,10 @@ def execute_brain_cycle(
     history: list[str] | None = None,
     *,
     include_private_memories: bool = True,
-    neural_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run real local planner/solver/critic tools; research intents use web search.
 
-    FlyBrain always processes the goal first and controls specialist ordering.
-    The local language decoder remains subordinate and no hosted LLM is called.
+    Local planner, solver and critic run without neural simulation or hosted LLM.
     """
     normalized_goal = goal.strip()
     if not normalized_goal:
@@ -346,14 +322,12 @@ def execute_brain_cycle(
     else:
         # Public chat must never read memories belonging to another installation.
         memories = []
-    current_neural_state = neural_state if neural_state is not None else FLY_BRAIN.process(normalized_goal, memories)
-    neural_state = apply_learned_strategy_policy(current_neural_state)
-    scores = neural_state.get("role_scores", {})
+    scores = learned_strategy_scores()
 
     # Each specialist now performs its actual local function instead of returning
     # a decorative placeholder string.
     plan = plan_task(normalized_goal)
-    answer = answer_without_provider(normalized_goal, memories, history, neural_state)
+    answer = answer_without_provider(normalized_goal, memories, history)
     critique = review_response(normalized_goal, answer)
     outputs: dict[str, dict[str, Any]] = {
         "planner": {"status": "completed", "result": plan},
@@ -390,7 +364,7 @@ def execute_brain_cycle(
     agents = [
         {
             "role": role,
-            "neural_priority": float(scores.get(role, 0.0)),
+            "priority": float(scores.get(role, 0.0)),
             **outputs[role],
         }
         for role in roles
@@ -400,7 +374,7 @@ def execute_brain_cycle(
         synthesis += "\\n\\nA pesquisa não retornou fontes verificáveis."
     return {
         "brain_version": "4.0.0-local-tools",
-        "neural_core": neural_state,
+        "strategy_priorities": scores,
         "goal": normalized_goal,
         "plan": plan,
         "agents": agents,
@@ -409,8 +383,7 @@ def execute_brain_cycle(
         "synthesis": synthesis,
         "synthesis_status": "completed",
         "execution_policy": (
-            "FlyBrain processa primeiro e prioriza as ferramentas locais; "
-            "planner, solver e critic executam funções reais; pesquisa usa fontes web; "
+            "Planner, solver e critic executam funções locais; pesquisa usa fontes web; "
             "decodificador linguístico local sem APIs ou tokens externos."
         ),
     }
@@ -421,20 +394,8 @@ def brain_status(request: Request) -> dict[str, Any]:
     enforce_public_limit(request, "brain-status", limit=60)
     return {
         "name": APP_NAME,
-        "brain_version": "3.0.0-local",
-        "neural_core": {
-            "name": "flywire_v783" if flywire_runtime_loaded() else "drosophila_lif_microcircuit",
-            "mandatory": True,
-            "version": FLY_BRAIN_VERSION,
-            "source": FLY_BRAIN_SOURCE,
-            "runtime": "upstream_pytorch_cpu" if flywire_runtime_loaded() else "local_cpu_lif",
-            "neurons": flywire_status().get("expected_neurons") if flywire_runtime_loaded() else FLY_BRAIN.neurons_per_group * 4,
-            "full_connectome_ready": flywire_status()["available"],
-            "full_connectome_loaded": flywire_runtime_loaded(),
-            "full_connectome": flywire_status(),
-            "full_connectome_enabled_for_chat": os.getenv("ULTRON_ENABLE_FULL_FLYWIRE", "0").lower() in {"1", "true", "yes", "on"},
-            "active_engine": "FlyWire v783" if flywire_runtime_loaded() else "48-neuron LIF microcircuit",
-        },
+        "brain_version": "5.0.0-local-tools",
+        "neural_core_configured": False,
         "parallel_specialists": ["planner", "solver", "critic"],
         "parallel_task_limit": 5,
         "model_configured": False,
@@ -446,7 +407,6 @@ def brain_status(request: Request) -> dict[str, Any]:
         "memory_enabled": True,
         "autonomous_production_changes": False,
     }
-
 
 @app.post("/brain/run", dependencies=[Depends(require_api_token)])
 def brain_run(payload: BrainRequest) -> dict[str, Any]:
@@ -471,7 +431,7 @@ def brain_learn(payload: NeuralLearningRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"learning": result, "method": "three_factor_reward_modulated_association",
-            "flywire_synapses_modified": False, "language_model_weights_modified": False,
+            "language_model_weights_modified": False,
             "persistence": "database_checkpointed"}
 
 
@@ -481,18 +441,6 @@ def brain_recall(payload: NeuralRecallRequest) -> dict[str, Any]:
     return {"encoded_features": len(context),
             "associations": ASSOCIATIVE_MEMORY.recall(context),
             "persistence": "database_checkpointed"}
-
-
-@app.post("/brain/flywire/simulate", dependencies=[Depends(require_api_token)])
-def brain_flywire_simulate(request: FlyWireSimulationRequest) -> dict[str, Any]:
-    """Run a documented sensory experiment on the real FlyWire v783 connectome."""
-    from backend.flywire_runtime import simulate
-    try:
-        return simulate(request.stimulus, request.duration_sec)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/brain/research")
@@ -541,7 +489,7 @@ def health() -> dict[str, Any]:
         "version": app.version,
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
         "ai_configured": False,
-        "neural_core_configured": True,
+        "neural_core_configured": False,
         "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
         "health_check": "process_liveness_only",
@@ -572,10 +520,6 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     enforce_public_limit(request, "chat", limit=20)
     message = payload.message.strip()
     # Public chat must not read or write shared private memories/conversations.
-    try:
-        neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, []))
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
     research_query = message[10:].strip() if message.casefold().startswith("/research ") else _extract_research_query(message)
     calculation = re.match(r"^(?:quanto é|quanto dá|calcule|calcular|resultado de)\s+(.+?)\s*[?.!]*$", message, re.I)
     if research_query:
@@ -583,7 +527,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
             research = search_web(research_query)
             response = research["summary"]
         except Exception:
-            response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; o núcleo FlyBrain continua ativo."
+            response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; os recursos locais restantes continuam disponíveis."
     elif message.casefold() == "/brain" or message.casefold().startswith("/brain "):
         goal = message[6:].strip()
         if not goal:
@@ -593,11 +537,10 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
                 brain_result = execute_brain_cycle(
                     goal,
                     include_private_memories=False,
-                    neural_state=neural_state,
                 )
                 response = brain_result["synthesis"]
             except RuntimeError:
-                response = "O ciclo cognitivo não pôde ser concluído agora. O núcleo FlyBrain permanece obrigatório e não será ignorado."
+                response = "O ciclo cognitivo não pôde ser concluído agora."
     elif calculation:
         expression = calculation.group(1).replace(",", ".")
         expression = re.sub(r"\b(vezes|multiplicado por)\b", "*", expression, flags=re.I)
@@ -611,9 +554,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     elif message.casefold().startswith("/remember ") or re.match(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", message, re.I):
         response = "Ainda não vou gravar isso em uma memória compartilhada. A memória pessoal precisa de identificação segura por instalação; assim seus dados não ficam misturados com os de outros usuários."
     else:
-        response = answer_without_provider(message, [], [], neural_state)
-    role_scores = neural_state.get("role_scores", {})
-    feedback_strategies = {role: float(role_scores.get(role, 0.0)) for role in ("planner", "solver", "critic")}
+        response = answer_without_provider(message, [], [])
+    feedback_strategies = {role: float(score) for role, score in learned_strategy_scores().items() if role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
     return {"reply": response, "strategy": selected_strategy}
 
@@ -663,7 +605,7 @@ def self_knowledge() -> dict[str, Any]:
     health = {
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
         "ai_configured": False,
-        "neural_core_configured": True,
+        "neural_core_configured": False,
         "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
     }

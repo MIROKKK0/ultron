@@ -2,7 +2,7 @@
 
 This is an experimental computational learning layer inspired by fly mushroom
 body circuits. It is NOT a biological simulation of those circuits and does
-not modify the upstream FlyWire connectome weights.
+do not modify any external model weights or simulation data.
 """
 from __future__ import annotations
 

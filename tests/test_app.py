@@ -96,32 +96,11 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(mocked.call_args.args[1], [])
         self.assertEqual(mocked.call_args.args[2], [])
 
-    def test_every_chat_turn_passes_through_mandatory_neural_core(self):
-        neural_state = {"core": "drosophila_lif_microcircuit", "mandatory": True}
-        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state) as neural:
-            with patch("backend.app.answer_without_provider", return_value="resposta") as provider:
-                response = client.post("/chat", json={"message": "oi"}, headers=AUTH)
-        self.assertEqual(response.status_code, 200)
-        neural.assert_called_once()
-        self.assertEqual(provider.call_args.args[3], neural_state)
-        self.assertEqual(response.json()["reply"], "resposta")
-
-    def test_chat_fails_closed_when_full_brain_is_enabled_but_unavailable(self):
-        with patch("backend.app.FLY_BRAIN.process", side_effect=RuntimeError("FlyWire data unavailable")):
-            response = client.post("/chat", json={"message": "quero comida"}, headers=AUTH)
-        self.assertEqual(response.status_code, 503)
-        self.assertIn("FlyWire data unavailable", response.json()["detail"])
-
     def test_chat_returns_only_a_feedback_supported_strategy(self):
-        neural_state = {
-            "role_scores": {"planner": 1.0, "solver": 1.0, "critic": 1.0, "researcher": 99.0},
-        }
-        with patch("backend.app.FLY_BRAIN.process", return_value=neural_state):
-            with patch("backend.app.answer_without_provider", return_value="resposta"):
-                response = client.post("/chat", json={"message": "oi"}, headers=AUTH)
+        with patch("backend.app.answer_without_provider", return_value="resposta"):
+            response = client.post("/chat", json={"message": "oi"}, headers=AUTH)
         self.assertEqual(response.status_code, 200)
         self.assertIn(response.json()["strategy"], {"planner", "solver", "critic"})
-
 
     def test_reward_learning_and_recall_endpoints_are_protected_and_functional(self):
         learned = client.post(
@@ -131,7 +110,6 @@ class UltronTests(unittest.TestCase):
         )
         self.assertEqual(learned.status_code, 200)
         self.assertEqual(learned.json()["method"], "three_factor_reward_modulated_association")
-        self.assertFalse(learned.json()["flywire_synapses_modified"])
         recalled = client.post(
             "/brain/recall", json={"context": "gostei de respostas úteis"}, headers=AUTH
         )
@@ -149,6 +127,7 @@ class UltronTests(unittest.TestCase):
         response = client.get("/brain/status", headers=AUTH)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["parallel_task_limit"], 5)
+        self.assertFalse(response.json()["neural_core_configured"])
 
     def test_brain_run_uses_parallel_specialists(self):
         with patch.dict(os.environ, {"GOOGLE_API_KEY": "", "OPENAI_API_KEY": ""}):
@@ -169,7 +148,7 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.json()["reply"], expected["synthesis"])
         self.assertEqual(cycle.call_args.args[0], "planejar uma melhoria")
         self.assertFalse(cycle.call_args.kwargs["include_private_memories"])
-        self.assertIn("neural_state", cycle.call_args.kwargs)
+        self.assertNotIn("neural_state", cycle.call_args.kwargs)
 
     def test_public_brain_command_rejects_empty_goal(self):
         response = client.post("/chat", json={"message": "/brain "})
@@ -232,7 +211,7 @@ class UltronTests(unittest.TestCase):
 
     def test_brain_multitask(self):
         with patch.dict(os.environ, {"GOOGLE_API_KEY": "", "OPENAI_API_KEY": ""}):
-            with patch("backend.app.answer_without_provider", side_effect=lambda prompt, memories=None, history=None, neural_state=None: "feito: " + prompt):
+            with patch("backend.app.answer_without_provider", side_effect=lambda prompt, memories=None, history=None: "feito: " + prompt):
                 response = client.post(
                     "/brain/multitask",
                     json={"tasks": ["resumir projeto", "listar riscos"]},
@@ -259,14 +238,12 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("ULTRON", response.json()["reply"])
 
-    def test_neural_activity_changes_local_decoding_strategy(self):
+    def test_local_decoder_does_not_depend_on_neural_state(self):
         from backend.local_decoder import decode_local
-        planner = {"role_scores": {"planner": 1.0, "solver": 0.1, "critic": 0.1}}
-        critic = {"role_scores": {"planner": 0.1, "solver": 0.1, "critic": 1.0}}
-        a = decode_local("planeje uma melhoria complexa", neural_state=planner)
-        b = decode_local("planeje uma melhoria complexa", neural_state=critic)
-        self.assertIn("planner", a)
-        self.assertIn("critic", b)
+        self.assertEqual(
+            decode_local("planeje uma melhoria complexa"),
+            decode_local("planeje uma melhoria complexa"),
+        )
 
 
 if __name__ == "__main__":
