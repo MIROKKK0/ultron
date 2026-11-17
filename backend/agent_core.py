@@ -23,6 +23,7 @@ class SelfModel:
         "cálculos aritméticos restritos",
         "autoavaliação estruturada de respostas",
         "propostas de melhoria verificáveis",
+        "pesquisa web pública sob comando /research e no endpoint /brain/research, com links para as fontes",
         "calibração limitada de prioridades com feedback explícito do usuário",
         "prioriza especialistas por critérios locais e feedback limitado",
         "executa até cinco tarefas locais independentes em paralelo",
@@ -33,12 +34,12 @@ class SelfModel:
         "o aprendizado atual calibra apenas prioridades de estratégia com feedback explícito",
         "não altera o próprio código em produção",
         "não acessa serviços externos sem integração e autorização",
-        "não pesquisa a internet por conta própria sem uma ferramenta de pesquisa conectada",
+        "não executa pesquisa contínua sobre qualquer assunto sem uma tarefa ou ciclo agendado; a pesquisa web sob demanda está disponível",
         "não pode garantir superioridade sobre outros modelos sem benchmarks",
     )
     evolution_policy: str = (
         "Calibrar prioridades de estratégia apenas com feedback explícito e limites fixos; "
-        "propor mudanças em branch isolada; executar testes; exigir revisão humana antes "
+         "propor mudanças em branch isolada; executar testes; exigir revisão humana antes "
         "de produção. Não alterar sinapses ou código automaticamente."
     )
 
