@@ -1,6 +1,6 @@
 """Reproducible CPU training and held-out evaluation for ULTRON Tiny."""
 from __future__ import annotations
-import argparse, hashlib, json, math
+import argparse, hashlib, json, math, copy
 from pathlib import Path
 import torch
 from .model import ModelConfig, UltronTinyGPT
@@ -52,6 +52,8 @@ def train(args: argparse.Namespace) -> dict:
         raise ValueError("Evaluation interval must be positive and threads must be 1..4")
     if args.warmup_steps < 0 or not 0.0 < args.min_lr_ratio <= 1.0:
         raise ValueError("Warmup must be non-negative and min LR ratio must be in (0, 1]")
+    if args.early_stopping_patience < 0 or args.min_delta < 0:
+        raise ValueError("Early stopping patience and min_delta must be non-negative")
     torch.manual_seed(args.seed)
     torch.set_num_threads(args.threads)
     corpus = Path(args.corpus).read_text(encoding="utf-8")
@@ -83,6 +85,11 @@ def train(args: argparse.Namespace) -> dict:
         return args.min_lr_ratio + (1.0 - args.min_lr_ratio) * cosine
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, learning_rate_scale)
     model.train()
+    best_validation_loss = float("inf")
+    best_step = 0
+    best_state = None
+    stale_evaluations = 0
+    completed_steps = 0
     for step in range(args.steps):
         inputs, targets = sample_batch(train_data, args.batch_size, args.context_length, generator=sampler)
         _, loss = model(inputs, targets)
@@ -103,13 +110,16 @@ def train(args: argparse.Namespace) -> dict:
     final_loss = evaluate_loss(model, validation_data, batch_size=args.batch_size,
         batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + args.steps + 1)
     test_loss = evaluate_loss(model, test_data, batch_size=args.batch_size,
-        batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + args.steps + 2) if test_data is not None else None
+        batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + completed_steps + 2) if test_data is not None else None
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     temp = output.with_name(output.name + ".tmp")
     torch.save({"model_state": model.state_dict(), "model_config": model.config_dict(),
         "tokenizer_version": TOKENIZER_VERSION, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
-        "training_steps": args.steps, "seed": args.seed, "validation_fraction": args.validation_fraction,
+        "training_steps": completed_steps, "requested_training_steps": args.steps,
+        "best_step": best_step, "best_validation_loss": best_validation_loss,
+        "early_stopping_patience": args.early_stopping_patience, "min_delta": args.min_delta,
+        "seed": args.seed, "validation_fraction": args.validation_fraction,
         "corpus_characters": len(corpus), "validation_corpus_sha256": hashlib.sha256(validation_text.encode("utf-8")).hexdigest() if validation_text else None,
         "test_corpus_sha256": hashlib.sha256(test_text.encode("utf-8")).hexdigest() if test_text else None,
         "test_loss": test_loss, "learning_rate": args.learning_rate,
@@ -117,7 +127,8 @@ def train(args: argparse.Namespace) -> dict:
         "validation_loss": final_loss, "validation_perplexity": math.exp(min(final_loss, 80)),
         "parameter_count": model.parameter_count(), "experimental": True}, temp)
     temp.replace(output)
-    return {"checkpoint": str(output), "parameters": model.parameter_count(), "training_steps": args.steps,
+    return {"checkpoint": str(output), "parameters": model.parameter_count(), "training_steps": completed_steps,
+        "requested_training_steps": args.steps, "best_step": best_step,
         "tokenizer": TOKENIZER_VERSION, "validation_loss": round(final_loss, 5),
         "validation_perplexity": round(math.exp(min(final_loss, 80)), 5),
         "test_loss": round(test_loss, 5) if test_loss is not None else None,
@@ -141,6 +152,8 @@ def main() -> None:
     parser.add_argument("--validation-fraction", type=float, default=0.1)
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--eval-batches", type=int, default=10)
+    parser.add_argument("--early-stopping-patience", type=int, default=8)
+    parser.add_argument("--min-delta", type=float, default=0.0005)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--threads", type=int, default=2)
     args = parser.parse_args()
