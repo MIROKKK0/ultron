@@ -284,6 +284,29 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(client.get("/memory", headers=auth).status_code, 401)
 
 
+    def test_chat_recalls_only_the_authenticated_installations_memories(self):
+        first = client.post("/installations/register").json()
+        second = client.post("/installations/register").json()
+        first_auth = {"Authorization": "Bearer " + first["access_token"]}
+        second_auth = {"Authorization": "Bearer " + second["access_token"]}
+        client.post("/memory", json={"content": "projeto pessoal reservado"}, headers=first_auth)
+        with patch("backend.app.rank_memories", return_value=["projeto pessoal reservado"]) as rank:
+            with patch("backend.app.answer_without_provider", return_value="contexto usado") as answer:
+                own = client.post("/chat", json={"message": "continue o projeto"}, headers=first_auth)
+                self.assertEqual(own.status_code, 200)
+                self.assertEqual(answer.call_args.args[1], ["projeto pessoal reservado"])
+                other = client.post("/chat", json={"message": "continue o projeto"}, headers=second_auth)
+                self.assertEqual(other.status_code, 200)
+                self.assertEqual(answer.call_args.args[1], ["projeto pessoal reservado"])
+                public = client.post("/chat", json={"message": "continue o projeto"})
+                self.assertEqual(public.status_code, 200)
+                self.assertEqual(answer.call_args.args[1], [])
+        self.assertEqual(rank.call_count, 2)
+
+    def test_chat_rejects_a_supplied_invalid_installation_token(self):
+        response = client.post("/chat", json={"message": "oi"}, headers={"Authorization": "Bearer " + "x" * 48})
+        self.assertEqual(response.status_code, 401)
+
     def test_public_remember_command_never_writes_private_memory(self):
         registered = client.post("/installations/register").json()
         auth = {"Authorization": "Bearer " + registered["access_token"]}
