@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @AppStorage("ultronServerURL") private var serverURL = "https://ultron-api-c5ae.onrender.com"
     @State private var messages: [ChatMessage] = [
-        ChatMessage(role: .assistant, text: "Olá. Eu sou o ULTRON. Estou pronta. Não precisa configurar token. Comandos: /self, /plan seu objetivo, /research sua pergunta e /calc 12*(3+4). A memória privada será ativada após autenticação segura por instalação.")
+        ChatMessage(role: .assistant, text: "Olá! Sou o ULTRON. Pode conversar comigo normalmente, sem comandos especiais. Posso pesquisar na internet, calcular, organizar planos e ajudar com tarefas autorizadas. O núcleo FlyBrain está ativo.")
     ]
     @State private var draft = ""
     @State private var isSending = false
@@ -185,7 +185,7 @@ private struct MessageBubble: View {
                     }
                     .padding(.horizontal, 8)
                     if let feedbackError {
-                        Text("Falha no feedback: \\(feedbackError)")
+                        Text("Falha no feedback: \(feedbackError)")
                             .font(.caption2)
                             .foregroundStyle(.red)
                             .padding(.horizontal, 8)
