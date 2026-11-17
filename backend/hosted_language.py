@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-FREE_MODEL = "openrouter/free"
+FREE_MODEL = "qwen/qwen3.8-27b:free"
 
 
 def configured_providers() -> list[str]:
