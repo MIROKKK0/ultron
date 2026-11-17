@@ -112,19 +112,19 @@ def predict_intent(text: str) -> dict:
 
 def resolve_intent(text: str) -> dict:
     lowered = unicodedata.normalize("NFKC", text.casefold()).strip()
-    if re.match(r"^/(?:plan|brain)\\b", lowered) or re.search(r"\\b(planej|planejar|planeje|planejamento|organize|organizar|etapas|roteiro)\\w*", lowered):
+    if re.match(r"^/(?:plan|brain)\b", lowered) or re.search(r"\b(planej|planejar|planeje|planejamento|organize|organizar|etapas|roteiro)\w*", lowered):
         intent = "plan"
-    elif re.search(r"\\b(evolu|melhor|autoavalia|autoaperfei|bugs?|revise sua|diagnóstico interno|diagnostico interno)\\w*", lowered):
+    elif re.search(r"\b(evolu|melhor|autoavalia|autoaperfei|bugs?|revise sua|diagnóstico interno|diagnostico interno)\w*", lowered):
         intent = "improve"
-    elif lowered in {"ajuda", "help", "/help"} or re.search(r"\\b(comandos|capacidades|recursos|funções|funcoes|como usar)\\b", lowered):
+    elif lowered in {"ajuda", "help", "/help", "o que você faz", "o que voce faz", "como funciona o ultron", "como usar o ultron"} or re.search(r"\b(ajuda|comandos|capacidades|recursos|funções|funcoes|como usar)\b", lowered):
         intent = "help"
-    elif re.search(r"\\b(obrigad|valeu|agrade|brigad|thanks)\\w*", lowered):
+    elif re.search(r"\b(obrigad|valeu|agrade|brigad|thanks)\w*", lowered):
         intent = "thanks"
-    elif re.match(r"^(oi|olá|ola|bom dia|boa tarde|boa noite|e aí|eai|saudações)\\b", lowered):
+    elif re.match(r"^(oi|olá|ola|bom dia|boa tarde|boa noite|e aí|eai|saudações)\b", lowered):
         intent = "greeting"
-    elif re.search(r"\\b(quem é você|quem e voce|seu nome|qual seu nome|identidade|apresente-se|arquitetura)\\b", lowered):
+    elif re.search(r"\b(quem é você|quem e voce|seu nome|qual seu nome|identidade|apresente-se|arquitetura)\b", lowered):
         intent = "identity"
-    elif re.search(r"\\b(status|online|funcionando|estado do sistema|servidor|operacional)\\b", lowered):
+    elif re.search(r"\b(status|online|funcionando|estado do sistema|servidor|operacional)\b", lowered):
         intent = "status"
     else:
         return predict_intent(text)
