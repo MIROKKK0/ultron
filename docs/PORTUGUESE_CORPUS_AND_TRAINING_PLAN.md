@@ -21,6 +21,15 @@ https://huggingface.co/datasets/dataseek/ptbr-wiki
 - É a opção mais interessante para um primeiro experimento de pré-treino em português, mas precisa de amostragem, deduplicação, filtros e trilha de atribuição.
 - Não baixar o dataset inteiro para o Git. Fazer streaming e limitar o experimento a um orçamento definido.
 
+### 2. dataseek/ptbr-books-publicos — melhor candidato para o primeiro piloto
+https://huggingface.co/datasets/dataseek/ptbr-books-publicos
+
+- Dataset card informa 28.245 segmentos de livros brasileiros em domínio público, ~213 MB e licença CC0 1.0.
+- Streaming é suportado; o material vem de arquivos públicos, foi filtrado por tipo/idioma e é descrito como redistribuível.
+- O card também alerta que não houve remoção completa de PII nem filtragem abrangente de conteúdo.
+- É menor e tem licença mais simples que os grandes corpora mistos. Recomendo começar com uma amostra pequena, preservando os metadados e auditando a qualidade.
+- É literatura, não diálogo de assistente; precisa de um conjunto separado de instruções e ferramentas escrito/revisado para ULTRON.
+
 ### 2. nicholasKluge/Pt-Corpus
 https://huggingface.co/datasets/nicholasKluge/Pt-Corpus
 
@@ -64,5 +73,7 @@ https://proceedings.neurips.cc/paper_files/paper/2022/hash/c1e2faff6f588870935f1
 O estudo compara mais de 400 modelos e mostra que parâmetros e tokens de treino precisam crescer juntos sob orçamento de computação. A regra prática ~20 tokens/parâmetro é apenas uma aproximação para planejar; dados, arquitetura, tokenizer, objetivo e compute alteram o resultado.
 
 ## Decisão
+
+O primeiro piloto deve usar streaming de `dataseek/ptbr-books-publicos` (CC0 1.0), em uma amostra limitada e com auditoria; não usar o corpus misto de 50 GB ou o PT-BR Wiki sem tratar suas licenças e PII. O corpus literário precisa ser complementado por exemplos próprios de instruções/diálogos, pois não ensina uso de ferramentas.
 
 Não iniciar um treino longo com o corpus atual de 1.823 bytes. Primeiro preparar uma amostra PT-BR licenciada, filtrada, deduplicada e documentada; depois treinar e medir. Isso evita gastar horas de CPU para produzir um checkpoint que apenas memoriza 24 linhas.
