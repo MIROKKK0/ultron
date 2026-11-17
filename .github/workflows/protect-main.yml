@@ -1,0 +1,46 @@
+name: Protect ULTRON main
+
+on:
+  workflow_run:
+    workflows: ["ULTRON CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  protect-main:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ultron
+      - name: Apply branch protection
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api --method PUT repos/MIROKKK0/ultron/branches/main/protection --input - <<'JSON'
+          {
+            "required_status_checks": {
+              "strict": true,
+              "contexts": ["Python validation"]
+            },
+            "enforce_admins": false,
+            "required_pull_request_reviews": {
+              "dismiss_stale_reviews": false,
+              "require_code_owner_reviews": false,
+              "required_approving_review_count": 0
+            },
+            "restrictions": null,
+            "required_conversation_resolution": true,
+            "allow_force_pushes": false,
+            "allow_deletions": false
+          }
+          JSON
