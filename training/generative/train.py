@@ -1,6 +1,6 @@
 """Reproducible CPU training and held-out evaluation for ULTRON Tiny."""
 from __future__ import annotations
-import argparse, hashlib, json, math, copy
+import argparse, hashlib, json, math
 from pathlib import Path
 import torch
 from .model import ModelConfig, UltronTinyGPT
