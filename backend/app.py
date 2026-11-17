@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
@@ -19,6 +21,7 @@ from backend.brain import run_multitask
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
 from backend.public_access import enforce_public_limit
+from backend.runtime_diagnostics import memory_snapshot
 from backend.intent_model import model_status
 from backend.skills import list_skills, run_intent_skill, run_named_skill
 from backend.web_research import search_web
@@ -583,6 +586,57 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     feedback_strategies = {role: float(score) for role, score in learned_strategy_scores().items() if role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
     return {"reply": response, "strategy": selected_strategy}
+
+
+@app.post("/chat/stream")
+async def chat_stream(payload: ChatRequest, request: Request) -> StreamingResponse:
+    """Emit lifecycle stages from the actual request execution, then the answer."""
+    async def events():
+        yield "data: " + json.dumps(
+            {"type": "stage", "stage": "processing"}, separators=(",", ":")
+        ) + "\n\n"
+        try:
+            result = await run_in_threadpool(chat, payload, request)
+        except HTTPException as exc:
+            yield "data: " + json.dumps(
+                {"type": "error", "status": exc.status_code}, separators=(",", ":")
+            ) + "\n\n"
+            return
+        except Exception:
+            yield "data: " + json.dumps(
+                {"type": "error", "status": 500}, separators=(",", ":")
+            ) + "\n\n"
+            return
+
+        yield "data: " + json.dumps(
+            {"type": "stage", "stage": "responding"}, separators=(",", ":")
+        ) + "\n\n"
+        yield "data: " + json.dumps(
+            {"type": "final", **result}, ensure_ascii=False, separators=(",", ":")
+        ) + "\n\n"
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/runtime/status")
+def runtime_status(request: Request) -> dict[str, Any]:
+    """Expose process RSS and configured memory budget without heavy dependencies."""
+    enforce_public_limit(request, "runtime-status", limit=60)
+    try:
+        budget_mb = int(os.getenv("ULTRON_MEMORY_BUDGET_MB", "512"))
+    except ValueError:
+        budget_mb = 512
+    return {
+        "name": APP_NAME,
+        "memory": memory_snapshot(budget_mb),
+        "intent_model": model_status(),
+        "generative_model_configured": False,
+        "external_ai_providers": False,
+    }
 
 
 @app.post("/memory", dependencies=[Depends(require_api_token)])
