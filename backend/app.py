@@ -650,7 +650,8 @@ async def chat_stream(payload: ChatRequest, request: Request) -> StreamingRespon
             {"type": "stage", "stage": "processing"}, separators=(",", ":")
         ) + "\n\n"
         try:
-            result = await run_in_threadpool(chat, payload, request)
+            installation_id = optional_installation(request.headers.get("authorization"))
+            result = await run_in_threadpool(chat, payload, request, installation_id)
         except HTTPException as exc:
             yield "data: " + json.dumps(
                 {"type": "error", "status": exc.status_code}, separators=(",", ":")
