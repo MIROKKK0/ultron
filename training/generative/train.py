@@ -100,15 +100,32 @@ def train(args: argparse.Namespace) -> dict:
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
         scheduler.step()
-        if step == 0 or (step + 1) % args.eval_interval == 0 or step + 1 == args.steps:
+        completed_steps = step + 1
+        if step == 0 or completed_steps % args.eval_interval == 0 or completed_steps == args.steps:
             val_loss = evaluate_loss(model, validation_data, batch_size=args.batch_size,
-                batches=args.eval_batches, context_length=args.context_length, seed=args.seed + step + 1)
-            print(json.dumps({"step": step + 1, "train_loss": round(float(loss.item()), 5),
+                batches=args.eval_batches, context_length=args.context_length, seed=args.seed + completed_steps)
+            improved = val_loss < best_validation_loss - args.min_delta
+            if improved:
+                best_validation_loss = val_loss
+                best_step = completed_steps
+                best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+                stale_evaluations = 0
+            else:
+                stale_evaluations += 1
+            print(json.dumps({"step": completed_steps, "train_loss": round(float(loss.item()), 5),
                 "learning_rate": round(optimizer.param_groups[0]["lr"], 8),
                 "validation_loss": round(val_loss, 5),
+                "best_validation_loss": round(best_validation_loss, 5),
+                "best_step": best_step,
                 "validation_perplexity": round(math.exp(min(val_loss, 80)), 5)}))
+            if args.early_stopping_patience and stale_evaluations >= args.early_stopping_patience:
+                print(json.dumps({"early_stopping": True, "step": completed_steps,
+                    "patience": args.early_stopping_patience, "best_step": best_step}))
+                break
+    if best_state is not None:
+        model.load_state_dict(best_state)
     final_loss = evaluate_loss(model, validation_data, batch_size=args.batch_size,
-        batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + args.steps + 1)
+        batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + completed_steps + 1)
     test_loss = evaluate_loss(model, test_data, batch_size=args.batch_size,
         batches=max(args.eval_batches, 10), context_length=args.context_length, seed=args.seed + completed_steps + 2) if test_data is not None else None
     output = Path(args.output)
