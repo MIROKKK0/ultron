@@ -4,7 +4,7 @@ import argparse, hashlib, json, math
 from pathlib import Path
 import torch
 from .model import ModelConfig, UltronTinyGPT
-from .tokenizer import ByteTokenizer, TOKENIZER_VERSION
+from .tokenizer import ByteTokenizer, TOKENIZER_VERSION, TrainedBPETokenizer
 
 def sample_batch(data: torch.Tensor, batch_size: int, context_length: int, *, generator=None):
     """Vectorized next-token windows; avoids Python slicing/stacking per sample."""
@@ -57,7 +57,7 @@ def train(args: argparse.Namespace) -> dict:
     torch.manual_seed(args.seed)
     torch.set_num_threads(args.threads)
     corpus = Path(args.corpus).read_text(encoding="utf-8")
-    tokenizer = ByteTokenizer()
+    tokenizer = TrainedBPETokenizer(args.tokenizer_json) if args.tokenizer_json else ByteTokenizer()
     data = torch.tensor(tokenizer.encode(corpus), dtype=torch.long)
     if args.validation_corpus:
         train_data = data
@@ -72,7 +72,7 @@ def train(args: argparse.Namespace) -> dict:
         raise ValueError("Validation corpus is too short for the configured context")
     if test_data is not None and len(test_data) <= args.context_length + 1:
         raise ValueError("Test corpus is too short for the configured context")
-    config = ModelConfig(context_length=args.context_length, width=args.width, layers=args.layers, heads=args.heads)
+    config = ModelConfig(vocab_size=tokenizer.vocab_size, context_length=args.context_length, width=args.width, layers=args.layers, heads=args.heads)
     model = UltronTinyGPT(config)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     sampler = torch.Generator(device="cpu").manual_seed(args.seed + 1)
@@ -132,7 +132,7 @@ def train(args: argparse.Namespace) -> dict:
     output.parent.mkdir(parents=True, exist_ok=True)
     temp = output.with_name(output.name + ".tmp")
     torch.save({"model_state": model.state_dict(), "model_config": model.config_dict(),
-        "tokenizer_version": TOKENIZER_VERSION, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
+        "tokenizer_version": tokenizer.version, "tokenizer_vocab_size": tokenizer.vocab_size,\n        "tokenizer_json_sha256": hashlib.sha256(Path(args.tokenizer_json).read_bytes()).hexdigest() if args.tokenizer_json else None, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
         "training_steps": completed_steps, "requested_training_steps": args.steps,
         "best_step": best_step, "best_validation_loss": best_validation_loss,
         "early_stopping_patience": args.early_stopping_patience, "min_delta": args.min_delta,
@@ -156,7 +156,7 @@ def main() -> None:
     parser.add_argument("--corpus", default="training/generative/corpus_pt.txt")
     parser.add_argument("--validation-corpus", default=None)
     parser.add_argument("--test-corpus", default=None)
-    parser.add_argument("--output", default="artifacts/ultron-tiny.pt")
+    parser.add_argument("--output", default="artifacts/ultron-tiny.pt")\n    parser.add_argument("--tokenizer-json", default=None)
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--context-length", type=int, default=128)
