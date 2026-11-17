@@ -10,6 +10,7 @@ on:
       - "training/**"
       - "scripts/train_intent_model.py"
       - "backend/model/**"
+      - ".github/workflows/model-training.yml"
 
 permissions:
   contents: read
