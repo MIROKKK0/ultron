@@ -28,7 +28,7 @@ class SelfModel:
     )
     limitations: tuple[str, ...] = (
         "o decodificador atual é determinístico e não equivale a um LLM treinado",
-        "não treina automaticamente os pesos do decodificador",
+        "não treina pesos do decodificador automaticamente",
         "o aprendizado atual calibra apenas prioridades de estratégia com feedback explícito",
         "não altera o próprio código em produção",
         "não acessa serviços externos sem integração e autorização",
