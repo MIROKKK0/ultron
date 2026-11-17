@@ -28,6 +28,12 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("ULTRON", response.json()["reply"])
 
+    def test_help_confirms_natural_language_does_not_require_slash_commands(self):
+        response = client.post("/chat", json={"message": "ajuda"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("sem comandos especiais", response.json()["reply"].casefold())
+        self.assertIn("atalhos opcionais", response.json()["reply"].casefold())
+
     def test_natural_language_research_does_not_need_slash_command(self):
         fixture = {"summary": "Fontes atuais: https://example.org"}
         with patch("backend.app.search_web", return_value=fixture) as search:
