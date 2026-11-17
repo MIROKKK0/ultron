@@ -44,3 +44,13 @@ jobs:
           python -m training.generative.train_tokenizer --corpus /tmp/ultron-smoke-corpus.txt --output /tmp/ultron-smoke-tokenizer.json --vocab-size 512
           python -m training.generative.train --corpus /tmp/ultron-smoke-corpus.txt --tokenizer-json /tmp/ultron-smoke-tokenizer.json --steps 10 --batch-size 2 --context-length 32 --width 16 --layers 1 --heads 1 --eval-interval 5 --eval-batches 1 --output /tmp/ultron-tiny-bpe.pt
           python -m training.generative.verify_checkpoint --checkpoint /tmp/ultron-tiny-bpe.pt --tokenizer-json /tmp/ultron-smoke-tokenizer.json --output /tmp/bpe-verification.json --threads 2 --tokens 8
+          python -m training.generative.train --corpus /tmp/ultron-smoke-corpus.txt --tokenizer-json /tmp/ultron-smoke-tokenizer.json --init-checkpoint /tmp/ultron-tiny-bpe.pt --steps 3 --batch-size 2 --context-length 32 --width 16 --layers 1 --heads 1 --eval-interval 1 --eval-batches 1 --seed 21 --output /tmp/ultron-tiny-bpe-continued.pt
+          python - <<'PY'
+          import torch
+          checkpoint = torch.load("/tmp/ultron-tiny-bpe-continued.pt", map_location="cpu", weights_only=True)
+          assert checkpoint["initialized_from_checkpoint"] is True
+          assert checkpoint["cumulative_training_steps"] == 13
+          assert checkpoint["parent_checkpoint_sha256"]
+          print("Continued pretraining lineage verified:", checkpoint["cumulative_training_steps"])
+          PY
+          python -m training.generative.verify_checkpoint --checkpoint /tmp/ultron-tiny-bpe-continued.pt --tokenizer-json /tmp/ultron-smoke-tokenizer.json --output /tmp/bpe-continued-verification.json --threads 2 --tokens 8
