@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
@@ -558,6 +560,40 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     feedback_strategies = {role: float(score) for role, score in learned_strategy_scores().items() if role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
     return {"reply": response, "strategy": selected_strategy}
+
+
+@app.post("/chat/stream")
+async def chat_stream(payload: ChatRequest, request: Request) -> StreamingResponse:
+    """Send truthful lifecycle events, then the completed local chat response."""
+    async def events():
+        yield "data: " + json.dumps(
+            {"type": "stage", "stage": "processing"}, separators=(",", ":")
+        ) + "\\n\\n"
+        try:
+            result = await run_in_threadpool(chat, payload, request)
+        except HTTPException as exc:
+            yield "data: " + json.dumps(
+                {"type": "error", "status": exc.status_code}, separators=(",", ":")
+            ) + "\\n\\n"
+            return
+        except Exception:
+            yield "data: " + json.dumps(
+                {"type": "error", "status": 500}, separators=(",", ":")
+            ) + "\\n\\n"
+            return
+
+        yield "data: " + json.dumps(
+            {"type": "stage", "stage": "responding"}, separators=(",", ":")
+        ) + "\\n\\n"
+        yield "data: " + json.dumps(
+            {"type": "final", **result}, ensure_ascii=False, separators=(",", ":")
+        ) + "\\n\\n"
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/memory", dependencies=[Depends(require_api_token)])
