@@ -25,7 +25,7 @@ struct ContentView: View {
                     .frame(width: 46, height: 46)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("ULTRON").font(.headline.weight(.bold)).tracking(1.5)
-                        Text(isSending ? "Pensando…" : "Assistente pessoal").font(.caption).foregroundStyle(.secondary)
+                        Text(isSending ? "Pensando…" : (serverOnline ? "API conectada" : (serverStatusChecked ? "API indisponível" : "Verificando API"))).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Circle()
