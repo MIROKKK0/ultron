@@ -5,6 +5,11 @@ import argparse
 import resource
 import statistics
 import time
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 from backend.intent_model import predict_intent, model_status
 
