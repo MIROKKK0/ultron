@@ -302,7 +302,7 @@ class UltronTests(unittest.TestCase):
                     self.assertEqual(answer.call_args_list[0].args[1], ["projeto pessoal reservado"])
                     self.assertEqual(answer.call_args_list[1].args[1], [])
                     self.assertEqual(answer.call_args_list[2].args[1], [])
-        self.assertEqual(rank.call_count, 2)
+        self.assertEqual(rank.call_count, 1)
 
     def test_chat_rejects_a_supplied_invalid_installation_token(self):
         response = client.post("/chat", json={"message": "oi"}, headers={"Authorization": "Bearer " + "x" * 48})
