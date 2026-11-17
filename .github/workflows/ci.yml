@@ -28,5 +28,7 @@ jobs:
         run: python scripts/train_intent_model.py --check
       - name: Compile Python modules
         run: python -m compileall -q backend scripts
+      - name: Benchmark lightweight intent inference
+        run: python scripts/benchmark_intent_model.py --iterations 1000
       - name: Run tests
         run: python -m unittest discover -s tests -v
