@@ -142,6 +142,26 @@ private struct MessageBubble: View {
                         message.role == .user ? Color.cyan : Color(.secondarySystemBackground),
                         in: RoundedRectangle(cornerRadius: 19)
                     )
+                if message.role == .assistant {
+                    HStack(spacing: 16) {
+                        Button { DeviceActions.copy(message.text) } label: {
+                            Label("Copiar", systemImage: "doc.on.doc")
+                        }
+                        .accessibilityLabel("Copiar resposta do ULTRON")
+                        Button { DeviceActions.speak(message.text) } label: {
+                            Label("Ouvir", systemImage: "speaker.wave.2")
+                        }
+                        .accessibilityLabel("Ouvir resposta do ULTRON")
+                        Button { DeviceActions.stopSpeaking() } label: {
+                            Image(systemName: "stop.fill")
+                        }
+                        .accessibilityLabel("Parar leitura")
+                    }
+                    .font(.caption)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.cyan)
+                    .padding(.horizontal, 8)
+                }
                 if message.role == .assistant, let strategy = message.strategy {
                     HStack(spacing: 12) {
                         Text("Estratégia neural: \(strategy)")
