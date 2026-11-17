@@ -195,7 +195,7 @@ private struct MessageBubble: View {
                 }
                 if message.role == .assistant, let strategy = message.strategy {
                     HStack(spacing: 12) {
-                        Text("Estratégia neural: \(strategy)")
+                        Text("Estratégia local: \(strategy)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Spacer()
