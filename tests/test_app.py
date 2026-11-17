@@ -23,6 +23,15 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("ULTRON", response.json()["reply"])
 
+    def test_chat_stream_reports_real_request_lifecycle(self):
+        response = client.post("/chat/stream", json={"message": "oi"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.headers["content-type"].startswith("text/event-stream"))
+        self.assertIn('"stage":"processing"', response.text)
+        self.assertIn('"stage":"responding"', response.text)
+        self.assertIn('"type":"final"', response.text)
+        self.assertIn('"reply"', response.text)
+
     def test_root_post_is_a_normal_chat_alias(self):
         response = client.post("/", json={"message": "oi"})
         self.assertEqual(response.status_code, 200)
