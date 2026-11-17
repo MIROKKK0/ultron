@@ -9,7 +9,7 @@ on:
       - "scripts/train_intent_model.py"
       - ".github/workflows/ultron-autonomous-evolution.yml"
   schedule:
-    # GitHub Actions uses UTC; 14:17 UTC is approximately 11:17 in Brazil (BRT).
+    # 14:17 UTC is approximately 11:17 in Brazil (UTC-3).
     - cron: "17 14 * * *"
 
 permissions:
@@ -61,15 +61,50 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Benchmark response routing
         run: python scripts/benchmark_intent_model.py --iterations 1000 | tee intent-benchmark.txt
-      - name: Train ULTRON Tiny from random initialization
+      - name: Continue ULTRON Tiny or bootstrap from scratch
+        env:
+          RESUME: ${{ steps.previous.outputs.resume }}
         run: |
-          python -m training.generative.train \
-            --corpus training/generative/corpus_pt.txt \
-            --steps 500 --batch-size 8 --context-length 64 \
-            --width 48 --layers 2 --heads 4 \
-            --eval-interval 50 --eval-batches 5 \
-            --early-stopping-patience 5 --threads 2 \
-            --output artifacts/ultron-tiny-daily.pt | tee tiny-training-report.jsonl
+          ARGS=(
+            --corpus training/generative/corpus_pt.txt
+            --steps 500 --batch-size 8 --context-length 64
+            --width 48 --layers 2 --heads 4
+            --eval-interval 50 --eval-batches 5
+            --early-stopping-patience 5 --threads 2
+            --output artifacts/ultron-tiny-daily.pt
+          )
+          if [ "$RESUME" = "true" ]; then
+            ARGS+=(--init-checkpoint artifacts/previous/ultron-tiny-daily.pt)
+          fi
+          python -m training.generative.train "${ARGS[@]}" | tee tiny-training-report.jsonl
+      - name: Keep the previous checkpoint if held-out quality regresses
+        if: steps.previous.outputs.resume == 'true'
+        run: |
+          python - <<'PY'
+          import json, shutil
+          from pathlib import Path
+          report = json.loads(Path("tiny-training-report.jsonl").read_text().strip().splitlines()[-1])
+          candidate = Path("artifacts/ultron-tiny-daily.pt")
+          parent = Path("artifacts/previous/ultron-tiny-daily.pt")
+          accepted = report.get("candidate_non_regression") is True
+          if not accepted:
+              shutil.copy2(candidate, "artifacts/rejected-daily-candidate.pt")
+              shutil.copy2(parent, candidate)
+          Path("artifacts/promotion-decision.json").write_text(json.dumps({
+              "candidate_accepted": accepted,
+              "production_weights_changed": False,
+              "fallback": "previous checkpoint retained" if not accepted else None,
+              "validation_loss": report.get("validation_loss"),
+              "parent_validation_loss": report.get("parent_validation_loss"),
+              "test_loss": report.get("test_loss"),
+              "parent_test_loss": report.get("parent_test_loss"),
+              "note": "Only non-regressive experimental candidates are carried forward; production is never changed by this workflow."
+          }, indent=2))
+          PY
+      - name: Mark first-run bootstrap as experimental
+        if: steps.previous.outputs.resume != 'true'
+        run: |
+          echo '{"candidate_accepted":false,"production_weights_changed":false,"fallback":null,"note":"Initial checkpoint only; independent quality evaluation required."}' > artifacts/promotion-decision.json
       - name: Validate checkpoint loading and CPU generation
         run: |
           python -m training.generative.verify_checkpoint \
@@ -79,7 +114,7 @@ jobs:
       - name: Produce machine-readable evolution report
         run: |
           python - <<'PY'
-          import json, platform, subprocess, time
+          import json, platform, subprocess
           from pathlib import Path
           report = {
               "scope": "training_and_evaluation_only",
@@ -91,8 +126,9 @@ jobs:
               "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
               "intent_benchmark": Path("intent-benchmark.txt").read_text(errors="replace"),
               "tiny_training": Path("tiny-training-report.jsonl").read_text(errors="replace"),
+              "promotion_decision": Path("artifacts/promotion-decision.json").read_text(errors="replace"),
               "checkpoint_verification": Path("artifacts/checkpoint-smoke-test.json").read_text(errors="replace"),
-              "guardrail": "Experimental checkpoint is not promoted without independent quality, safety, latency and memory evaluation."
+              "guardrail": "Experimental checkpoint is not promoted to production without independent quality, safety, latency and memory evaluation."
           }
           Path("artifacts/evolution-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
           PY
@@ -103,6 +139,7 @@ jobs:
           path: |
             artifacts/ultron-tiny-daily.pt
             artifacts/evolution-report.json
+            artifacts/promotion-decision.json
             artifacts/checkpoint-smoke-test.json
             checkpoint-verification.txt
             tiny-training-report.jsonl
