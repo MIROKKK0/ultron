@@ -65,26 +65,48 @@ jobs:
         run: |
           echo "ready=false" >> "$GITHUB_OUTPUT"
           mkdir -p artifacts/previous
-          DAILY_RUN="$(gh run list --workflow ultron-autonomous-evolution.yml --repo "$GITHUB_REPOSITORY" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
-          if [ -n "$DAILY_RUN" ] && gh run download "$DAILY_RUN" --repo "$GITHUB_REPOSITORY" --name ultron-autonomous-evolution-checkpoint --dir artifacts/previous; then
-            if [ -s artifacts/previous/ultron-tiny-ptbr.pt ] && [ -s artifacts/previous/ultron-bpe-tokenizer.json ] && [ -s artifacts/previous/ptbr-corpus/train.txt ]; then
-              echo "ready=true" >> "$GITHUB_OUTPUT"
-              echo "source=daily" >> "$GITHUB_OUTPUT"
-              echo "source_run_id=$DAILY_RUN" >> "$GITHUB_OUTPUT"
-            fi
+          DAILY_INFO="$(gh run list --workflow ultron-autonomous-evolution.yml --repo "$GITHUB_REPOSITORY" --branch main --status success --limit 1 --json databaseId,createdAt --jq '.[0] | [.databaseId, .createdAt] | @tsv' 2>/dev/null || true)"
+          WEEKLY_INFO="$(gh run list --workflow ptbr-pretraining.yml --repo "$GITHUB_REPOSITORY" --branch main --status success --limit 1 --json databaseId,createdAt --jq '.[0] | [.databaseId, .createdAt] | @tsv' 2>/dev/null || true)"
+          DAILY_RUN=""
+          DAILY_CREATED=""
+          WEEKLY_RUN=""
+          WEEKLY_CREATED=""
+          if [ -n "$DAILY_INFO" ] && [ "$DAILY_INFO" != "null"$'\t'"null" ]; then IFS=$'\t' read -r DAILY_RUN DAILY_CREATED <<< "$DAILY_INFO"; fi
+          if [ -n "$WEEKLY_INFO" ] && [ "$WEEKLY_INFO" != "null"$'\t'"null" ]; then IFS=$'\t' read -r WEEKLY_RUN WEEKLY_CREATED <<< "$WEEKLY_INFO"; fi
+
+          # A new weekly corpus/checkpoint must supersede an older daily artifact.
+          FIRST_SOURCE="daily"
+          FIRST_RUN="$DAILY_RUN"
+          SECOND_SOURCE="weekly-bootstrap"
+          SECOND_RUN="$WEEKLY_RUN"
+          if [ -n "$WEEKLY_RUN" ] && { [ -z "$DAILY_RUN" ] || [ "$(date -d "$WEEKLY_CREATED" +%s)" -gt "$(date -d "$DAILY_CREATED" +%s)" ]; }; then
+            FIRST_SOURCE="weekly-bootstrap"
+            FIRST_RUN="$WEEKLY_RUN"
+            SECOND_SOURCE="daily"
+            SECOND_RUN="$DAILY_RUN"
           fi
-          if [ "$(cat "$GITHUB_OUTPUT" | grep -c 'ready=true' || true)" -eq 0 ]; then
+
+          for SOURCE_RUN in "$FIRST_SOURCE:$FIRST_RUN" "$SECOND_SOURCE:$SECOND_RUN"; do
+            SOURCE="${SOURCE_RUN%%:*}"
+            RUN_ID="${SOURCE_RUN#*:}"
+            [ -n "$RUN_ID" ] || continue
             rm -rf artifacts/previous/*
-            WEEKLY_RUN="$(gh run list --workflow ptbr-pretraining.yml --repo "$GITHUB_REPOSITORY" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
-            if [ -n "$WEEKLY_RUN" ] && gh run download "$WEEKLY_RUN" --repo "$GITHUB_REPOSITORY" --name ultron-ptbr-experimental-checkpoint --dir artifacts/previous; then
-              if [ -s artifacts/previous/ultron-tiny-ptbr.pt ] && [ -s artifacts/previous/ultron-bpe-tokenizer.json ] && [ -s artifacts/previous/ptbr-corpus/train.txt ]; then
+            ARTIFACT_NAME="ultron-autonomous-evolution-checkpoint"
+            if [ "$SOURCE" = "weekly-bootstrap" ]; then ARTIFACT_NAME="ultron-ptbr-experimental-checkpoint"; fi
+            if gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$ARTIFACT_NAME" --dir artifacts/previous; then
+              if [ -s artifacts/previous/ultron-tiny-ptbr.pt ] &&
+                 [ -s artifacts/previous/ultron-bpe-tokenizer.json ] &&
+                 [ -s artifacts/previous/ptbr-corpus/train.txt ] &&
+                 [ -s artifacts/previous/ptbr-corpus/validation.txt ] &&
+                 [ -s artifacts/previous/ptbr-corpus/test.txt ]; then
                 echo "ready=true" >> "$GITHUB_OUTPUT"
-                echo "source=weekly-bootstrap" >> "$GITHUB_OUTPUT"
-                echo "source_run_id=$WEEKLY_RUN" >> "$GITHUB_OUTPUT"
+                echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
+                echo "source_run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+                break
               fi
             fi
-          fi
-          if ! grep -q '^ready=true
+          done
+          if ! grep -q "^ready=true$" "$GITHUB_OUTPUT"; then
             echo "No validated PT-BR BPE checkpoint is available yet. Daily model training is safely skipped; the small didactic corpus is only used for PR smoke tests."
           fi
       - name: Continue training from the validated PT-BR checkpoint
