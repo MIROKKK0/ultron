@@ -291,16 +291,17 @@ class UltronTests(unittest.TestCase):
         second_auth = {"Authorization": "Bearer " + second["access_token"]}
         client.post("/memory", json={"content": "projeto pessoal reservado"}, headers=first_auth)
         with patch("backend.app.rank_memories", return_value=["projeto pessoal reservado"]) as rank:
-            with patch("backend.app.answer_without_provider", return_value="contexto usado") as answer:
-                own = client.post("/chat", json={"message": "continue o projeto"}, headers=first_auth)
-                self.assertEqual(own.status_code, 200)
-                self.assertEqual(answer.call_args.args[1], ["projeto pessoal reservado"])
-                other = client.post("/chat", json={"message": "continue o projeto"}, headers=second_auth)
-                self.assertEqual(other.status_code, 200)
-                self.assertEqual(answer.call_args.args[1], ["projeto pessoal reservado"])
-                public = client.post("/chat", json={"message": "continue o projeto"})
-                self.assertEqual(public.status_code, 200)
-                self.assertEqual(answer.call_args.args[1], [])
+            with patch("backend.app.run_intent_skill", return_value=None):
+                with patch("backend.app.answer_without_provider", return_value="contexto usado") as answer:
+                    own = client.post("/chat", json={"message": "continue o projeto"}, headers=first_auth)
+                    self.assertEqual(own.status_code, 200)
+                    other = client.post("/chat", json={"message": "continue o projeto"}, headers=second_auth)
+                    self.assertEqual(other.status_code, 200)
+                    public = client.post("/chat", json={"message": "continue o projeto"})
+                    self.assertEqual(public.status_code, 200)
+                    self.assertEqual(answer.call_args_list[0].args[1], ["projeto pessoal reservado"])
+                    self.assertEqual(answer.call_args_list[1].args[1], [])
+                    self.assertEqual(answer.call_args_list[2].args[1], [])
         self.assertEqual(rank.call_count, 2)
 
     def test_chat_rejects_a_supplied_invalid_installation_token(self):
