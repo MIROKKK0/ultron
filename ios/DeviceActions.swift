@@ -20,4 +20,25 @@ enum DeviceActions {
     static func stopSpeaking() {
         speech.stopSpeaking(at: .immediate)
     }
+
+    /// Return the first explicit HTTPS link in a message for a user-tapped SwiftUI Link.
+    static func firstHTTPSURL(in text: String) -> URL? {
+        guard let expression = try? NSRegularExpression(pattern: #"https://[^\\s<>()]+"#) else {
+            return nil
+        }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = expression.firstMatch(in: text, range: range),
+              let matchRange = Range(match.range, in: text) else {
+            return nil
+        }
+        let raw = String(text[matchRange]).trimmingCharacters(
+            in: CharacterSet(charactersIn: ".,;:!?)]}")
+        )
+        guard let url = URL(string: raw),
+              url.scheme?.lowercased() == "https",
+              url.host != nil else {
+            return nil
+        }
+        return url
+    }
 }
