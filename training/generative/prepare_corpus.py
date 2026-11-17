@@ -40,7 +40,7 @@ def alpha_ratio(text: str) -> float:
 
 def split_for_document(text_hash: str) -> str:
     bucket = int(text_hash[:8], 16) % 100
-    return "train" if bucket < 90 else ("validation" if bucket < 95 else "test")
+    return "train" if bucket < 80 else ("validation" if bucket < 90 else "test")
 
 
 def prepare(args: argparse.Namespace) -> dict:
