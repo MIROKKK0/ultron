@@ -1,13 +1,17 @@
 import unittest
 
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None
 
-from training.generative.model import ModelConfig, UltronTinyGPT
-from training.generative.tokenizer import BOS_ID
 
-
+@unittest.skipIf(torch is None, "PyTorch is installed only in the optional training workflow")
 class TinyTransformerTests(unittest.TestCase):
     def test_forward_loss_backward_and_greedy_generation(self):
+        from training.generative.model import ModelConfig, UltronTinyGPT
+        from training.generative.tokenizer import BOS_ID
+
         config = ModelConfig(context_length=16, width=32, layers=1, heads=4)
         model = UltronTinyGPT(config)
         inputs = torch.randint(0, config.vocab_size, (2, 8))
@@ -21,6 +25,8 @@ class TinyTransformerTests(unittest.TestCase):
         self.assertGreater(model.parameter_count(), 0)
 
     def test_rejects_input_longer_than_context(self):
+        from training.generative.model import ModelConfig, UltronTinyGPT
+
         model = UltronTinyGPT(ModelConfig(context_length=8, width=32, layers=1, heads=4))
         with self.assertRaises(ValueError):
             model(torch.ones((1, 9), dtype=torch.long))
