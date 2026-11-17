@@ -57,6 +57,15 @@ class GenerativeTrainingTests(unittest.TestCase):
             self.assertGreaterEqual(checkpoint["best_step"], 1)
             self.assertIsNotNone(checkpoint["test_loss"])
 
+            args.init_checkpoint = str(root / "checkpoint.pt")
+            args.output = str(root / "checkpoint-next.pt")
+            args.steps = 2
+            continued = train(args)
+            next_checkpoint = torch.load(root / "checkpoint-next.pt", map_location="cpu", weights_only=True)
+            self.assertTrue(continued["initialized_from_checkpoint"])
+            self.assertEqual(next_checkpoint["cumulative_training_steps"], 5)
+            self.assertIsNotNone(next_checkpoint["parent_checkpoint_sha256"])
+
     def test_evaluation_restores_model_training_mode(self):
         from training.generative.model import ModelConfig, UltronTinyGPT
         from training.generative.train import evaluate_loss
