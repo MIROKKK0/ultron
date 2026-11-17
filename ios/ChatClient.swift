@@ -89,7 +89,7 @@ struct ChatClient {
 
         for try await line in bytes.lines {
             guard line.hasPrefix("data:") else { continue }
-            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
             guard let data = payload.data(using: .utf8) else { continue }
             let event = try JSONDecoder().decode(ChatStreamEvent.self, from: data)
             switch event.type {
