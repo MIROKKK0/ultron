@@ -22,8 +22,7 @@ def decode_local(
 
     if re.search(r"\b(oi|olá|ola|e aí|eai|bom dia|boa tarde|boa noite)\b", lower):
         return (
-            "Oi! Sou o ULTRON. a camada local está ativa e "
-            "a prioridade desta resposta. Posso conversar, organizar objetivos, "
+            "Oi! Sou o ULTRON. A camada local está ativa. Posso conversar, organizar objetivos, "
             "planejar tarefas, calcular e consultar minhas memórias. Não uso "
             "tokens nem APIs de IA externas."
         )
@@ -75,7 +74,7 @@ def decode_local(
 
     if any(word in lower for word in ("plano", "planeje", "organize", "como faço", "como fazer", "etapas", "me ajuda a planejar", "quero planejar")):
         return (
-            f"Vou priorizar a estratégia {strategy}, conforme a atividade neural.\n"
+            f"Vou priorizar a estratégia {strategy}, com uma estratégia inicial.\n"
             f"Objetivo identificado: {text}\n"
             "1. Esclarecer o resultado esperado.\n"
             "2. Separar o trabalho em etapas verificáveis.\n"
