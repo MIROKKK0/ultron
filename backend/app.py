@@ -65,8 +65,13 @@ def require_installation(authorization: str | None = Header(default=None)) -> st
 
 
 def optional_installation(authorization: str | None = Header(default=None)) -> str | None:
-    # Ordinary public chat remains available without registering an installation.
+    # The legacy administrative token must never be interpreted as a personal
+    # installation credential or used to expose any installation's memories.
     if not authorization:
+        return None
+    scheme, _, supplied = authorization.partition(" ")
+    admin_token = os.getenv("ULTRON_API_TOKEN", "")
+    if scheme.lower() == "bearer" and admin_token and hmac.compare_digest(supplied, admin_token):
         return None
     return _installation_id_from_authorization(authorization)
 
