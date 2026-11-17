@@ -33,3 +33,20 @@ Broader integrations must use Apple's supported APIs and explicit permission flo
 ## Validation still required
 
 The iOS GitHub Actions workflow must compile this change. A successful CI build does not replace installation and testing on the user's iPhone 11 Pro.
+
+
+## Real-time ULTRON brain monitor
+
+The iOS header now renders a lightweight procedural hologram using SwiftUI
+`Canvas` and `TimelineView`. Its motion rate and intensity respond to the
+request lifecycle instead of driving a timer through the entire chat view.
+
+The app calls `POST /chat/stream`, which emits server-sent events for
+`processing` and `responding`, followed by the final answer. The processing
+event is sent when the server accepts the request for execution; it does not
+claim to expose hidden neural activations or token-by-token model thoughts.
+The current language decoder is still deterministic, not a trained LLM.
+
+The monitor uses a bounded 28-particle drawing and 12 FPS while idle / 24 FPS
+during requests. This is a visual activity monitor, not a biological brain
+simulation. It should be profiled on a physical iPhone before tuning further.
