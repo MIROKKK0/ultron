@@ -34,3 +34,28 @@ Também não há chamadas a provedores de IA hospedados.
   ausente, informando claramente que o modelo ainda não está treinado.
 - Nenhuma alteração deve prometer qualidade equivalente a modelos grandes sem
   benchmarks reproduzíveis.
+
+
+## Implementação iniciada nesta evolução
+
+- O app iOS possui monitor holográfico procedural com partículas e núcleo
+  geométrico, desenhado por `Canvas` + `TimelineView`.
+- O endpoint `POST /chat/stream` envia eventos reais de processamento e
+  resposta; o cliente iOS acompanha esses eventos via Server-Sent Events.
+- O pacote `training/` contém um tokenizador byte-level próprio e um
+  Transformer causal pequeno, com inicialização aleatória e treino reproduzível.
+- O corpus inicial é autoral e serve apenas para smoke training.
+- O runtime web expõe `GET /runtime/status` para medir RSS e pressão contra
+  orçamento configurável de 512 MB.
+- O iOS oferece cópia, leitura em voz alta, compartilhamento e uma ação
+  invocável pelo app Atalhos/Siri.
+
+## O que ainda não está concluído
+
+- Nenhum checkpoint treinado e avaliado está integrado ao backend.
+- O modelo experimental ainda não tem qualidade de conversa geral.
+- A API online e o streaming precisam de validação no deploy real.
+- A IPA precisa concluir build e ser testada no iPhone físico.
+- Memória pessoal por instalação ainda precisa de identidade/autorização segura.
+- A animação é um monitor visual de estados do ciclo, não leitura de ativações
+  internas de uma rede neural nem prova de consciência.
