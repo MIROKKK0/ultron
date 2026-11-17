@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
@@ -175,6 +175,7 @@ def init_db() -> None:
         execute(db, """CREATE TABLE IF NOT EXISTS installation_memories (id BIGSERIAL PRIMARY KEY, installation_id TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)""")
     else:
         execute(db, """CREATE TABLE IF NOT EXISTS installation_memories (id INTEGER PRIMARY KEY AUTOINCREMENT, installation_id TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)""")
+    execute(db, "CREATE INDEX IF NOT EXISTS installation_memories_owner_idx ON installation_memories(installation_id, id)")
 
 
 def load_associative_memory() -> None:
@@ -701,9 +702,11 @@ def runtime_status(request: Request) -> dict[str, Any]:
 
 
 @app.post("/installations/register")
-def register_installation(request: Request) -> dict[str, str]:
+def register_installation(request: Request, response: Response) -> dict[str, str]:
     """Create an isolated installation identity; the random token is returned once."""
     enforce_public_limit(request, "installation-register", limit=10, window_seconds=3600)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
     installation_id = str(uuid.uuid4())
     token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
