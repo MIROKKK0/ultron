@@ -373,7 +373,7 @@ def execute_brain_cycle(
     ]
     synthesis = research["summary"] if research and research.get("count", 0) else answer
     if research and not research.get("count", 0):
-        synthesis += "\\n\\nA pesquisa não retornou fontes verificáveis."
+        synthesis += "\n\nA pesquisa não retornou fontes verificáveis."
     return {
         "brain_version": "4.0.0-local-tools",
         "strategy_priorities": scores,
@@ -568,26 +568,26 @@ async def chat_stream(payload: ChatRequest, request: Request) -> StreamingRespon
     async def events():
         yield "data: " + json.dumps(
             {"type": "stage", "stage": "processing"}, separators=(",", ":")
-        ) + "\\n\\n"
+        ) + "\n\n"
         try:
             result = await run_in_threadpool(chat, payload, request)
         except HTTPException as exc:
             yield "data: " + json.dumps(
                 {"type": "error", "status": exc.status_code}, separators=(",", ":")
-            ) + "\\n\\n"
+            ) + "\n\n"
             return
         except Exception:
             yield "data: " + json.dumps(
                 {"type": "error", "status": 500}, separators=(",", ":")
-            ) + "\\n\\n"
+            ) + "\n\n"
             return
 
         yield "data: " + json.dumps(
             {"type": "stage", "stage": "responding"}, separators=(",", ":")
-        ) + "\\n\\n"
+        ) + "\n\n"
         yield "data: " + json.dumps(
             {"type": "final", **result}, ensure_ascii=False, separators=(",", ":")
-        ) + "\\n\\n"
+        ) + "\n\n"
 
     return StreamingResponse(
         events(),
