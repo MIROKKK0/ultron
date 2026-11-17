@@ -2,6 +2,7 @@ import SwiftUI
 
 enum BrainPhase: Equatable {
     case idle
+    case connecting
     case processing
     case responding
     case error
@@ -9,6 +10,7 @@ enum BrainPhase: Equatable {
     var title: String {
         switch self {
         case .idle: return "Núcleo em espera"
+        case .connecting: return "Conectando ao núcleo"
         case .processing: return "Processando solicitação"
         case .responding: return "Resposta recebida"
         case .error: return "Falha na conexão"
@@ -18,6 +20,7 @@ enum BrainPhase: Equatable {
     var intensity: Double {
         switch self {
         case .idle: return 0.32
+        case .connecting: return 0.58
         case .processing: return 1.0
         case .responding: return 1.35
         case .error: return 0.12
