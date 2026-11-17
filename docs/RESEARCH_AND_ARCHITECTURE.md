@@ -31,8 +31,9 @@ O backend web deve continuar sem PyTorch e sem carregar pesos generativos no pro
 - [jlinoff/tiny-llm-in-rust](https://github.com/jlinoff/tiny-llm-in-rust): BPE, Transformer pequeno, autograd, treino e KV cache didáticos.
 - [MarcoKl99/LLM-Lab](https://github.com/MarcoKl99/LLM-Lab): pipeline reproduzível e métricas de validação.
 - [RamiJaloudi/small-llm-from-scratch](https://github.com/RamiJaloudi/small-llm-from-scratch): dados, tokenizer, treino, checkpoints e presets de GPU.
-- [freeCodeCamp — Train Your Own LLM](https://www.youtube.com/watch?v=9Ge0sMm65jo): corpus, BPE, Transformer, pré-treino e instruction tuning.
-- [Tiny GPT from scratch (2026)](https://www.youtube.com/watch?v=NiZdkwx9t5Q): tokenização, atenção causal, loss, treino e avaliação.
+- [Let's build GPT: from scratch, in code, spelled out](https://www.youtube.com/watch?v=kCc8FmEb1nY): aula de 1h56 de Andrej Karpathy construindo um GPT do zero, incluindo tokenizer, split treino/validação, atenção causal e Transformer.
+- [Let's reproduce GPT-2 (124M)](https://www.youtube.com/watch?v=l8pRSuU81PU): aula de 4h sobre implementação, otimização, treino, validação e avaliação de um modelo de 124M parâmetros.
+- [Code an LLM From Scratch — Theory to RLHF](https://www.freecodecamp.org/news/code-an-llm-from-scratch-theory-to-rlhf): curso de aproximadamente seis horas com PyTorch, tiny LLM, RoPE, KV cache, SFT e RLHF; a página inclui o vídeo do freeCodeCamp.
 - [EvoSkill](https://github.com/sentient-agi/EvoSkill): aprende skills reutilizáveis de falhas e seleciona variantes por avaliação; depende de modelo propositor.
 - [Awesome Self-Improving Agents](https://github.com/interactivetech/awesome-self-improving-agent): mapa de pesquisa sobre evolução de memória, skills, harnesses e políticas.
 - [skillmem](https://github.com/liza-studio/skillmem): memória local com proveniência e confiança explícitas.
