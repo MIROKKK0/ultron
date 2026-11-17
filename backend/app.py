@@ -18,6 +18,7 @@ from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposa
 from backend.brain import run_multitask
 from backend.fly_brain import FLY_BRAIN, FLY_BRAIN_SOURCE, FLY_BRAIN_VERSION
 from backend.flywire_runtime import status as flywire_status, runtime_loaded as flywire_runtime_loaded
+from backend.hosted_language import configured_providers, generate_reply
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
 from backend.public_access import enforce_public_limit
@@ -437,8 +438,8 @@ def brain_status(request: Request) -> dict[str, Any]:
         },
         "parallel_specialists": ["planner", "solver", "critic"],
         "parallel_task_limit": 5,
-        "model_configured": False,
-        "language_decoder": "local_deterministic",
+        "model_configured": bool(configured_providers()),
+        "language_decoder": "free_hosted_with_local_fallback" if configured_providers() else "local_deterministic",
         "external_ai_tokens_required": False,
         "web_research_enabled": True,
         "experimental_associative_learning": True,
@@ -540,11 +541,27 @@ def health() -> dict[str, Any]:
         "status": "online",
         "version": app.version,
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
-        "ai_configured": False,
+        "ai_configured": bool(configured_providers()),
         "neural_core_configured": True,
         "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
         "health_check": "process_liveness_only",
+    }
+
+
+@app.get("/ai/status")
+def ai_status(request: Request) -> dict[str, Any]:
+    """Expose provider readiness without exposing keys or configuration values."""
+    enforce_public_limit(request, "ai-status", limit=60)
+    providers = configured_providers()
+    return {
+        "configured": bool(providers),
+        "providers": providers,
+        "primary": providers[0] if providers else None,
+        "fallback": "local_deterministic",
+        "secrets_exposed": False,
+        "paid_models_enabled": os.getenv("ULTRON_ALLOW_PAID_AI", "0").lower() in {"1", "true", "yes"},
+        "free_tier_limits_apply": True,
     }
 
 
@@ -568,20 +585,29 @@ def _extract_research_query(message: str) -> str | None:
 
 @app.post("/", include_in_schema=False)
 @app.post("/chat")
-def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
+def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
     enforce_public_limit(request, "chat", limit=20)
     message = payload.message.strip()
     # Public chat must not read or write shared private memories/conversations.
+    # FlyBrain is mandatory and always runs before any hosted language provider.
     try:
         neural_state = apply_learned_strategy_policy(FLY_BRAIN.process(message, []))
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    provider_used = "local"
+    model_used = None
     research_query = message[10:].strip() if message.casefold().startswith("/research ") else _extract_research_query(message)
     calculation = re.match(r"^(?:quanto é|quanto dá|calcule|calcular|resultado de)\s+(.+?)\s*[?.!]*$", message, re.I)
     if research_query:
         try:
             research = search_web(research_query)
             response = research["summary"]
+            hosted = generate_reply(message, neural_state, research_context=research["summary"])
+            if hosted:
+                response = hosted["text"]
+                provider_used = hosted["provider"]
+                model_used = hosted["model"]
         except Exception:
             response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; o núcleo FlyBrain continua ativo."
     elif message.casefold() == "/brain" or message.casefold().startswith("/brain "):
@@ -611,11 +637,23 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     elif message.casefold().startswith("/remember ") or re.match(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", message, re.I):
         response = "Ainda não vou gravar isso em uma memória compartilhada. A memória pessoal precisa de identificação segura por instalação; assim seus dados não ficam misturados com os de outros usuários."
     else:
-        response = answer_without_provider(message, [], [], neural_state)
+        hosted = generate_reply(message, neural_state)
+        if hosted:
+            response = hosted["text"]
+            provider_used = hosted["provider"]
+            model_used = hosted["model"]
+        else:
+            response = answer_without_provider(message, [], [], neural_state)
+
     role_scores = neural_state.get("role_scores", {})
     feedback_strategies = {role: float(role_scores.get(role, 0.0)) for role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
-    return {"reply": response, "strategy": selected_strategy}
+    return {
+        "reply": response,
+        "strategy": selected_strategy,
+        "provider": provider_used,
+        "model": model_used,
+    }
 
 
 @app.post("/memory", dependencies=[Depends(require_api_token)])
