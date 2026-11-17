@@ -58,8 +58,8 @@ class HostedLanguageTests(unittest.TestCase):
             with patch("backend.hosted_language.httpx.Client", return_value=client):
                 result = generate_reply("Explique FlyBrain", {"core": "FlyBrain"})
         self.assertEqual(result["text"], "Resposta online")
-        self.assertEqual(result["model"], "openrouter/free")
-        self.assertEqual(calls[0][1]["json"]["model"], "openrouter/free")
+        self.assertEqual(result["model"], "qwen/qwen3.8-27b:free")
+        self.assertEqual(calls[0][1]["json"]["model"], "qwen/qwen3.8-27b:free")
         self.assertNotIn("router-secret", str(result))
 
     def test_recent_chat_history_is_sent_and_system_roles_are_dropped(self):
