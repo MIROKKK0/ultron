@@ -236,7 +236,7 @@ private struct MessageBubble: View {
                     }
                     .padding(.horizontal, 8)
                     if let feedbackError {
-                        Text("Falha no feedback: \\(feedbackError)")
+                        Text("Falha no feedback: \(feedbackError)")
                             .font(.caption2)
                             .foregroundStyle(.red)
                             .padding(.horizontal, 8)
