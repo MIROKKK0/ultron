@@ -38,8 +38,7 @@ def decode_local(
         return (
             "Sou ULTRON. Minha arquitetura organiza tarefas com ferramentas locais; "
             "a camada linguística local converte a intenção em respostas estruturadas. "
-            "Sem Gemini, OpenAI, Claude ou tokens externos. O circuito atual é um "
-            "microcircuito LIF de 48 neurônios, não o conectoma FlyWire completo."
+            "Sem Gemini, OpenAI, Claude ou tokens externos. A camada linguística atual é determinística, não um LLM treinado."
         )
     if lower.startswith("/calc "):
         return "Use o mecanismo de cálculo seguro do ULTRON."
