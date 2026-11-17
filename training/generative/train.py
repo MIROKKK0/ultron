@@ -84,6 +84,24 @@ def train(args: argparse.Namespace) -> dict:
         raise ValueError("Test corpus is too short for the configured context")
     config = ModelConfig(vocab_size=tokenizer.vocab_size, context_length=args.context_length, width=args.width, layers=args.layers, heads=args.heads)
     model = UltronTinyGPT(config)
+    tokenizer_hash = hashlib.sha256(Path(tokenizer_json_path).read_bytes()).hexdigest() if tokenizer_json_path else None
+    init_checkpoint_path = getattr(args, "init_checkpoint", None)
+    parent_checkpoint_sha256 = None
+    parent_cumulative_steps = 0
+    if init_checkpoint_path:
+        parent_path = Path(init_checkpoint_path)
+        if not parent_path.is_file():
+            raise ValueError("Initial checkpoint does not exist")
+        parent = torch.load(parent_path, map_location="cpu", weights_only=True)
+        if parent.get("model_config") != model.config_dict():
+            raise ValueError("Initial checkpoint architecture does not match this training run")
+        if parent.get("tokenizer_version") != tokenizer.version:
+            raise ValueError("Initial checkpoint tokenizer version does not match")
+        if parent.get("tokenizer_json_sha256") != tokenizer_hash:
+            raise ValueError("Initial checkpoint tokenizer checksum does not match")
+        model.load_state_dict(parent["model_state"], strict=True)
+        parent_checkpoint_sha256 = hashlib.sha256(parent_path.read_bytes()).hexdigest()
+        parent_cumulative_steps = int(parent.get("cumulative_training_steps", parent.get("training_steps", 0)))
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     sampler = torch.Generator(device="cpu").manual_seed(args.seed + 1)
     warmup_steps = min(args.warmup_steps, max(0, args.steps - 1))
@@ -145,8 +163,10 @@ def train(args: argparse.Namespace) -> dict:
     temp = output.with_name(output.name + ".tmp")
     torch.save({"model_state": model.state_dict(), "model_config": model.config_dict(),
         "tokenizer_version": tokenizer.version, "tokenizer_vocab_size": tokenizer.vocab_size,
-        "tokenizer_json_sha256": hashlib.sha256(Path(tokenizer_json_path).read_bytes()).hexdigest() if tokenizer_json_path else None, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
-        "training_steps": completed_steps, "requested_training_steps": args.steps,
+        "tokenizer_json_sha256": tokenizer_hash, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
+        "training_steps": completed_steps, "cumulative_training_steps": parent_cumulative_steps + completed_steps,
+        "initialized_from_checkpoint": bool(init_checkpoint_path), "parent_checkpoint_sha256": parent_checkpoint_sha256,
+        "requested_training_steps": args.steps,
         "best_step": best_step, "best_validation_loss": best_validation_loss,
         "early_stopping_patience": args.early_stopping_patience, "min_delta": args.min_delta,
         "seed": args.seed, "validation_fraction": args.validation_fraction,
@@ -160,6 +180,8 @@ def train(args: argparse.Namespace) -> dict:
     temp.replace(output)
     return {"checkpoint": str(output), "parameters": model.parameter_count(), "training_steps": completed_steps,
         "requested_training_steps": args.steps, "best_step": best_step,
+        "cumulative_training_steps": parent_cumulative_steps + completed_steps,
+        "initialized_from_checkpoint": bool(init_checkpoint_path),
         "tokenizer": tokenizer.version, "validation_loss": round(final_loss, 5),
         "validation_perplexity": round(math.exp(min(final_loss, 80)), 5),
         "test_loss": round(test_loss, 5) if test_loss is not None else None,
@@ -173,6 +195,7 @@ def main() -> None:
     parser.add_argument("--validation-corpus", default=None)
     parser.add_argument("--test-corpus", default=None)
     parser.add_argument("--output", default="artifacts/ultron-tiny.pt")
+    parser.add_argument("--init-checkpoint", default=None, help="Continue pretraining from a compatible ULTRON checkpoint")
     parser.add_argument("--tokenizer-json", default=None)
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=8)
