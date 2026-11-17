@@ -27,7 +27,7 @@ APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 DB_PATH = Path(os.getenv("ULTRON_DB_PATH", "ultron.db"))
 
-app = FastAPI(title=APP_NAME, version="0.4.0", description="Assistente pessoal com memória persistente e ações seguras.")
+app = FastAPI(title=APP_NAME, version="0.5.0", description="Assistente pessoal com memória persistente e ações seguras.")
 
 _ALLOWED_OPERATORS = {
     ast.Add: operator.add,
@@ -417,8 +417,9 @@ def brain_status(request: Request) -> dict[str, Any]:
         "neural_core_configured": False,
         "parallel_specialists": ["planner", "solver", "critic"],
         "parallel_task_limit": 5,
-        "model_configured": False,
-        "language_decoder": "local_deterministic",
+        "model_configured": True,
+        "generative_language_model_configured": False,
+        "language_decoder": "local_deterministic_with_intent_classifier",
         "intent_model": model_status(),
         "external_ai_tokens_required": False,
         "web_research_enabled": True,
