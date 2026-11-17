@@ -5,87 +5,85 @@ struct ChatMessage: Identifiable, Codable {
     let role: Role
     let text: String
     let strategy: String?
-
     enum Role: String, Codable { case user, assistant }
-
     init(role: Role, text: String, strategy: String? = nil) {
-        self.id = UUID()
-        self.role = role
-        self.text = text
-        self.strategy = strategy
+        self.id = UUID(); self.role = role; self.text = text; self.strategy = strategy
     }
 }
-
 private struct ChatRequest: Encodable { let message: String }
+private struct ChatResponse: Decodable { let reply: String; let strategy: String? }
 private struct ChatStreamEvent: Decodable {
-    let type: String
-    let stage: String?
-    let reply: String?
-    let strategy: String?
-    let status: Int?
+    let type: String; let stage: String?; let reply: String?; let strategy: String?; let status: Int?
 }
-private struct FeedbackRequest: Encodable {
-    let rating: Int
-    let strategy: String
-    let comment: String
-}
-
+private struct FeedbackRequest: Encodable { let rating: Int; let strategy: String; let comment: String }
 struct ChatResult { let reply: String; let strategy: String? }
 
 enum ChatClientError: LocalizedError {
-    case invalidServerURL
-    case invalidResponse
-    case serverError(Int)
-
+    case invalidServerURL, invalidResponse, serverError(Int)
     var errorDescription: String? {
         switch self {
         case .invalidServerURL: return "Configure o endereço HTTPS do servidor."
-        case .invalidResponse: return "Resposta inválida do servidor."
-        case .serverError(let code): return "O servidor respondeu com erro (\(code))."
+        case .invalidResponse: return "O servidor enviou uma resposta inválida."
+        case .serverError(let code):
+            if code == 404 { return "A rota de chat não existe nesta versão do servidor. O ULTRON tentou compatibilidade com /chat, mas ela também não respondeu." }
+            if code == 503 { return "O servidor está temporariamente indisponível ou sem uma configuração necessária." }
+            return "O servidor respondeu com erro (\\(code))."
         }
     }
 }
-
 private struct HealthResponse: Decodable { let status: String }
 
 struct ChatClient {
-    func checkHealth(serverURL: String) async -> Bool {
-        guard let base = URL(string: serverURL), base.scheme == "https",
-              let url = URL(string: "/health", relativeTo: base) else { return false }
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = 12
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode) else { return false }
-            return (try? JSONDecoder().decode(HealthResponse.self, from: data).status) == "online"
-        } catch {
-            return false
-        }
+    private func endpoint(_ path: String, serverURL: String) -> URL? {
+        guard let base = URL(string: serverURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              base.scheme?.lowercased() == "https", base.host != nil else { return nil }
+        return URL(string: path, relativeTo: base)?.absoluteURL
     }
 
-    func send(
-        _ message: String,
-        serverURL: String,
-        onPhase: @MainActor @escaping (BrainPhase) -> Void = { _ in }
-    ) async throws -> ChatResult {
-        guard let base = URL(string: serverURL), base.scheme == "https",
-              let url = URL(string: "/chat/stream", relativeTo: base) else {
-            throw ChatClientError.invalidServerURL
+    func checkHealth(serverURL: String) async -> Bool {
+        for path in ["/health", "/"] {
+            guard let url = endpoint(path, serverURL: serverURL) else { return false }
+            var request = URLRequest(url: url); request.httpMethod = "GET"; request.timeoutInterval = 12
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { continue }
+                if (try? JSONDecoder().decode(HealthResponse.self, from: data).status) == "online" { return true }
+            } catch { continue }
         }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 90
+        return false
+    }
+
+    private func sendLegacy(_ message: String, serverURL: String) async throws -> ChatResult {
+        guard let url = endpoint("/chat", serverURL: serverURL) else { throw ChatClientError.invalidServerURL }
+        var request = URLRequest(url: url); request.httpMethod = "POST"; request.timeoutInterval = 90
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(ChatRequest(message: message))
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw ChatClientError.serverError(http.statusCode) }
+        let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
+        return ChatResult(reply: decoded.reply, strategy: decoded.strategy)
+    }
+
+    func send(_ message: String, serverURL: String,
+              onPhase: @MainActor @escaping (BrainPhase) -> Void = { _ in }) async throws -> ChatResult {
+        guard let url = endpoint("/chat/stream", serverURL: serverURL) else { throw ChatClientError.invalidServerURL }
+        var request = URLRequest(url: url); request.httpMethod = "POST"; request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.httpBody = try JSONEncoder().encode(ChatRequest(message: message))
-
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else {
-            throw ChatClientError.serverError(http.statusCode)
+
+        // A Render instance on the previous backend revision returns 404 here.
+        // Retry once on the stable /chat JSON endpoint rather than failing the conversation.
+        if http.statusCode == 404 {
+            await onPhase(.processing)
+            let result = try await sendLegacy(message, serverURL: serverURL)
+            await onPhase(.responding)
+            return result
         }
+        guard (200..<300).contains(http.statusCode) else { throw ChatClientError.serverError(http.statusCode) }
 
         for try await line in bytes.lines {
             guard line.hasPrefix("data:") else { continue }
@@ -94,35 +92,23 @@ struct ChatClient {
             let event = try JSONDecoder().decode(ChatStreamEvent.self, from: data)
             switch event.type {
             case "stage":
-                if event.stage == "processing" {
-                    await onPhase(.processing)
-                } else if event.stage == "responding" {
-                    await onPhase(.responding)
-                }
+                if event.stage == "processing" { await onPhase(.processing) }
+                else if event.stage == "responding" { await onPhase(.responding) }
             case "final":
                 guard let reply = event.reply else { throw ChatClientError.invalidResponse }
                 return ChatResult(reply: reply, strategy: event.strategy)
-            case "error":
-                throw ChatClientError.serverError(event.status ?? 500)
-            default:
-                continue
+            case "error": throw ChatClientError.serverError(event.status ?? 500)
+            default: continue
             }
         }
         throw ChatClientError.invalidResponse
     }
 
     func sendFeedback(_ rating: Int, strategy: String, serverURL: String) async throws {
-        guard let base = URL(string: serverURL), base.scheme == "https",
-              let url = URL(string: "/feedback", relativeTo: base) else {
-            throw ChatClientError.invalidServerURL
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 20
+        guard let url = endpoint("/feedback", serverURL: serverURL) else { throw ChatClientError.invalidServerURL }
+        var request = URLRequest(url: url); request.httpMethod = "POST"; request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(
-            FeedbackRequest(rating: rating, strategy: strategy, comment: "")
-        )
+        request.httpBody = try JSONEncoder().encode(FeedbackRequest(rating: rating, strategy: strategy, comment: ""))
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else { throw ChatClientError.serverError(http.statusCode) }
