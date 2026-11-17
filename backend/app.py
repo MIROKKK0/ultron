@@ -47,8 +47,8 @@ _ALLOWED_OPERATORS = {
 }
 
 
-def require_installation(authorization: str | None = Header(default=None)) -> str:
-    """Authenticate one app installation without embedding a shared server secret."""
+def _installation_id_from_authorization(authorization: str | None) -> str:
+    """Resolve a random per-installation credential to its isolated owner ID."""
     scheme, _, supplied = (authorization or "").partition(" ")
     if scheme.lower() != "bearer" or len(supplied) < 32:
         raise HTTPException(status_code=401, detail="Instalação não autenticada.")
@@ -58,6 +58,17 @@ def require_installation(authorization: str | None = Header(default=None)) -> st
     if not row:
         raise HTTPException(status_code=401, detail="Credencial da instalação inválida ou revogada.")
     return str(row["installation_id"])
+
+
+def require_installation(authorization: str | None = Header(default=None)) -> str:
+    return _installation_id_from_authorization(authorization)
+
+
+def optional_installation(authorization: str | None = Header(default=None)) -> str | None:
+    # Ordinary public chat remains available without registering an installation.
+    if not authorization:
+        return None
+    return _installation_id_from_authorization(authorization)
 
 
 def require_api_token(authorization: str | None = Header(default=None)) -> bool:
@@ -338,6 +349,7 @@ def execute_brain_cycle(
     history: list[str] | None = None,
     *,
     include_private_memories: bool = True,
+    installation_id: str | None = None,
 ) -> dict[str, Any]:
     """Run real local planner/solver/critic tools; research intents use web search.
 
@@ -347,7 +359,11 @@ def execute_brain_cycle(
     if not normalized_goal:
         raise ValueError("Informe o objetivo.")
 
-    if include_private_memories:
+    if include_private_memories and installation_id:
+        with connect_db() as db:
+            rows = execute(db, "SELECT content FROM installation_memories WHERE installation_id = ? ORDER BY id DESC LIMIT 100", (installation_id,)).fetchall()
+        memories = rank_memories(normalized_goal, rows, limit=8)
+    elif include_private_memories:
         with connect_db() as db:
             rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
         memories = rank_memories(normalized_goal, rows, limit=8)
@@ -568,7 +584,11 @@ def _extract_research_query(message: str) -> str | None:
 
 @app.post("/", include_in_schema=False)
 @app.post("/chat")
-def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
+def chat(
+    payload: ChatRequest,
+    request: Request,
+    installation_id: str | None = Depends(optional_installation),
+) -> dict[str, str]:
     enforce_public_limit(request, "chat", limit=20)
     message = payload.message.strip()
     # Public chat must not read or write shared private memories/conversations.
@@ -592,7 +612,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
             try:
                 brain_result = execute_brain_cycle(
                     goal,
-                    include_private_memories=False,
+                    include_private_memories=bool(installation_id),
+                    installation_id=installation_id,
                 )
                 response = brain_result["synthesis"]
             except RuntimeError:
@@ -610,7 +631,12 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     elif message.casefold().startswith("/remember ") or re.match(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", message, re.I):
         response = "A memória pessoal exige autenticação por instalação. O chat público não grava dados compartilhados."
     else:
-        response = run_intent_skill(message) or answer_without_provider(message, [], [])
+        personal_memories: list[str] = []
+        if installation_id:
+            with connect_db() as db:
+                rows = execute(db, "SELECT content FROM installation_memories WHERE installation_id = ? ORDER BY id DESC LIMIT 100", (installation_id,)).fetchall()
+            personal_memories = rank_memories(message, rows, limit=5)
+        response = run_intent_skill(message) or answer_without_provider(message, personal_memories, [])
     feedback_strategies = {role: float(score) for role, score in learned_strategy_scores().items() if role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
     return {"reply": response, "strategy": selected_strategy}
