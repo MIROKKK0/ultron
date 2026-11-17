@@ -41,3 +41,12 @@ Essas mudanças melhoram o pipeline, não a capacidade por si só. O corpus atua
 A linha BPE (ultron-bpe-v1) é treinada apenas no split de treino do corpus licenciado. O checkpoint registra versão/hash do tokenizador e tamanho do vocabulário; o treino seleciona o melhor estado pela validação e avalia o teste separado apenas após a seleção. Perplexidade é útil dentro da mesma tokenização, mas não deve ser comparada diretamente entre tokenizadores. Por isso, o pipeline também calcula bits-per-byte (BPB), uma métrica normalizada pelo tamanho UTF-8 do texto. BPB ainda mede apenas previsão do próximo token: não prova qualidade de diálogo, factualidade, segurança ou uso de ferramentas.
 
 O corpus dataseek/ptbr-books-publicos declara CC0-1.0 e contém livros de domínio público. A própria ficha informa que a fonte não foi sanitizada de PII e pode conter nomes, contatos ou conteúdo enviesado; a limpeza por regex do ULTRON é apenas uma mitigação incompleta. Não publique amostras/checkpoints com dados suspeitos sem revisão adicional.
+
+
+## Ciclo automático validado
+
+O arquivo `corpus_pt.txt` versionado é um corpus didático de aproximadamente 1,8 KB. Ele serve somente para smoke tests curtos em pull requests; não é uma base adequada para evolução diária de linguagem.
+
+O pré-treino semanal prepara o corpus público com licença declarada CC0-1.0, guarda proveniência e splits fixos de treino/validação/teste, e treina o BPE próprio. O ciclo diário compara os timestamps do último artefato diário e do pré-treino semanal, continua o checkpoint mais recente com o mesmo tokenizer e os mesmos splits, e rejeita candidatos que regredirem em validação/teste. Se ainda não houver checkpoint semanal válido, o ciclo diário registra que está aguardando, em vez de treinar repetidamente no corpus didático.
+
+A continuação reutiliza os pesos, mas reinicia o estado do otimizador em cada execução. Os artefatos são experimentais, têm retenção limitada e não são automaticamente conectados ao chat de produção.
