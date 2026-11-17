@@ -538,8 +538,25 @@ def brain_flywire_simulate(request: FlyWireSimulationRequest) -> dict[str, Any]:
 @app.post("/brain/research")
 def brain_research(payload: BrainRequest, request: Request) -> dict[str, Any]:
     enforce_public_limit(request, "web-research", limit=8)
+    # Research is a cognitive action too: the mandatory neural core must run
+    # before any external search, and search must fail closed if it is unavailable.
     try:
-        return search_web(payload.goal)
+        neural_state = FLY_BRAIN.process(payload.goal, [])
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    try:
+        result = search_web(payload.goal)
+        scores = neural_state.get("role_scores", {})
+        result["neural_control"] = {
+            "core": neural_state.get("core"),
+            "version": neural_state.get("version"),
+            "is_full_connectome": bool(neural_state.get("is_full_connectome", False)),
+            "researcher_priority": round(float(scores.get("researcher", 0.0)), 4),
+        }
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
