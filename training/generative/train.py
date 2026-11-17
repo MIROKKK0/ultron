@@ -6,6 +6,16 @@ import torch
 from .model import ModelConfig, UltronTinyGPT
 from .tokenizer import ByteTokenizer, TOKENIZER_VERSION
 
+def sample_batch(data: torch.Tensor, batch_size: int, context_length: int, *, generator=None):
+    """Vectorized next-token windows; avoids Python slicing/stacking per sample."""
+    if batch_size < 1 or context_length < 1 or len(data) <= context_length:
+        raise ValueError("Insufficient data or invalid batch dimensions")
+    starts = torch.randint(0, len(data) - context_length, (batch_size,), generator=generator)
+    offsets = torch.arange(context_length)
+    indices = starts[:, None] + offsets[None, :]
+    return data[indices], data[indices + 1]
+
+
 def split_corpus(data: torch.Tensor, context_length: int, validation_fraction: float = 0.1):
     """Split sequentially before sampling windows, preventing train/validation overlap."""
     if not 0.05 <= validation_fraction <= 0.4:
@@ -26,9 +36,7 @@ def evaluate_loss(model, data, *, batch_size: int, batches: int, context_length:
     try:
         model.eval()
         for _ in range(batches):
-            starts = torch.randint(0, len(data) - context_length - 1, (batch_size,), generator=generator)
-            inputs = torch.stack([data[int(i):int(i) + context_length] for i in starts])
-            targets = torch.stack([data[int(i) + 1:int(i) + context_length + 1] for i in starts])
+            inputs, targets = sample_batch(data, batch_size, context_length, generator=generator)
             _, loss = model(inputs, targets)
             if loss is None:
                 raise RuntimeError("Evaluation loss was not produced")
@@ -42,6 +50,8 @@ def train(args: argparse.Namespace) -> dict:
         raise ValueError("Steps, batch size and evaluation batches must be positive")
     if args.eval_interval < 1 or not 1 <= args.threads <= 4:
         raise ValueError("Evaluation interval must be positive and threads must be 1..4")
+    if args.warmup_steps < 0 or not 0.0 < args.min_lr_ratio <= 1.0:
+        raise ValueError("Warmup must be non-negative and min LR ratio must be in (0, 1]")
     torch.manual_seed(args.seed)
     torch.set_num_threads(args.threads)
     corpus = Path(args.corpus).read_text(encoding="utf-8")
@@ -50,11 +60,18 @@ def train(args: argparse.Namespace) -> dict:
     config = ModelConfig(context_length=args.context_length, width=args.width, layers=args.layers, heads=args.heads)
     model = UltronTinyGPT(config)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+    sampler = torch.Generator(device="cpu").manual_seed(args.seed + 1)
+    warmup_steps = min(args.warmup_steps, max(0, args.steps - 1))
+    def learning_rate_scale(step: int) -> float:
+        if warmup_steps and step < warmup_steps:
+            return (step + 1) / warmup_steps
+        progress = (step - warmup_steps) / max(1, args.steps - warmup_steps)
+        cosine = 0.5 * (1.0 + math.cos(math.pi * min(1.0, progress)))
+        return args.min_lr_ratio + (1.0 - args.min_lr_ratio) * cosine
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, learning_rate_scale)
     model.train()
     for step in range(args.steps):
-        starts = torch.randint(0, len(train_data) - args.context_length - 1, (args.batch_size,))
-        inputs = torch.stack([train_data[int(i):int(i) + args.context_length] for i in starts])
-        targets = torch.stack([train_data[int(i) + 1:int(i) + args.context_length + 1] for i in starts])
+        inputs, targets = sample_batch(train_data, args.batch_size, args.context_length, generator=sampler)
         _, loss = model(inputs, targets)
         if loss is None:
             raise RuntimeError("Training loss was not produced")
@@ -62,10 +79,12 @@ def train(args: argparse.Namespace) -> dict:
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
+        scheduler.step()
         if step == 0 or (step + 1) % args.eval_interval == 0 or step + 1 == args.steps:
             val_loss = evaluate_loss(model, validation_data, batch_size=args.batch_size,
                 batches=args.eval_batches, context_length=args.context_length, seed=args.seed + step + 1)
             print(json.dumps({"step": step + 1, "train_loss": round(float(loss.item()), 5),
+                "learning_rate": round(optimizer.param_groups[0]["lr"], 8),
                 "validation_loss": round(val_loss, 5),
                 "validation_perplexity": round(math.exp(min(val_loss, 80)), 5)}))
     final_loss = evaluate_loss(model, validation_data, batch_size=args.batch_size,
@@ -76,6 +95,8 @@ def train(args: argparse.Namespace) -> dict:
     torch.save({"model_state": model.state_dict(), "model_config": model.config_dict(),
         "tokenizer_version": TOKENIZER_VERSION, "corpus_sha256": hashlib.sha256(corpus.encode("utf-8")).hexdigest(),
         "training_steps": args.steps, "seed": args.seed, "validation_fraction": args.validation_fraction,
+        "corpus_characters": len(corpus), "learning_rate": args.learning_rate,
+        "warmup_steps": warmup_steps, "min_lr_ratio": args.min_lr_ratio,
         "validation_loss": final_loss, "validation_perplexity": math.exp(min(final_loss, 80)),
         "parameter_count": model.parameter_count(), "experimental": True}, temp)
     temp.replace(output)
@@ -95,6 +116,8 @@ def main() -> None:
     parser.add_argument("--layers", type=int, default=2)
     parser.add_argument("--heads", type=int, default=4)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
+    parser.add_argument("--warmup-steps", type=int, default=50)
+    parser.add_argument("--min-lr-ratio", type=float, default=0.1)
     parser.add_argument("--validation-fraction", type=float, default=0.1)
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--eval-batches", type=int, default=10)
