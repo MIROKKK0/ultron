@@ -3,7 +3,7 @@ name: ULTRON model training
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 5 * * 1"
+    - cron: "17 14 * * *"
   pull_request:
     branches: ["feat/ultron-core-assistant"]
     paths:
@@ -29,3 +29,11 @@ jobs:
         run: python scripts/train_intent_model.py --check
       - name: Run model and skills tests
         run: python -m unittest tests.test_intent_model tests.test_skills -v
+      - name: Benchmark latency and memory
+        run: python scripts/benchmark_intent_model.py --iterations 1000 | tee ultron-evolution-report.txt
+      - name: Save daily evolution report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultron-daily-evolution-report
+          path: ultron-evolution-report.txt
+          retention-days: 14
