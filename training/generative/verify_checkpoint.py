@@ -11,7 +11,7 @@ from pathlib import Path
 import torch
 
 from .model import ModelConfig, UltronTinyGPT
-from .tokenizer import ByteTokenizer, TrainedBPETokenizer
+from .tokenizer import BOS_ID, ByteTokenizer, TrainedBPETokenizer
 
 
 def main() -> None:
@@ -40,7 +40,7 @@ def main() -> None:
         tokenizer = ByteTokenizer()
         if checkpoint.get("tokenizer_version") != tokenizer.version:
             raise RuntimeError("Checkpoint requires its matching tokenizer JSON")
-        prompt_ids = tokenizer.encode(prompt)
+        prompt_ids = [BOS_ID, *tokenizer.encode(prompt, add_special_tokens=False)]
     if config.vocab_size != tokenizer.vocab_size:
         raise RuntimeError("Checkpoint and tokenizer vocabulary sizes differ")
     model = UltronTinyGPT(config)
@@ -53,7 +53,7 @@ def main() -> None:
         generated = model.generate(input_ids, max_new_tokens=args.tokens, temperature=0)
     elapsed = time.perf_counter() - started
     decoded = tokenizer.decode(generated[0].tolist())
-    if not decoded.startswith(prompt) or len(decoded) <= len(prompt):
+    if generated.shape[1] != input_ids.shape[1] + args.tokens or not decoded.startswith(prompt):
         raise RuntimeError("Checkpoint generation smoke test returned an invalid result")
 
     # Linux reports ru_maxrss in KiB. This is a runner-side measurement, not iPhone RAM.
