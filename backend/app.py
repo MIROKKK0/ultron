@@ -550,6 +550,10 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     # Public chat must not read or write shared private memories/conversations.
     research_query = message[10:].strip() if message.casefold().startswith("/research ") else _extract_research_query(message)
     calculation = re.match(r"^(?:quanto é|quanto dá|calcule|calcular|resultado de)\s+(.+?)\s*[?.!]*$", message, re.I)
+    # Accept a plain expression such as "1+9", without requiring a command.
+    if calculation is None and re.fullmatch(r"[0-9\s.,()+*/-]+", message) and re.search(r"[+*/-]", message):
+        if len(re.findall(r"\d+(?:[.,]\d+)?", message)) >= 2:
+            calculation = re.match(r"^(.+)$", message)
     if research_query:
         try:
             research = search_web(research_query)
