@@ -49,7 +49,7 @@ enum ChatClientError: LocalizedError {
             if code == 503 {
                 return "O servidor está temporariamente indisponível ou sem uma configuração necessária."
             }
-            return "O servidor respondeu com erro (\\(code))."
+            return "O servidor respondeu com erro (\(code))."
         }
     }
 }
