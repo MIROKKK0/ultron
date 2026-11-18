@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-18T04:11:12.784731+00:00",
+  "repository": "MIROKKK0/ultron",
+  "commit": "24cc5daac7ccb6a70ad7606f40666d3c0f37bb05",
+  "scope": "public research plus bounded deterministic repair experiment; no external code execution, merge or production deployment",
+  "local": {
+    "files_scanned": 12,
+    "maintenance_markers": []
+  },
+  "recent_failures": [],
+  "open_issues": [
+    {
+      "number": 55,
+      "title": "[ULTRON] Relatório autônomo de investigação",
+      "url": "https://github.com/MIROKKK0/ultron/issues/55"
+    }
+  ],
+  "research_leads": [
+    {
+      "name": "agungvg/news-image-20261117",
+      "description": "Tuesday 17 November 2026 world news in one image. Built by an AI agent for make.fun's \"Sum up 17 November's world news in one image\" bounty, $250 in USDC.",
+      "url": "https://github.com/agungvg/news-image-20261117",
+      "updated_at": "2026-11-18T04:11:04Z",
+      "license": "NOASSERTION"
+    },
+    {
+      "name": "stephxu96/pruneagent",
+      "description": "LLM agent that prunes Qwen3 to Wanda-level quality with real memory and speed savings",
+      "url": "https://github.com/stephxu96/pruneagent",
+      "updated_at": "2026-11-16T18:05:30Z",
+      "license": null
+    },
+    {
+      "name": "YKB01/so101-cube-position-analysis",
+      "description": "Red cube position analysis for SO-101 LeRobot datasets: first-frame detection, test positions vs. training data",
+      "url": "https://github.com/YKB01/so101-cube-position-analysis",
+      "updated_at": "2026-11-12T04:43:05Z",
+      "license": null
+    },
+    {
+      "name": "Tokaecom/agent-annonces",
+      "description": "Agent IA qui surveille les posts Trump sur Truth Social et envoie des alertes trading sur Telegram en cas d'annonce a fort impact macro/geopolitique. Filtrage intelligent via Claude Sonnet 4.5.",
+      "url": "https://github.com/Tokaecom/agent-annonces",
+      "updated_at": "2026-11-12T15:05:41Z",
+      "license": null
+    }
+  ],
+  "web_research": [
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "Regression testing: Automate it with CI/CD - CircleCI",
+      "url": "https://circleci.com/blog/regression-testing-and-how-to-automate-it-with-ci/",
+      "snippet": "Mar 5, 2026 · Learn what regression testing is, how it differs from retesting, and how to automate it in a CI/CD pipeline to catch bugs early and ship safely."
+    },
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "Regression Testing in CI/CD Pipelines - Complete Guide",
+      "url": "https://www.virtuosoqa.com/post/ci-cd-regression-testing",
+      "snippet": "Apr 8, 2026 · Embed regression testing into CI/CD pipelines with practical patterns for quality gates, parallel execution, self-healing tests, and AI automation."
+    }
+  ],
+  "reproduction_attempts": [],
+  "collection_errors": [],
+  "priorities": [
+    "Agrupar issues abertas por componente e evitar criar tarefas duplicadas.",
+    "Revisar manualmente relevância, licença, segurança e data das referências públicas antes de adotar qualquer técnica.",
+    "Expandir receitas de reparo somente quando houver falha reproduzível, teste de regressão e evidência de não regressão."
+  ]
+}
