@@ -28,7 +28,7 @@ class AutonomousAgentReportTests(unittest.TestCase):
         self.assertIn("TimeoutError", markdown)
         self.assertIn("Testing guide", markdown)
         self.assertIn("https://example.org/testing", markdown)
-        self.assertIn("não altera código-fonte", markdown.lower())
+        self.assertIn("não faz merge", markdown.lower())
 
     def test_report_lists_observed_failure_with_sha(self):
         report = {
