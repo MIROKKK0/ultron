@@ -27,8 +27,9 @@ class MemoryStore:
         self.db = db
 
     def initialize(self) -> None:
-        self.db.execute("""CREATE TABLE IF NOT EXISTS cognitive_memories (
-            id INTEGER PRIMARY KEY,
+        primary_key = "BIGSERIAL PRIMARY KEY" if self.db.__class__.__module__.startswith("psycopg") else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        self.db.execute(f"""CREATE TABLE IF NOT EXISTS cognitive_memories (
+            id {primary_key},
             owner_id TEXT NOT NULL,
             kind TEXT NOT NULL,
             content TEXT NOT NULL,
@@ -51,9 +52,9 @@ class MemoryStore:
             raise ValueError("Confiança deve estar entre 0 e 1.")
         now = datetime.now(timezone.utc).isoformat()
         cursor = self.db.execute(
-            "INSERT INTO cognitive_memories(owner_id,kind,content,source,confidence,created_at,last_accessed_at,access_count) VALUES(?,?,?,?,?,?,?,0)",
+            "INSERT INTO cognitive_memories(owner_id,kind,content,source,confidence,created_at,last_accessed_at,access_count) VALUES(?,?,?,?,?,?,?,0) RETURNING id",
             (owner_id, kind, content, str(source)[:300], float(confidence), now, now))
-        return int(cursor.lastrowid)
+        return int(cursor.fetchone()[0])
 
     def retrieve(self, owner_id: str, query: str, kind: str | None = None, limit: int = 8) -> list[dict]:
         if kind is not None and kind not in KINDS:
