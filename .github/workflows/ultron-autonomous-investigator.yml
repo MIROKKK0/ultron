@@ -48,7 +48,7 @@ jobs:
       - name: Install static repair tool
         run: python -m pip install --disable-pip-version-check -r requirements.txt ruff ddgs pytest
       - name: Test investigator and repair policy
-        run: python -m unittest tests.test_autonomous_agent_report tests.test_autonomous_repair_engine -v
+        run: python -m unittest tests.test_autonomous_agent_report tests.test_autonomous_repair_engine tests.test_gemini_bridge -v
       - name: Run investigation
         env:
           GITHUB_TOKEN: ${{ github.token }}
