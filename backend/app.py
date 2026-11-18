@@ -958,10 +958,14 @@ def import_history(payload: HistoryImportRequest, installation_id: str = Depends
             if existing:
                 duplicates += 1
                 continue
-            memory_id = store.add(
-                installation_id, "episodic", f"{record.role}: {content}",
-                f"history_import:{payload.source_export}"[:300], 0.95,
-            )
+            try:
+                memory_id = store.add(
+                    installation_id, "episodic", f"{record.role}: {content}",
+                    f"history_import:{payload.source_export}"[:300], 0.95,
+                    created_at=record.timestamp or None,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
             vector_index.upsert(installation_id, memory_id, f"{record.role}: {content}")
             execute(db, "INSERT INTO memory_import_receipts(owner_id,source_hash,memory_id,created_at) VALUES(?,?,?,?)",
                     (installation_id, source_hash, memory_id, datetime.now(timezone.utc).isoformat()))
