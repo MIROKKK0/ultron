@@ -66,6 +66,20 @@ def retrieval_metrics(model: UltronTinyGPT, tokenizer: ByteTokenizer,
         "mean_reciprocal_rank": round(sum(1.0 / rank for rank in ranks) / len(ranks), 4),
         "median_rank": sorted(ranks)[len(ranks) // 2],
         "p90_rank": sorted(ranks)[max(0, math.ceil(0.90 * len(ranks)) - 1)],
+        "case_ranks": ranks,
+    }
+
+
+def compare_case_ranks(baseline: list[int], candidate: list[int]) -> dict:
+    if not baseline or len(baseline) != len(candidate):
+        raise ValueError("Rankings de baseline e candidato precisam ter o mesmo tamanho não vazio.")
+    regressions = sum(new > old for old, new in zip(baseline, candidate))
+    improvements = sum(new < old for old, new in zip(baseline, candidate))
+    return {
+        "cases": len(baseline),
+        "regressions": regressions,
+        "improvements": improvements,
+        "unchanged": len(baseline) - regressions - improvements,
     }
 
 
@@ -119,7 +133,10 @@ def train(args: argparse.Namespace) -> dict:
         raise RuntimeError("Nenhum checkpoint candidato foi avaliado.")
     model.load_state_dict(best_state)
     after = retrieval_metrics(model, tokenizer, eval_pairs, device)
-    accepted = after["mean_reciprocal_rank"] > before["mean_reciprocal_rank"]
+    case_comparison = compare_case_ranks(before["case_ranks"], after["case_ranks"])
+    accepted = (after["mean_reciprocal_rank"] > before["mean_reciprocal_rank"]
+                and case_comparison["regressions"] == 0)
+    after["per_case_comparison"] = case_comparison
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = {
@@ -136,6 +153,7 @@ def train(args: argparse.Namespace) -> dict:
         "baseline_metrics": before,
         "candidate_metrics": after,
         "candidate_accepted": accepted,
+        "per_case_comparison": case_comparison,
         "experimental": True,
     }
     temporary = output.with_suffix(output.suffix + ".tmp")
@@ -147,7 +165,7 @@ def train(args: argparse.Namespace) -> dict:
         "candidate": after,
         "accepted_for_experiment": accepted,
         "promotion": "blocked_pending_human_review_and_larger_benchmark",
-        "warning": "Benchmark pequeno; não comprova semântica geral nem autoriza promoção em produção.",
+        "warning": "Benchmark PT-BR ampliado, mas ainda limitado; aprovação exige MRR maior e zero regressões por caso. Não autoriza promoção em produção.",
     }
 
 
