@@ -336,14 +336,23 @@ def execute_brain_cycle(
 
     # Each specialist now performs its actual local function instead of returning
     # a decorative placeholder string.
+    workspace = CognitiveWorkspace(capacity=7)
+    workspace.publish("goal", normalized_goal, source="user", confidence=1.0, priority=1.0)
+    for memory in memories[:5]:
+        workspace.publish("memory", memory, source="retrieved_memory", confidence=0.65, priority=0.7)
     plan = plan_task(normalized_goal)
+    workspace.publish("plan", json.dumps(plan, ensure_ascii=False), source="planner", confidence=0.9, priority=0.9)
+    attended_context = [
+        f"{entry.kind}: {entry.content}"
+        for entry in workspace.attend(limit=6)
+    ]
     if model_config()["configured"]:
         try:
             answer = answer_with_provider(normalized_goal, attended_context, history)
         except Exception:
             answer = answer_without_provider(normalized_goal, attended_context, history)
     else:
-        answer = answer_without_provider(normalized_goal, memories, history)
+        answer = answer_without_provider(normalized_goal, attended_context, history)
     workspace.publish("candidate_answer", answer, source="solver", confidence=0.65, priority=0.85)
     critique = review_response(normalized_goal, answer)
     workspace.publish(
@@ -365,6 +374,11 @@ def execute_brain_cycle(
     if research_query:
         try:
             research = search_web(research_query)
+            workspace.publish(
+                "research", research.get("summary", "Pesquisa sem resumo"),
+                source="web_research", confidence=0.75 if research.get("count", 0) else 0.2,
+                priority=0.95,
+            )
             outputs["researcher"] = {
                 "status": "completed" if research.get("count", 0) else "no_results",
                 "result": research,
@@ -401,6 +415,7 @@ def execute_brain_cycle(
         "agents": agents,
         "research": research,
         "review": critique,
+        "cognitive_workspace": workspace.snapshot(),
         "synthesis": synthesis,
         "synthesis_status": "completed",
         "execution_policy": (
@@ -594,6 +609,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
             try:
                 brain_result = execute_brain_cycle(
                     goal,
+                    history=payload.history,
                     include_private_memories=False,
                 )
                 response = brain_result["synthesis"]
