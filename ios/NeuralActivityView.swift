@@ -64,8 +64,8 @@ struct NeuralActivityView: View {
                         let progress = (time * (0.18 + activity * 1.55) + Double(index) * 0.173 + Double(linkIndex) * 0.31)
                             .truncatingRemainder(dividingBy: 1.0)
                         let pulse = CGPoint(
-                            x: start.x + (end.x - start.x) * progress,
-                            y: start.y + (end.y - start.y) * progress
+                            x: start.x + (end.x - start.x) * CGFloat(progress),
+                            y: start.y + (end.y - start.y) * CGFloat(progress)
                         )
                         let pulseSize: CGFloat = phase == .processing ? 3.2 : 2.2
                         let pulseRect = CGRect(
