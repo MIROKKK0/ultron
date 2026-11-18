@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-18T03:49:38.705039+00:00",
+  "repository": "MIROKKK0/ultron",
+  "commit": "1119dd0b423c33ec4a18c9253ea31bac64cfad53",
+  "scope": "bounded read-only investigation; no external code execution, source edits, merge or deployment",
+  "local": {
+    "files_scanned": 9,
+    "maintenance_markers": []
+  },
+  "recent_failures": [
+    {
+      "name": "ULTRON autonomous investigator",
+      "branch": "feat/ultron-autonomous-investigator",
+      "sha": "74155a40afe3",
+      "created_at": "2026-11-18T03:46:58Z",
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44232803131",
+      "failed_jobs": [
+        {
+          "job": "investigate",
+          "failed_steps": [
+            "Publish findings as a reviewable PR"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ULTRON Agent Evolution Gate",
+      "branch": "feat/ultron-ios-private-memory-v2",
+      "sha": "6d4f27576fa4",
+      "created_at": "2026-11-18T03:27:03Z",
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44230498410",
+      "failed_jobs": [
+        {
+          "job": "evaluate",
+          "failed_steps": [
+            "Require measurable improvement and zero regressions"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ULTRON Agent Evolution Gate",
+      "branch": "feat/ultron-neural-core-visual",
+      "sha": "8b08808d8595",
+      "created_at": "2026-11-18T03:21:40Z",
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44229866206",
+      "failed_jobs": [
+        {
+          "job": "evaluate",
+          "failed_steps": [
+            "Require measurable improvement and zero regressions"
+          ]
+        }
+      ]
+    }
+  ],
+  "open_issues": [
+    {
+      "number": 55,
+      "title": "[ULTRON] Relatório autônomo de investigação",
+      "url": "https://github.com/MIROKKK0/ultron/issues/55"
+    }
+  ],
+  "research_leads": [
+    {
+      "name": "AdilShamim8/Agentic-RAG-Platform",
+      "description": "A reproducible, evaluated, secured, observable, and deployable Agentic Retrieval-Augmented Generation (RAG) platform for continuously changing organizational knowledge.",
+      "url": "https://github.com/AdilShamim8/Agentic-RAG-Platform",
+      "updated_at": "2026-10-29T06:10:17Z",
+      "license": "MIT"
+    },
+    {
+      "name": "allwhenlabs/arnheim",
+      "description": "AI coding agent dashboard: see which Claude Code or Codex agent is waiting on you, talk to each project's lead by voice, and check that work called done really passes.",
+      "url": "https://github.com/allwhenlabs/arnheim",
+      "updated_at": "2026-11-15T13:55:55Z",
+      "license": "MIT"
+    },
+    {
+      "name": "curlewlabs-com/cloudflare-deploy-toolkit",
+      "description": "Safely deploy stateful Cloudflare Workers: gradual-deployments split, lock/drain/bookmark, verified lock read-back and concentric recovery, with deploy gates and a mock-wrangler test harness.",
+      "url": "https://github.com/curlewlabs-com/cloudflare-deploy-toolkit",
+      "updated_at": "2026-11-16T21:31:51Z",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "AverroesLabs/legibility-quiz-pilot",
+      "description": "Can an LLM-written quiz test whether a paper is legible to humans? Pilot code, data and write-up.",
+      "url": "https://github.com/AverroesLabs/legibility-quiz-pilot",
+      "updated_at": "2026-11-04T23:03:34Z",
+      "license": "MIT"
+    },
+    {
+      "name": "Djordje-Stojanovic/Sigmaskills",
+      "description": "Sigma Skills for AI Agents, focused on maximum quality and ease of use.",
+      "url": "https://github.com/Djordje-Stojanovic/Sigmaskills",
+      "updated_at": "2026-11-12T16:15:10Z",
+      "license": "MIT"
+    },
+    {
+      "name": "mikulo/3c-engineering-agent-skills",
+      "description": "Versioned Agent Skills for 3C engineering workflows",
+      "url": "https://github.com/mikulo/3c-engineering-agent-skills",
+      "updated_at": "2026-11-18T03:42:38Z",
+      "license": null
+    },
+    {
+      "name": "masbagusyutl/news-image-18-november",
+      "description": "One-page front page summing up 18 November 2026's world news. Built by an AI agent for make.fun's “Sum up 18 November's world news in one image” bounty, $250 in USDC.",
+      "url": "https://github.com/masbagusyutl/news-image-18-november",
+      "updated_at": "2026-11-18T03:49:09Z",
+      "license": "MIT"
+    },
+    {
+      "name": "xiaopangxiexyg/AgenticRobot",
+      "description": "Agent",
+      "url": "https://github.com/xiaopangxiexyg/AgenticRobot",
+      "updated_at": "2026-11-18T03:49:26Z",
+      "license": null
+    }
+  ],
+  "collection_errors": [],
+  "priorities": [
+    "Reproduzir a falha mais recente em runner limpo; identificar job/step e registrar o teste que falha antes de editar.",
+    "Agrupar issues abertas por componente e evitar criar tarefas duplicadas.",
+    "Revisar manualmente relevância, licença, segurança e data das referências públicas antes de adotar qualquer técnica.",
+    "Próxima fase: habilitar reparos determinísticos cobertos por testes; nenhuma alteração de produto é aplicada por este ciclo."
+  ]
+}
