@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import shlex
 from pathlib import Path
 
 # When invoked as `python scripts/ultron_gemini_proposer.py`, Python puts
@@ -69,12 +70,35 @@ def request_proposal(context: str, failure_summary: str):
 
 
 def patch_paths(patch: str):
+    """Return every touched path, including deleted/renamed paths.
+
+    Checking both sides is essential: a deletion has `+++ /dev/null`,
+    so inspecting only destination paths would bypass sensitive-path policy.
+    """
     paths = []
     for line in patch.splitlines():
-        if line.startswith("+++ b/"):
-            paths.append(line[6:].strip())
-        elif line.startswith("+++ /dev/null"):
+        raw = None
+        if line.startswith("--- a/"):
+            raw = line[4:]
+        elif line.startswith("+++ b/"):
+            raw = line[4:]
+        elif line.startswith("rename from "):
+            raw = line[len("rename from "):]
+        elif line.startswith("rename to "):
+            raw = line[len("rename to "):]
+        if raw is None:
             continue
+        try:
+            raw = shlex.split(raw.strip())[0]
+        except (ValueError, IndexError):
+            continue
+        raw = raw.split("\\t", 1)[0]
+        if raw == "/dev/null":
+            continue
+        if raw.startswith(("a/", "b/")):
+            raw = raw[2:]
+        if raw:
+            paths.append(raw)
     return sorted(set(paths))
 
 
@@ -93,6 +117,12 @@ def apply_candidate(root: Path, patch: str, summary: str):
     runner = EvolutionOrchestrator(root, timeout_seconds=TEST_TIMEOUT)
     if not paths or not runner.validate_patch_paths(paths):
         return {"candidate_ready": False, "decision": "Patch paths escaped workspace.", "changed_files": []}
+    # This first implementation only edits tracked files. New-file additions
+    # are rejected until their staging and rollback lifecycle is implemented.
+    tracked = subprocess.run(["git", "ls-files", "--error-unmatch", "--", *paths],
+                             cwd=root, capture_output=True, text=True, check=False)
+    if tracked.returncode:
+        return {"candidate_ready": False, "decision": "New or untracked paths require human review.", "changed_files": []}
     # Sensitive paths are deliberately never model-editable in unattended mode.
     from ultron_core.governance import evaluate_evolution
     gate = evaluate_evolution(paths, tests_passed=True, diff_valid=True)
