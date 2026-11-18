@@ -44,6 +44,8 @@ class UltronMemoryV2ApiTests(unittest.TestCase):
         results = client.get("/v2/memory?query=português", headers=self.auth)
         self.assertEqual(results.status_code, 200)
         self.assertTrue(results.json()["items"])
+        self.assertTrue(any(item["created_at"].startswith("2026-11-01")
+                            for item in results.json()["items"]))
 
     def test_semantic_memory_is_vector_indexed_and_scoped(self):
         saved = client.post("/v2/memory", json={
