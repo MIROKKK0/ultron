@@ -13,7 +13,7 @@ VIDEO_TERMS = re.compile(
 STOP_WORDS = {
     "para", "com", "sem", "sobre", "mais", "melhor", "video", "videos",
     "youtube", "quero", "procure", "pesquise", "encontre", "mostre",
-    "por", "uma", "uns", "dos", "das", "que", "the", "and", "for",
+    "por", "uma", "uns", "dos", "das", "que", "de", "do", "da", "no", "na", "em", "e", "um", "the", "and", "for",
 }
 
 
