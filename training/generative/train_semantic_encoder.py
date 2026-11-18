@@ -62,8 +62,10 @@ def retrieval_metrics(model: UltronTinyGPT, tokenizer: ByteTokenizer,
         "queries": len(pairs),
         "recall_at_1": round(sum(rank == 1 for rank in ranks) / len(ranks), 4),
         "recall_at_5": round(sum(rank <= 5 for rank in ranks) / len(ranks), 4),
+        "recall_at_10": round(sum(rank <= 10 for rank in ranks) / len(ranks), 4),
         "mean_reciprocal_rank": round(sum(1.0 / rank for rank in ranks) / len(ranks), 4),
         "median_rank": sorted(ranks)[len(ranks) // 2],
+        "p90_rank": sorted(ranks)[max(0, math.ceil(0.90 * len(ranks)) - 1)],
     }
 
 
@@ -75,6 +77,14 @@ def train(args: argparse.Namespace) -> dict:
     eval_hash = hashlib.sha256(Path(args.eval_pairs).read_bytes()).hexdigest()
     if train_hash == eval_hash:
         raise ValueError("Treino e avaliação precisam ser arquivos distintos.")
+    if len(eval_pairs) < args.min_eval_pairs:
+        raise ValueError(f"A avaliação precisa de pelo menos {args.min_eval_pairs} pares; recebeu {len(eval_pairs)}.")
+    normalize = lambda value: " ".join(value.casefold().split())
+    train_texts = {normalize(text) for pair in train_pairs for text in pair}
+    eval_texts = {normalize(text) for pair in eval_pairs for text in pair}
+    overlap = train_texts & eval_texts
+    if overlap:
+        raise ValueError(f"Vazamento entre treino e avaliação: {len(overlap)} textos repetidos.")
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.set_num_threads(max(1, min(args.threads, 4)))
@@ -146,6 +156,7 @@ def main() -> None:
     parser.add_argument("--train-pairs", default="training/semantic/train.pt-br.jsonl")
     parser.add_argument("--eval-pairs", default="training/semantic/eval.pt-br.jsonl")
     parser.add_argument("--output", default="artifacts/ultron-semantic-encoder.pt")
+    parser.add_argument("--min-eval-pairs", type=int, default=8)
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--temperature", type=float, default=0.08)
