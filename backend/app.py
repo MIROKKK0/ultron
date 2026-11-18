@@ -581,7 +581,7 @@ def brain_status(request: Request) -> dict[str, Any]:
         "generative_provider": model_config()["provider"],
         "language_decoder": "hosted_generative_with_local_fallback" if model_config()["configured"] else "local_deterministic_with_intent_classifier",
         "intent_model": model_status(),
-        "external_ai_tokens_required": True,
+        "external_ai_tokens_required": False,
         "web_research_enabled": True,
         "experimental_associative_learning": True,
         "associative_memory_persistence": "database_checkpointed",
@@ -713,7 +713,7 @@ def health() -> dict[str, Any]:
         "generative_model": model_config()["model"],
         "generative_provider": model_config()["provider"],
         "neural_core_configured": False,
-        "external_ai_tokens_required": True,
+        "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
         "health_check": "process_liveness_only",
     }
@@ -1115,7 +1115,7 @@ def self_knowledge() -> dict[str, Any]:
         "generative_model": model_config()["model"],
         "generative_provider": model_config()["provider"],
         "neural_core_configured": False,
-        "external_ai_tokens_required": True,
+        "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
     }
     return {"identity": SELF_MODEL.public_dict(), "runtime": health}
