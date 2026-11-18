@@ -121,6 +121,9 @@ def init_db() -> None:
                 decision TEXT NOT NULL DEFAULT '', quality_score DOUBLE PRECISION,
                 created_at TEXT NOT NULL
             )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS installation_credentials (
+                installation_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, created_at TEXT NOT NULL
+            )""")
         else:
             execute(db, """
                 CREATE TABLE IF NOT EXISTS memories (
@@ -165,6 +168,9 @@ def init_db() -> None:
                 model TEXT NOT NULL DEFAULT '', input_tokens INTEGER, output_tokens INTEGER,
                 estimated_cost_usd REAL, tool_name TEXT NOT NULL DEFAULT '',
                 decision TEXT NOT NULL DEFAULT '', quality_score REAL, created_at TEXT NOT NULL
+            )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS installation_credentials (
+                installation_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, created_at TEXT NOT NULL
             )""")
 
 
@@ -240,6 +246,25 @@ def generate_and_record(message: str, history: list[dict[str, str]] | None = Non
         raise
 
 
+def verify_installation(installation_id: str | None, installation_token: str | None) -> str:
+    tenant = installation_scope(installation_id)
+    if not installation_token or len(installation_token) < 32:
+        raise HTTPException(status_code=401, detail="Credencial de instalação ausente.")
+    supplied_hash = __import__("hashlib").sha256(installation_token.encode("utf-8")).hexdigest()
+    with connect_db() as db:
+        row = execute(db, "SELECT token_hash FROM installation_credentials WHERE installation_id = ?", (tenant,)).fetchone()
+    if not row or not __import__("hmac").compare_digest(str(row["token_hash"]), supplied_hash):
+        raise HTTPException(status_code=401, detail="Credencial de instalação inválida.")
+    return tenant
+
+
+def require_installation_auth(
+    installation_id: str | None = Header(default=None, alias="X-ULTRON-Installation-ID"),
+    installation_token: str | None = Header(default=None, alias="X-ULTRON-Installation-Token"),
+) -> str:
+    return verify_installation(installation_id, installation_token)
+
+
 def installation_scope(installation_id: str | None) -> str:
     """Validate the client installation namespace; caller must also authenticate."""
     try:
@@ -267,6 +292,11 @@ async def request_telemetry(request: Request, call_next):
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     history: list[str] = Field(default_factory=list, max_length=8)
+
+
+class InstallationRegisterRequest(BaseModel):
+    installation_id: str = Field(min_length=36, max_length=36)
+    installation_token: str = Field(min_length=32, max_length=128)
 
 
 class MemoryRequest(BaseModel):
@@ -859,9 +889,28 @@ def runtime_status(request: Request) -> dict[str, Any]:
     }
 
 
-@app.post("/memory", dependencies=[Depends(require_api_token)])
-def add_memory(request: MemoryRequest, installation_id: str | None = Header(default=None, alias="X-ULTRON-Installation-ID")) -> dict[str, Any]:
-    tenant = installation_scope(installation_id)
+@app.post("/installations/register")
+def register_installation(payload: InstallationRegisterRequest, request: Request) -> dict[str, Any]:
+    enforce_public_limit(request, "installation-register", limit=5, window_seconds=3600)
+    tenant = installation_scope(payload.installation_id)
+    token_hash = __import__("hashlib").sha256(payload.installation_token.encode("utf-8")).hexdigest()
+    created_at = datetime.now(timezone.utc).isoformat()
+    with connect_db() as db:
+        if is_postgres(db):
+            execute(db, "INSERT INTO installation_credentials(installation_id, token_hash, created_at) VALUES (?, ?, ?) ON CONFLICT (installation_id) DO NOTHING",
+                    (tenant, token_hash, created_at))
+        else:
+            execute(db, "INSERT OR IGNORE INTO installation_credentials(installation_id, token_hash, created_at) VALUES (?, ?, ?)",
+                    (tenant, token_hash, created_at))
+        row = execute(db, "SELECT token_hash FROM installation_credentials WHERE installation_id = ?", (tenant,)).fetchone()
+    if not row or not __import__("hmac").compare_digest(str(row["token_hash"]), token_hash):
+        raise HTTPException(status_code=409, detail="Esta instalação já está registrada com outra credencial.")
+    record_telemetry("installation_register", decision="registered_or_verified")
+    return {"registered": True, "installation_id": tenant}
+
+
+@app.post("/memory", dependencies=[Depends(require_installation_auth)])
+def add_memory(request: MemoryRequest, tenant: str = Depends(require_installation_auth)) -> dict[str, Any]:
     content = request.content.strip()
     now = datetime.now(timezone.utc)
     expires_at = (now + __import__("datetime").timedelta(days=30)).isoformat()
@@ -880,9 +929,8 @@ def add_memory(request: MemoryRequest, installation_id: str | None = Header(defa
     return {"id": memory_id, "content": content, "expires_at": expires_at}
 
 
-@app.get("/memory", dependencies=[Depends(require_api_token)])
-def list_memory(installation_id: str | None = Header(default=None, alias="X-ULTRON-Installation-ID")) -> dict[str, Any]:
-    tenant = installation_scope(installation_id)
+@app.get("/memory", dependencies=[Depends(require_installation_auth)])
+def list_memory(tenant: str = Depends(require_installation_auth)) -> dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
     with connect_db() as db:
         execute(db, "DELETE FROM memories WHERE installation_id = ? AND expires_at IS NOT NULL AND expires_at <= ?", (tenant, now))
@@ -892,9 +940,8 @@ def list_memory(installation_id: str | None = Header(default=None, alias="X-ULTR
     return {"items": [dict(row) for row in rows]}
 
 
-@app.get("/memory/search", dependencies=[Depends(require_api_token)])
-def search_memory(q: str, installation_id: str | None = Header(default=None, alias="X-ULTRON-Installation-ID")) -> dict[str, Any]:
-    tenant = installation_scope(installation_id)
+@app.get("/memory/search", dependencies=[Depends(require_installation_auth)])
+def search_memory(q: str, tenant: str = Depends(require_installation_auth)) -> dict[str, Any]:
     query_terms = {term.casefold() for term in re.findall(r"[\wÀ-ÿ]{2,}", q) if term}
     if not query_terms:
         raise HTTPException(status_code=400, detail="Informe uma consulta com termos úteis.")
@@ -917,9 +964,8 @@ def search_memory(q: str, installation_id: str | None = Header(default=None, ali
             "method": "tenant_scoped_lexical_overlap", "semantic_embeddings": False}
 
 
-@app.delete("/memory/{memory_id}", dependencies=[Depends(require_api_token)])
-def delete_memory(memory_id: int, installation_id: str | None = Header(default=None, alias="X-ULTRON-Installation-ID")) -> dict[str, bool]:
-    tenant = installation_scope(installation_id)
+@app.delete("/memory/{memory_id}", dependencies=[Depends(require_installation_auth)])
+def delete_memory(memory_id: int, tenant: str = Depends(require_installation_auth)) -> dict[str, bool]:
     with connect_db() as db:
         cursor = execute(db, "DELETE FROM memories WHERE id = ? AND installation_id = ?", (memory_id, tenant))
     if cursor.rowcount == 0:
