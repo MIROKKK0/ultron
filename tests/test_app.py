@@ -305,6 +305,22 @@ class UltronTests(unittest.TestCase):
                         headers=INSTALL_B)
         self.assertEqual(generated_other.call_args.args[2], [])
 
+    def test_remember_memory_and_forget_commands_are_installation_scoped(self):
+        client.post("/installations/register", json={
+            "installation_id": INSTALL_A["X-ULTRON-Installation-ID"],
+            "installation_token": INSTALL_A["X-ULTRON-Installation-Token"],
+        })
+        saved = client.post("/chat", json={"message": "/remember Minha preferência é respostas curtas"},
+                            headers=INSTALL_A)
+        self.assertIn("Memória salva", saved.json()["reply"])
+        listed = client.post("/chat", json={"message": "/memory"}, headers=INSTALL_A)
+        self.assertIn("Minha preferência é respostas curtas", listed.json()["reply"])
+        import re
+        match = re.search(r"ID (\d+)", saved.json()["reply"])
+        self.assertIsNotNone(match)
+        deleted = client.post("/chat", json={"message": "/forget " + match.group(1)}, headers=INSTALL_A)
+        self.assertIn("excluída", deleted.json()["reply"])
+
     def test_memory_requires_installation_scope(self):
         response = client.get("/memory", headers={})
         self.assertEqual(response.status_code, 400)
