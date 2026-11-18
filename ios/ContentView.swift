@@ -153,8 +153,13 @@ struct ContentView: View {
             let allowedKinds = ["episodic", "semantic", "procedural"]
             let kind = parts.count == 2 && allowedKinds.contains(parts[0].lowercased()) ? parts[0].lowercased() : "semantic"
             let content = parts.count == 2 && allowedKinds.contains(parts[0].lowercased()) ? parts[1] : payload
-            let id = try await client.remember(content, kind: kind, serverURL: serverURL)
-            return "Memória privada salva (\(kind)). ID: \(id)"
+            let outcome = try await client.rememberWithOfflineQueue(content, kind: kind, serverURL: serverURL)
+            switch outcome {
+            case .synced(let id):
+                return "Memória privada salva (\(kind)). ID: \(id)"
+            case .queued(let localID):
+                return "Sem conexão com o servidor. Memória criptografada na fila offline. ID local: \(localID.uuidString)"
+            }
         }
 
         if lowered == "/memories" {
