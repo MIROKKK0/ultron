@@ -14,10 +14,10 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-MAX_FILES = int(os.environ.get("ULTRON_MAX_REPAIR_FILES", "10"))
-MAX_DIFF_LINES = int(os.environ.get("ULTRON_MAX_REPAIR_LINES", "300"))
-TEST_TIMEOUT_SECONDS = 300
-CYCLE_BUDGET_SECONDS = int(os.environ.get("ULTRON_CYCLE_BUDGET_SECONDS", "720"))
+MAX_FILES = int(os.environ.get("ULTRON_MAX_REPAIR_FILES", "30"))
+MAX_DIFF_LINES = int(os.environ.get("ULTRON_MAX_REPAIR_LINES", "1000"))
+TEST_TIMEOUT_SECONDS = int(os.environ.get("ULTRON_TEST_TIMEOUT_SECONDS", "600"))
+CYCLE_BUDGET_SECONDS = int(os.environ.get("ULTRON_CYCLE_BUDGET_SECONDS", "1800"))
 _started = time.monotonic()
 _deadline = _started + CYCLE_BUDGET_SECONDS
 
