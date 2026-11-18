@@ -359,6 +359,9 @@ def answer_without_provider(message: str, memories: list[str] | None = None,
         return str(SELF_MODEL.public_dict())
     if lower.startswith("/propose "):
         return str(improvement_proposal(normalized[9:].strip()))
+    if os.getenv("ULTRON_LOCAL_GENERATIVE_ENABLED", "").strip().lower() == "true":
+        from backend.local_transformer_runtime import generate_local_reply
+        return generate_local_reply(normalized, memories or [], history or [])
     return decode_local(normalized, memories or [], history or [])
 
 
