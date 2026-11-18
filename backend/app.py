@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_multitask
 from backend.cognitive_workspace import CognitiveWorkspace
+from backend.evidence_critic import review_evidence
+from backend.hierarchical_planner import plan_hierarchical
 from backend.generative import generate_reply, model_config
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
@@ -342,6 +344,8 @@ def execute_brain_cycle(
     for memory in memories[:5]:
         workspace.publish("memory", memory, source="retrieved_memory", confidence=0.65, priority=0.7)
     plan = plan_task(normalized_goal)
+    hierarchy = plan_hierarchical(normalized_goal)
+    plan["hierarchy"] = hierarchy
     workspace.publish("plan", json.dumps(plan, ensure_ascii=False), source="planner", confidence=0.9, priority=0.9)
     attended_context = [
         f"{entry.kind}: {entry.content}"
@@ -391,6 +395,13 @@ def execute_brain_cycle(
                 "status": "failed",
                 "result": {"error": "Pesquisa web indisponível no momento."},
             }
+
+    evidence_items = (research or {}).get("results", []) if isinstance(research, dict) else []
+    evidence_review = review_evidence(normalized_goal, answer, evidence_items)
+    critique["evidence_review"] = evidence_review
+    critique["needs_human_or_source_check"] = evidence_review["needs_human_or_source_check"]
+    workspace.publish("evidence_review", json.dumps(evidence_review, ensure_ascii=False),
+                      source="evidence_critic", confidence=0.8, priority=0.9)
 
     roles = sorted(
         outputs,
