@@ -21,6 +21,7 @@ from backend.brain import run_multitask
 from backend.cognitive_workspace import CognitiveWorkspace
 from backend.evidence_critic import review_evidence
 from backend.hierarchical_planner import plan_hierarchical
+from backend.tool_runtime import ToolRegistry, ToolSpec
 from backend.generative import generate_reply, model_config
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
@@ -378,7 +379,17 @@ def execute_brain_cycle(
     research: dict[str, Any] | None = None
     if research_query:
         try:
-            research = search_web(research_query)
+            tool_registry = ToolRegistry()
+            tool_registry.register(ToolSpec("web_search", search_web, idempotent=True, max_retries=1))
+            tool_execution = tool_registry.execute("web_search", query=research_query)
+            if tool_execution["status"] != "completed":
+                raise RuntimeError("A ferramenta de pesquisa não concluiu.")
+            research = tool_execution["observation"]
+            research["tool_execution"] = {
+                "tool": tool_execution["tool"],
+                "attempts": tool_execution["attempts"],
+                "recovered": tool_execution["recovered"],
+            }
             workspace.publish(
                 "research", research.get("summary", "Pesquisa sem resumo"),
                 source="web_research", confidence=0.75 if research.get("count", 0) else 0.2,
