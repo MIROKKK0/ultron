@@ -1,7 +1,9 @@
 """Deterministic, offline ULTRON capability benchmark; emits no user data."""
 from __future__ import annotations
-import argparse, json
+import argparse, json, os, sys
 from pathlib import Path
+SOURCE_ROOT = Path(os.getenv("ULTRON_SOURCE_ROOT", Path(__file__).resolve().parents[1])).resolve()
+sys.path.insert(0, str(SOURCE_ROOT))
 
 def run() -> dict:
     checks = {}
