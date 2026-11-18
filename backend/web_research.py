@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import re
 import math
+import logging
 import ipaddress
 import unicodedata
 from collections.abc import Callable
 from typing import Any
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+
+logger = logging.getLogger(__name__)
 
 VIDEO_TERMS = re.compile(
     r"\b(v[ií]deo|v[ií]deos|youtube|clipe|gameplay|trailer|shorts?)\b",
@@ -153,6 +156,7 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
         try:
             videos = _video_search(cleaned, limit, searcher)
         except Exception as exc:
+            logger.warning("DDGS video search failed (%s)", type(exc).__name__)
             raise RuntimeError("A pesquisa de vídeos falhou temporariamente.") from exc
         if not videos:
             return {
@@ -204,6 +208,8 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
                 break
         except Exception as exc:
             errors.append(exc)
+            # Provider and exception class only: never log the user's query or result content.
+            logger.warning("DDGS text backend %s failed (%s)", backend, type(exc).__name__)
 
     if not raw and errors:
         # Keep the original cause chained for diagnostics, without returning
