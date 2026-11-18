@@ -141,5 +141,10 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as exc:
-        print(json.dumps({"candidate_ready": False, "decision": f"Gemini proposal failed: {type(exc).__name__}"}))
+        evidence = Path.cwd() / "reports/autonomy/repair-evidence"
+        evidence.mkdir(parents=True, exist_ok=True)
+        failure = {"candidate_ready": False, "decision": f"Gemini proposal failed: {type(exc).__name__}", "changed_files": []}
+        (evidence / "repair.json").write_text(json.dumps(failure, indent=2) + "\\n", encoding="utf-8")
+        (evidence / "repair.md").write_text("# Gemini repair proposal\\n\\n" + failure["decision"] + "\\n", encoding="utf-8")
+        print(json.dumps(failure))
         raise SystemExit(0)
