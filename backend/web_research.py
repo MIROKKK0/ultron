@@ -243,9 +243,9 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
         item["relevance"] = round(0.70 * lexical_score + 0.30 * overlap, 3)
     results = [
         item for item in candidates
-        if item["topic_overlap"] >= 0.20
-        and (item["title_overlap"] >= 0.10 or item["topic_overlap"] >= 0.35)
-        and item["relevance"] >= 0.18
+        if item["topic_overlap"] >= 0.10
+        and item["title_overlap"] >= 0.10
+        and item["relevance"] >= 0.12
     ]
     results.sort(key=lambda item: item["relevance"], reverse=True)
     results = results[:limit]
