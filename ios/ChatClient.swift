@@ -214,7 +214,14 @@ struct ChatClient {
         history: [String] = [],
         onPhase: @MainActor @escaping (BrainPhase) -> Void = { _ in }
     ) async throws -> ChatResult {
-        try await registerInstallationIfNeeded(serverURL: serverURL)
+        // Registration is an optional capability on older production backends.
+        // A 404 must not block ordinary chat; the server can still handle /chat
+        // statelessly until the installation-aware backend is deployed.
+        do {
+            try await registerInstallationIfNeeded(serverURL: serverURL)
+        } catch ChatClientError.serverError(let code) where code == 404 {
+            // Continue without installation-scoped memory on legacy servers.
+        }
         guard let url = endpoint("/chat/stream", serverURL: serverURL) else {
             throw ChatClientError.invalidServerURL
         }
