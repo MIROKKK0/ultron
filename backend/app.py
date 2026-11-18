@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import ast
 import hmac
+import hashlib
+import secrets
+import time
 import json
 import operator
 import os
@@ -19,6 +22,7 @@ from pydantic import BaseModel, Field
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_multitask
 from backend.cognitive_workspace import CognitiveWorkspace
+from backend.memory_system import MemoryStore
 from backend.evidence_critic import review_evidence
 from backend.hierarchical_planner import plan_hierarchical
 from backend.tool_runtime import ToolRegistry, ToolSpec
@@ -58,6 +62,19 @@ def require_api_token(authorization: str | None = Header(default=None)) -> bool:
     if scheme.lower() != "bearer" or not hmac.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="Token de acesso inválido.")
     return True
+
+
+def require_installation(x_installation_id: str | None = Header(default=None),
+                          x_installation_token: str | None = Header(default=None)) -> str:
+    if not x_installation_id or not x_installation_token:
+        raise HTTPException(status_code=401, detail="Identidade da instalação ausente.")
+    supplied_hash = hashlib.sha256(x_installation_token.encode("utf-8")).hexdigest()
+    with connect_db() as db:
+        row = execute(db, "SELECT token_hash FROM installations WHERE installation_id=? AND revoked_at IS NULL",
+                      (x_installation_id,)).fetchone()
+    if not row or not hmac.compare_digest(str(row["token_hash"]), supplied_hash):
+        raise HTTPException(status_code=401, detail="Credencial da instalação inválida.")
+    return x_installation_id
 
 
 def connect_db():
@@ -112,6 +129,15 @@ def init_db() -> None:
                 state_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS installations (
+                installation_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, created_at TEXT NOT NULL,
+                revoked_at TEXT
+            )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS agent_evaluations (
+                id BIGSERIAL PRIMARY KEY, installation_id TEXT NOT NULL, category TEXT NOT NULL,
+                score DOUBLE PRECISION NOT NULL, passed INTEGER NOT NULL, metrics_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )""")
         else:
             execute(db, """
                 CREATE TABLE IF NOT EXISTS memories (
@@ -140,6 +166,15 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 state_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL
+            )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS installations (
+                installation_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, created_at TEXT NOT NULL,
+                revoked_at TEXT
+            )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS agent_evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, installation_id TEXT NOT NULL, category TEXT NOT NULL,
+                score REAL NOT NULL, passed INTEGER NOT NULL, metrics_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
             )""")
 
 
@@ -179,6 +214,15 @@ class ChatRequest(BaseModel):
 
 class MemoryRequest(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
+\nclass TypedMemoryRequest(BaseModel):
+    kind: Literal["episodic", "semantic", "procedural"]
+    content: str = Field(min_length=1, max_length=4000)
+    source: str = Field(default="user_explicit", max_length=300)
+    confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+
+class InstallationRequest(BaseModel):
+    installation_id: str = Field(min_length=16, max_length=128)
+
 
 
 class ReviewRequest(BaseModel):
@@ -728,6 +772,67 @@ def runtime_status(request: Request) -> dict[str, Any]:
         "generative_provider": model_config()["provider"],
         "external_ai_providers": model_config()["configured"],
     }
+
+
+@app.post("/installations/register", dependencies=[Depends(require_api_token)])
+def register_installation(payload: InstallationRequest) -> dict[str, Any]:
+    """Provision a per-installation credential; only an administrator can mint it."""
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    now = datetime.now(timezone.utc).isoformat()
+    with connect_db() as db:
+        existing = execute(db, "SELECT installation_id FROM installations WHERE installation_id=?",
+                           (payload.installation_id,)).fetchone()
+        if existing:
+            raise HTTPException(status_code=409, detail="Instalação já registrada; revogue e registre novamente.")
+        execute(db, "INSERT INTO installations(installation_id,token_hash,created_at,revoked_at) VALUES(?,?,?,NULL)",
+                (payload.installation_id, token_hash, now))
+    return {"installation_id": payload.installation_id, "installation_token": token,
+            "warning": "Guarde o token no Keychain do iOS; ele não será exibido novamente."}
+
+
+@app.delete("/installations/{installation_id}", dependencies=[Depends(require_api_token)])
+def revoke_installation(installation_id: str) -> dict[str, bool]:
+    with connect_db() as db:
+        cursor = execute(db, "UPDATE installations SET revoked_at=? WHERE installation_id=? AND revoked_at IS NULL",
+                         (datetime.now(timezone.utc).isoformat(), installation_id))
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Instalação não encontrada ou já revogada.")
+    return {"revoked": True}
+
+
+@app.post("/v2/memory")
+def add_typed_memory(payload: TypedMemoryRequest, installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    with connect_db() as db:
+        store = MemoryStore(db)
+        store.initialize()
+        memory_id = store.add(installation_id, payload.kind, payload.content, payload.source, payload.confidence)
+    return {"id": memory_id, "kind": payload.kind, "stored": True}
+
+
+@app.get("/v2/memory")
+def get_typed_memories(kind: Literal["episodic", "semantic", "procedural"] | None = None,
+                       query: str = "", installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    with connect_db() as db:
+        store = MemoryStore(db)
+        store.initialize()
+        items = store.retrieve(installation_id, query, kind=kind, limit=20) if query else []
+        if not query:
+            rows = execute(db, "SELECT id,kind,content,source,confidence,created_at,last_accessed_at,access_count FROM cognitive_memories WHERE owner_id=? AND (? IS NULL OR kind=?) ORDER BY id DESC LIMIT 20",
+                           (installation_id, kind, kind)).fetchall()
+            items = [dict(row) for row in rows]
+    return {"items": items, "scope": "authenticated_installation"}
+
+
+@app.delete("/v2/memory/{memory_id}")
+def delete_typed_memory(memory_id: int, installation_id: str = Depends(require_installation)) -> dict[str, bool]:
+    with connect_db() as db:
+        store = MemoryStore(db)
+        store.initialize()
+        deleted = store.forget(installation_id, memory_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Memória não encontrada.")
+    return {"deleted": True}
 
 
 @app.post("/memory", dependencies=[Depends(require_api_token)])
