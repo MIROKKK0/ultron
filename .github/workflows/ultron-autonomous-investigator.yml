@@ -89,7 +89,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPAIR_BRANCH: ${{ steps.publish_repair.outputs.branch }}
-          REPORT_BRANCH: ${{ steps.publish_report.outputs.branch }}
         run: |
           gh pr create --base main --head "$REPAIR_BRANCH" \
             --title "ULTRON: tested autonomous repair" \
@@ -122,6 +121,7 @@ jobs:
           REPORT_PATH: reports/autonomy/latest.md
           REPAIR_PR_RESULT: ${{ steps.create_repair_pr.outcome }}
           REPAIR_BRANCH: ${{ steps.publish_repair.outputs.branch }}
+          REPORT_BRANCH: ${{ steps.publish_report.outputs.branch }}
         with:
           github-token: ${{ github.token }}
           script: |
