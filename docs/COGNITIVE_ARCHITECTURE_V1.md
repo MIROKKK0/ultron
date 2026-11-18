@@ -7,7 +7,7 @@ Evolve ULTRON from a prompt router into a measurable, tool-using cognitive agent
 ## Evidence-based design
 
 1. **Modular planning and coordination.** Webb, Mondal and Momennejad's 2025 Nature Communications paper proposes specialized processes for conflict monitoring, state prediction, state evaluation, task decomposition and task coordination. Its key lesson is that individually capable modules still need an explicit coordinator.
-   - https://www.nature.com/articles/s41424-025-63804-5
+   - https://www.nature.com/articles/s41467-025-63804-5
 2. **Memory is a lifecycle, not just a vector database.** The 2026 survey "Learning to remember" separates memory construction, maintenance, retrieval, consolidation, forgetting, governance and evaluation.
    - https://link.springer.com/article/10.1007/s44336-026-00044-1
 3. **Agentic architecture needs evaluation and oversight.** The 2026 systematic survey covers goal formation, episodic/semantic memory, planning, continual learning, explainability, security and evaluation.
