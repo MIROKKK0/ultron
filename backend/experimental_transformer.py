@@ -6,7 +6,7 @@ from typing import Any
 
 def transformer_status() -> dict[str, Any]:
     enabled = os.getenv("ULTRON_TINY_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
-    checkpoint = Path(os.getenv("ULTRON_TINY_CHECKPOINT", "artifacts/ultron-tiny.pt"))
+    checkpoint = Path(os.getenv("ULTRON_TINY_CHECKPOINT", "artifacts/ultron-tiny-sft.pt"))
     return {"enabled": enabled, "available": enabled and checkpoint.is_file(),
             "checkpoint_present": checkpoint.is_file(), "checkpoint_path": str(checkpoint),
             "role": "experimental_candidate_only",
