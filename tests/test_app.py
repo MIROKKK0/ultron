@@ -167,6 +167,9 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["agents"]), 3)
         self.assertEqual(response.json()["synthesis"], "perspectiva")
+        workspace = response.json()["cognitive_workspace"]
+        self.assertEqual(workspace["policy"], "per_request_only; priority_times_confidence; bounded_capacity")
+        self.assertLessEqual(workspace["size"], 7)
 
 
     def test_public_brain_command_runs_cognitive_cycle_without_private_memories(self):
@@ -176,6 +179,7 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["reply"], expected["synthesis"])
         self.assertEqual(cycle.call_args.args[0], "planejar uma melhoria")
+        self.assertEqual(cycle.call_args.kwargs["history"], [])
         self.assertFalse(cycle.call_args.kwargs["include_private_memories"])
         self.assertNotIn("neural_state", cycle.call_args.kwargs)
 
