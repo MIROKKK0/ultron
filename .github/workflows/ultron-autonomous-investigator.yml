@@ -1,0 +1,90 @@
+name: ULTRON autonomous investigator
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/ultron-autonomous-investigator-main"]
+    paths:
+      - "scripts/ultron_autonomous_agent.py"
+      - "tests/test_autonomous_agent_report.py"
+      - ".github/workflows/ultron-autonomous-investigator.yml"
+  schedule:
+    # GitHub schedules are best-effort and only run from the default branch.
+    - cron: "17 * * * *"
+
+permissions:
+  contents: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: ultron-autonomous-investigator
+  cancel-in-progress: true
+
+jobs:
+  investigate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test autonomous report logic
+        run: python -m unittest tests.test_autonomous_agent_report -v
+      - name: Run bounded investigation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python scripts/ultron_autonomous_agent.py
+      - name: Validate generated report
+        run: |
+          python -m json.tool reports/autonomy/latest.json > /dev/null
+          test -s reports/autonomy/latest.md
+      - name: Publish report branch
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/autonomy/latest.json reports/autonomy/latest.md
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "chore(autonomy): publish verified investigation report"
+          REPORT_COMMIT="$(git rev-parse HEAD)"
+          git fetch origin main
+          git checkout -B ultron/autonomy-findings origin/main
+          git cherry-pick "$REPORT_COMMIT"
+          git push --force origin ultron/autonomy-findings
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Create or update investigation issue
+        if: steps.publish.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: reports/autonomy/latest.md
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
+            const title = '[ULTRON] Relatório autônomo de investigação';
+            const { owner, repo } = context.repo;
+            const listed = await github.rest.issues.listForRepo({ owner, repo, state: 'open', per_page: 100 });
+            const existing = listed.data.find(item => !item.pull_request && item.title === title);
+            const compare = `https://github.com/${owner}/${repo}/compare/main...ultron/autonomy-findings?expand=1`;
+            const body = report + '\n\n---\n' +
+              'Branch com os artefatos: ' + compare + '\n\n' +
+              'Este ciclo não altera código de produto nem faz merge. Revisão humana necessária.';
+            if (existing) {
+              await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
+              core.info(`Updated investigation issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({ owner, repo, title, body });
+              core.info(`Created investigation issue #${created.data.number}`);
+            }
