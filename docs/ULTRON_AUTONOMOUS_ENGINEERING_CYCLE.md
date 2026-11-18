@@ -2,43 +2,39 @@
 
 ## Operating schedule and budget
 
-- Schedule: four best-effort GitHub Actions runs per day (23 */6 * * * UTC).
-- Hard workflow timeout: 12 minutes per run; the repair engine enforces the same 720-second cycle budget internally.
-- Repair test timeout: 300 seconds per test invocation.
-- One reproducibility rerun at most per cycle, only for a failed run from the last 7 days and only when its run attempt is 1.
-- Research discovery: at most 8 public GitHub repository references per cycle.
-- Repair diff budget: at most 10 files and 300 changed lines.
+- Schedule: four best-effort GitHub Actions runs per day (cron `17 */6 * * *` UTC).
+- Hard workflow timeout: 35 minutes; the repair engine receives a 30-minute cycle budget.
+- Per-test timeout: at most 600 seconds.
+- Reproduction: at most one eligible failed workflow is re-run per cycle.
+- Research discovery: up to 16 public references per cycle, from GitHub and DDGS.
+- Repair diff budget: at most 30 files and 1,000 changed lines (configurable).
 - Evidence retention: 30 days as a GitHub Actions artifact.
-- Each repair attempt records a Git checkpoint, base commit, elapsed time, remaining budget, decision, and rollback result in JSON/JSONL evidence.
-- Recovery uses a separate 30-second restore allowance, so an exhausted experiment budget cannot disable rollback.
-- No paid model API is called by this workflow. GitHub Actions usage remains subject to the repository/account's free-minute quota and GitHub limits.
+- Repair candidates are tested before and after the patch and pass a final Ruff lint gate.
+- With `GEMINI_API_KEY`, Gemini proposes a structured diff; without it, the workflow uses deterministic Ruff-only fixes.
+- No provider output is trusted as executable instructions. ULTRON validates paths, patch syntax, budget, tests and lint.
+- GitHub Actions usage remains subject to the repository/account's available minutes and GitHub scheduling delays.
 
 ## What it can do
 
-1. Inspect recent Actions failures, failed steps, issues and maintenance markers.
-2. Search the public web with DDGS and the public GitHub API (up to 8 total references per cycle); record URLs, snippets, update dates and declared licenses.
-3. Re-run one eligible failed workflow to test whether the failure reproduces.
-4. Run a deterministic repair experiment using Ruff's documented safe fixes only.
-5. Run the repository unit-test suite before and after the candidate patch, then run a final Ruff lint gate.
-6. Discard the candidate if tests/lint fail or the diff exceeds the budget.
-7. Publish the candidate on a unique isolated branch, attach JSON/Markdown/patch/checkpoint/audit evidence, and attempt to open a PR.
-8. Publish each investigation report to a unique run-specific branch; no force-push is used.
-9. Update one investigation issue when no PR can be opened.
+1. Inspect recent Actions failures, failed steps, open issues and maintenance markers.
+2. Search public web/GitHub references and record URLs, snippets, dates and declared licenses where available.
+3. Re-run one eligible failed workflow to test reproducibility.
+4. Ask Gemini for a minimal unified diff when its secret is configured, or use Ruff safe fixes otherwise.
+5. Apply a candidate only after path and patch validation; run baseline tests, post-patch tests and lint.
+6. Reject candidates that fail validation or exceed the configured file/line/time budget.
+7. Publish passing candidates to an isolated branch and attempt a reviewable PR.
+8. Publish investigation evidence as JSON/Markdown and retain workflow artifacts.
 
 ## What it cannot honestly claim yet
 
-- This is not a general-purpose autonomous coding model. It does not invent arbitrary semantic fixes.
-- Ruff safe fixes cover a narrow class of Python static issues; they do not repair arbitrary Swift, backend logic, architecture, or product behavior.
-- Public search uses metasearch providers and GitHub's public API; it is not unrestricted crawling, authenticated browsing or access to paywalled/private content. Search results are untrusted data and are never executed.
-- It does not access private credentials, secrets, personal accounts, or external systems. Authentication, memory, credential, and security changes remain human-reviewed.
-- It does not deploy releases or promote model weights.
+- This is not a general-purpose autonomous coding model. Gemini proposes patches; it does not own ULTRON's identity, memory, policy or publication decisions.
+- Ruff safe fixes cover a narrow class of Python static issues; they do not repair arbitrary Swift, backend logic, architecture or product behavior.
+- Public search is not unrestricted crawling or authenticated access to private/paywalled content. Search results are untrusted data and are never executed.
+- A green test suite does not prove that Gemini improved model intelligence, that the iOS app works on a physical iPhone, or that a production deployment succeeded.
+- This workflow does not merge PRs, deploy releases or promote model weights.
 
-## PR creation and main
+## PR creation and activation
 
-The workflow requests contents: write and pull-requests: write. GitHub repository settings must also permit Actions to create pull requests. If the setting blocks it, the workflow keeps the isolated branch and records the failed PR attempt in the investigation issue.
+The workflow requests contents, issues, pull-request and Actions permissions. GitHub repository settings must also permit Actions to create pull requests. If that setting blocks it, the workflow keeps the isolated branch and records the failed PR attempt.
 
-No direct push to main is performed. A candidate must be reviewable and pass the repository's required checks before merge. Auto-merge is not enabled by this cycle. Authentication, memory, credential, and security changes remain behind human review. Force-push and branch deletion are not part of recovery; recovery restores only tracked files changed by the current repair candidate.
-
-## Activation
-
-GitHub scheduled workflows only execute from the default branch. Merge the autonomous investigator PR into main after its checks pass to activate the schedule. Push/manual runs on the feature branch can validate the workflow before that.
+No direct push to `main` is performed. A candidate must be reviewable and pass required checks before merge. Authentication, memory, credentials, workflow and security-policy changes remain subject to human review. GitHub scheduled workflows only execute from the default branch; merge the investigator workflow into `main` after its checks and review to activate the schedule.

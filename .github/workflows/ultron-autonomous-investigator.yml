@@ -14,8 +14,8 @@ on:
   issues:
     types: [opened, reopened, labeled]
   schedule:
-    # Six-hour heartbeat; GitHub schedule is best-effort.
-    - cron: "17 */2 * * *"
+    # Four runs per day; GitHub schedule is best-effort.
+    - cron: "17 */6 * * *"
 
 permissions:
   contents: write
@@ -25,7 +25,8 @@ permissions:
 
 concurrency:
   group: ultron-autonomous-investigator
-  cancel-in-progress: true
+  # Do not discard a live investigation when another event arrives.
+  cancel-in-progress: false
 
 jobs:
   investigate-and-repair:
