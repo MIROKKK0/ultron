@@ -128,7 +128,7 @@ def collect_github_signals() -> dict:
     try:
         query = urllib.parse.urlencode({
             "q": "language:python (agent OR evaluation OR testing)",
-            "sort": "updated", "order": "desc", "per_page": 8,
+            "sort": "updated", "order": "desc", "per_page": int(os.environ.get("ULTRON_RESEARCH_RESULT_LIMIT", "8")),
         })
         items = api_json(f"/search/repositories?{query}").get("items", [])
         research = [{
