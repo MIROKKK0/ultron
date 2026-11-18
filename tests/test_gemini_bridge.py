@@ -27,6 +27,27 @@ class GeminiBridgeTests(unittest.TestCase):
         )
         self.assertEqual(patch_paths(patch_text), ["src/fix.py"])
 
+    def test_deleted_sensitive_paths_are_still_detected(self):
+        patch_text = (
+            "diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml\\n"
+            "--- a/.github/workflows/ci.yml\\n"
+            "+++ /dev/null\\n"
+            "@@ -1 +0,0 @@\\n-old\\n"
+        )
+        paths = patch_paths(patch_text)
+        self.assertEqual(paths, [".github/workflows/ci.yml"])
+        decision = evaluate_evolution(paths, tests_passed=True, diff_valid=True)
+        self.assertFalse(decision.accepted)
+        self.assertIn("human_review_required", decision.reasons)
+
+    def test_renamed_sensitive_paths_include_both_sides(self):
+        patch_text = (
+            "diff --git a/.env b/config/runtime.env\\n"
+            "rename from .env\\n"
+            "rename to config/runtime.env\\n"
+        )
+        self.assertEqual(patch_paths(patch_text), [".env", "config/runtime.env"])
+
     def test_sensitive_paths_are_rejected_without_human_review(self):
         decision = evaluate_evolution([".github/workflows/ci.yml"],
                                       tests_passed=True, diff_valid=True)
