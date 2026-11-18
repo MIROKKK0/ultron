@@ -153,13 +153,14 @@ def collect_github_signals() -> dict:
             )
             queries.append(f"{latest.get('name', 'GitHub Actions')} {failed_step} troubleshooting regression test")
         queries.append("Python automated repair CI regression testing safe fixes software engineering")
-        with DDGS(timeout=8) as search:
-            for query in queries[:2]:
-                results = search.text(
-                    query, region="br-pt", safesearch="moderate",
-                    max_results=4, backend="auto",
-                )
-                for item in results:
+        search = DDGS(timeout=8)
+        for query in queries[:2]:
+            results = search.text(
+                query, region="br-pt", safesearch="moderate",
+                max_results=4, backend="auto",
+            )
+            for item in results:
+                if item.get("href"):
                     web_research.append({
                         "query": query,
                         "title": (item.get("title") or "")[:180],
