@@ -36,6 +36,15 @@ class UltronTests(unittest.TestCase):
         self.assertIn("https://example.org", response.json()["reply"])
         search.assert_called_once_with("FlyWire")
 
+    def test_research_synthesis_always_appends_original_source_links(self):
+        from backend.app import synthesize_research
+        fixture = {"count": 1, "results": [{"title": "Minecraft gameplay", "snippet": "Vídeo relevante", "url": "https://www.youtube.com/watch?v=abc123", "duration": "10:20"}], "summary": "Resultados"}
+        with patch("backend.app.model_config", return_value={"configured": False}):
+            result = synthesize_research("vídeo Minecraft", fixture)
+        self.assertIn("https://www.youtube.com/watch?v=abc123", result)
+        self.assertIn("Minecraft gameplay", result)
+        self.assertIn("Fontes consultadas", result)
+
     def test_natural_language_calculation_does_not_need_slash_command(self):
         response = client.post("/chat", json={"message": "Quanto é 12 vezes (3+4)?"})
         self.assertEqual(response.status_code, 200)
