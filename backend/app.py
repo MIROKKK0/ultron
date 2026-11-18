@@ -229,6 +229,19 @@ def record_telemetry(event_type: str, *, route: str = "", method: str = "",
         return
 
 
+def search_and_record(query: str) -> dict[str, Any]:
+    started = time.perf_counter()
+    try:
+        result = search_web(query)
+        record_telemetry("tool_decision", latency_ms=(time.perf_counter() - started) * 1000,
+                         tool_name="web_search", decision="success_" + str(result.get("count", 0)))
+        return result
+    except Exception as exc:
+        record_telemetry("tool_decision", latency_ms=(time.perf_counter() - started) * 1000,
+                         tool_name="web_search", decision="failed_" + type(exc).__name__)
+        raise
+
+
 def generate_and_record(message: str, history: list[dict[str, str]] | None = None,
                         memories: list[str] | None = None) -> str:
     started = time.perf_counter()
@@ -624,7 +637,7 @@ def execute_brain_cycle(
     research: dict[str, Any] | None = None
     if research_query:
         try:
-            research = search_web(research_query)
+            research = search_and_record(research_query)
             outputs["researcher"] = {
                 "status": "completed" if research.get("count", 0) else "no_results",
                 "result": research,
@@ -855,10 +868,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     if research_query:
         try:
             research = search_web(research_query)
-            record_telemetry("tool_decision", tool_name="web_search", decision="success_" + str(research.get("count", 0)))
             response = synthesize_research(research_query, research)
         except Exception as exc:
-            record_telemetry("tool_decision", tool_name="web_search", decision="failed_" + type(exc).__name__)
             response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; os recursos locais restantes continuam disponíveis."
     elif message.casefold() == "/brain" or message.casefold().startswith("/brain "):
         goal = message[6:].strip()
