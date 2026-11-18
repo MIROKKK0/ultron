@@ -20,7 +20,7 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    BrainMonitorView(phase: brainPhase)
+                    NeuralActivityView(phase: brainPhase)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("ULTRON").font(.headline.weight(.bold)).tracking(1.5)
                         Text(isSending ? brainPhase.title : (serverOnline ? "API conectada" : (serverStatusChecked ? "API indisponível" : "Verificando API"))).font(.caption).foregroundStyle(.secondary)
