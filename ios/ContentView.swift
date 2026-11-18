@@ -162,6 +162,29 @@ struct ContentView: View {
             }
         }
 
+        if lowered == "/sync" {
+            let report = try await client.syncQueuedMemories(serverURL: serverURL)
+            return "Sincronização concluída. Enviadas: \(report.uploaded). Pendentes: \(report.remaining)."
+        }
+
+        if lowered == "/import-history" {
+            let formatter = ISO8601DateFormatter()
+            let records = messages.suffix(500).map { item in
+                HistoryExportRecord(
+                    role: item.role.rawValue,
+                    content: item.text,
+                    timestamp: formatter.string(from: item.createdAt ?? Date())
+                )
+            }
+            guard !records.isEmpty else { return "Não há mensagens para importar." }
+            let result = try await client.importHistory(
+                sourceExport: "ios-local-chat-history-v1",
+                records: records,
+                serverURL: serverURL
+            )
+            return "Histórico importado. Novas memórias: \(result.imported). Duplicadas ignoradas: \(result.duplicates)."
+        }
+
         if lowered == "/memories" {
             let items = try await client.listMemories(serverURL: serverURL)
             return items.isEmpty ? "Ainda não há memórias privadas salvas." : "Memórias desta instalação:\n" + items.joined(separator: "\n")
