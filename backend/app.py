@@ -1073,7 +1073,7 @@ def delete_memory(memory_id: int, tenant: str = Depends(require_installation_aut
 def telemetry_summary() -> dict[str, Any]:
     cutoff = (datetime.now(timezone.utc) - __import__("datetime").timedelta(days=7)).isoformat()
     with connect_db() as db:
-        rows = execute(db, "SELECT event_type, status_code, latency_ms, input_tokens, output_tokens, estimated_cost_usd, quality_score FROM telemetry_events WHERE created_at >= ? ORDER BY id DESC LIMIT 10000", (cutoff,)).fetchall()
+        rows = execute(db, "SELECT event_type, status_code, latency_ms, input_tokens, output_tokens, estimated_cost_usd, quality_score, decision FROM telemetry_events WHERE created_at >= ? ORDER BY id DESC LIMIT 10000", (cutoff,)).fetchall()
     request_rows = [row for row in rows if row["event_type"] == "http_request"]
     latencies = sorted(float(row["latency_ms"] or 0) for row in request_rows)
     def percentile(values: list[float], p: float) -> float | None:
