@@ -1,6 +1,7 @@
 import os
 import uuid
 import unittest
+import hashlib
 from pathlib import Path
 
 os.environ["ULTRON_DB_PATH"] = str(Path("/tmp") / "ultron-tests.sqlite3")
@@ -16,11 +17,10 @@ class UltronMemoryV2ApiTests(unittest.TestCase):
     def setUp(self):
         self.installation_id = "memory-v2-" + uuid.uuid4().hex
         self.token = uuid.uuid4().hex + uuid.uuid4().hex
-        response = client.post("/v2/installations/register", json={
-            "installation_id": self.installation_id,
-            "installation_token": self.token,
-        })
-        self.assertEqual(response.status_code, 200)
+        token_hash = hashlib.sha256(self.token.encode("utf-8")).hexdigest()
+        with connect_db() as db:
+            execute(db, "INSERT INTO installations(installation_id,token_hash,created_at,revoked_at) VALUES(?,?,?,NULL)",
+                    (self.installation_id, token_hash, "2026-11-18T00:00:00+00:00"))
         self.auth = {
             "X-Installation-ID": self.installation_id,
             "X-Installation-Token": self.token,
