@@ -1,7 +1,7 @@
-"""Bounded ULTRON autonomy cycle: inspect, research, diagnose, and publish evidence.
+"""ULTRON cycle: inspect, research, reproduce one failure, and publish evidence.
 
-This first safe agent iteration does not execute external code or modify product source.
-It turns observed repository signals into a reproducible report PR.
+Public search results are untrusted references. Only deterministic local tooling may
+propose source changes; candidates must pass the repository test and lint gates.
 """
 from __future__ import annotations
 
@@ -128,7 +128,7 @@ def collect_github_signals() -> dict:
     try:
         query = urllib.parse.urlencode({
             "q": "language:python (agent OR evaluation OR testing)",
-            "sort": "updated", "order": "desc", "per_page": int(os.environ.get("ULTRON_RESEARCH_RESULT_LIMIT", "8")),
+            "sort": "updated", "order": "desc", "per_page": max(1, int(os.environ.get("ULTRON_RESEARCH_RESULT_LIMIT", "8")) // 2),
         })
         items = api_json(f"/search/repositories?{query}").get("items", [])
         research = [{
@@ -157,7 +157,7 @@ def collect_github_signals() -> dict:
         for query in queries[:2]:
             results = search.text(
                 query, region="br-pt", safesearch="moderate",
-                max_results=4, backend="auto",
+                max_results=max(1, int(os.environ.get("ULTRON_RESEARCH_RESULT_LIMIT", "8")) // 4), backend="auto",
             )
             for item in results:
                 if item.get("href"):
@@ -171,7 +171,7 @@ def collect_github_signals() -> dict:
         errors.append(f"web_research: {type(exc).__name__}: {exc}")
 
     return {"recent_failures": failures, "open_issues": issues, "research_leads": research,
-            "web_research": web_research[:int(os.environ.get("ULTRON_RESEARCH_RESULT_LIMIT", "8"))],
+            "web_research": web_research[:max(0, int(os.environ.get("ULTRON_RESEARCH_RESULT_LIMIT", "8")) - len(research))],
             "reproduction_attempts": reproduction_attempts, "collection_errors": errors}
 
 
