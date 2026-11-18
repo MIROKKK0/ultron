@@ -2,6 +2,12 @@ name: ULTRON autonomous investigator
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["feat/ultron-autonomous-investigator"]
+    paths:
+      - "scripts/ultron_autonomous_agent.py"
+      - "tests/test_autonomous_agent_report.py"
+      - ".github/workflows/ultron-autonomous-investigator.yml"
   schedule:
     # GitHub schedules are best-effort and only run from the default branch.
     - cron: "17 * * * *"
