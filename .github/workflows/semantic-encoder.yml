@@ -29,7 +29,7 @@ jobs:
           python -m pip install -r training/generative/requirements.txt
       - name: Train and evaluate local PT-BR encoder
         run: |
-          python -m training.generative.train_semantic_encoder --steps 300 --batch-size 16 --output artifacts/ultron-semantic-encoder.pt
+          python -m training.generative.train_semantic_encoder --steps 300 --batch-size 16 --min-eval-pairs 50 --output artifacts/ultron-semantic-encoder.pt
       - name: Preserve experimental checkpoint and metrics
         uses: actions/upload-artifact@v4
         with:
