@@ -7,13 +7,14 @@ budgets are respected. The workflow publishes the evidence and an isolated branc
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-MAX_FILES = 10
-MAX_DIFF_LINES = 300
+MAX_FILES = int(os.environ.get("ULTRON_MAX_REPAIR_FILES", "10"))
+MAX_DIFF_LINES = int(os.environ.get("ULTRON_MAX_REPAIR_LINES", "300"))
 TEST_TIMEOUT_SECONDS = 300
 
 
@@ -89,8 +90,8 @@ def main() -> int:
         report["decision"] = "Candidate exceeded the diff budget and was discarded."
         report["changed_files"] = []
     else:
-        patch = command(["git", "diff", "--no-ext-diff", "--"], timeout=30)
-        (evidence / "candidate.patch").write_text(patch["stdout"], encoding="utf-8")
+        patch = subprocess.run(["git", "diff", "--no-ext-diff", "--"], text=True, capture_output=True, timeout=30)
+        (evidence / "candidate.patch").write_text(patch.stdout, encoding="utf-8")
         final = command([sys.executable, "-m", "unittest", "discover", "-v"])
         report["final_tests"] = final
         final_lint = command(["ruff", "check", ".", "--output-format", "json"], timeout=120)
