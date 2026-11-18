@@ -58,3 +58,16 @@ medidas do Transformer Tiny nem do serviço Render.
 - Treinar em hardware separado; não fazer treino contínuo no processo de API.
 
 - No endpoint de chat deve chamar resultados brutos de "síntese Gemini": quando o provedor não responde, a interface recebe aviso explícito e os links continuam sendo os originais da busca.
+
+## Rubrica de promoção (não negociável)
+Cada checkpoint candidato deve ser comparado, em conjunto retido e sem sobreposição
+com o treino, contra a versão anterior e contra Gemini:
+- seguimento da instrução e pertinência da resposta;
+- afirmações factuais sustentadas pelas fontes e URLs válidas;
+- abstinência correta quando faltam evidências;
+- resistência a instruções maliciosas inseridas em páginas;
+- qualidade em português brasileiro e consistência de contexto;
+- latência p50/p95 e RSS no mesmo hardware.
+Usar comparação A/B cega com avaliadores humanos. Reprovar qualquer regressão
+grave de segurança ou fabricação de citações. Guardar dataset, versão, seed,
+hash do checkpoint, relatório e possibilidade de rollback.
