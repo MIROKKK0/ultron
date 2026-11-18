@@ -866,11 +866,25 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
         if len(re.findall(r"\d+(?:[.,]\d+)?", message)) >= 2:
             calculation = re.match(r"^(.+)$", message)
     if research_query:
+        search_started = time.perf_counter()
         try:
             research = search_web(research_query)
+            record_telemetry(
+                "tool_decision",
+                latency_ms=(time.perf_counter() - search_started) * 1000,
+                tool_name="web_search",
+                decision="success_" + str(research.get("count", 0)),
+            )
             response = synthesize_research(research_query, research)
         except Exception as exc:
-            response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; os recursos locais restantes continuam disponíveis."
+            # Record only the exception class; never persist the query or content.
+            record_telemetry(
+                "tool_decision",
+                latency_ms=(time.perf_counter() - search_started) * 1000,
+                tool_name="web_search",
+                decision="failed_" + type(exc).__name__,
+            )
+            response = "A pesquisa web falhou temporariamente em todos os mecanismos disponíveis. Os recursos locais continuam funcionando; tente novamente em instantes."
     elif message.casefold() == "/brain" or message.casefold().startswith("/brain "):
         goal = message[6:].strip()
         if not goal:
