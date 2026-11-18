@@ -33,3 +33,26 @@ de 512 MB. Perplexidade é métrica de previsão de tokens, não uma nota de int
   https://huggingface.co/docs/transformers/tasks/language_modeling
 - Anthropic, avaliação contínua de agentes:
   https://www.anthropic.com/research/demystifying-evals-for-ai-agents
+
+
+## Primeira medição real (GitHub Actions, 2026-11-18)
+A execução de CI treinou um checkpoint SFT com 148.864 parâmetros, 10 exemplos de
+treino e 6 de avaliação, por 10 épocas. A loss de conclusão na avaliação terminou
+em 21,37427 e a perplexidade em aproximadamente 1,917 × 10^9. A loss caiu durante
+as épocas, mas o valor absoluto continua extremamente alto: isto demonstra que o
+pipeline executa, não que o modelo já saiba conversar. O checkpoint não deve ser
+ativado no ULTRON nem apresentado como melhoria de qualidade.
+
+O relatório do classificador de intenção separado mediu 0,1522 ms de latência média,
+0,2045 ms no p95 e 14,73 MB de RSS máximo no runner de CI. Esses números não são
+medidas do Transformer Tiny nem do serviço Render.
+
+## Próxima etapa para melhorar de verdade
+- Ampliar o corpus com exemplos autorizados, variados, revisados e deduplicados;
+  registrar origem/licença e remover dados pessoais.
+- Substituir o tokenizador byte por BPE treinado no corpus e versionar o JSON do tokenizer.
+- Fazer pré-treino causal em corpus grande antes de SFT; 16 pares de demonstração
+  não ensinam linguagem geral.
+- Criar benchmark fixo com casos fora do treino, revisão humana A/B e taxa de
+  alucinação/citação correta; publicar baseline e resultado de cada checkpoint.
+- Treinar em hardware separado; não fazer treino contínuo no processo de API.
