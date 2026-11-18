@@ -444,7 +444,10 @@ def execute_brain_cycle(
         }
         for role in roles
     ]
-    if research and research.get("count", 0):\n        synthesis, synthesis_status = synthesize_research_with_status(research_query, research)\n    else:\n        synthesis, synthesis_status = answer, "no_research"
+    if research and research.get("count", 0):
+        synthesis, synthesis_status = synthesize_research_with_status(research_query, research)
+    else:
+        synthesis, synthesis_status = answer, "no_research"
     if research and not research.get("count", 0):
         synthesis += "\n\nA pesquisa não retornou fontes verificáveis."
     return {
