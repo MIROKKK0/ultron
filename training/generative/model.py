@@ -131,7 +131,6 @@ class UltronTinyGPT(nn.Module):
         finally:
             self.train(was_training)
 
-    @torch.no_grad()
     def encode_hidden(self, input_ids: torch.Tensor) -> torch.Tensor:
         """Return final normalized token states for ULTRON-owned local embeddings."""
         if input_ids.ndim != 2 or input_ids.shape[0] < 1 or input_ids.shape[1] < 1:
