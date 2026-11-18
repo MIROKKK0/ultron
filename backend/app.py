@@ -385,17 +385,26 @@ def save_conversation(role: str, content: str) -> None:
         )
 
 
+def create_memory_embedding(content: str, operation: str) -> list[float] | None:
+    started = time.perf_counter()
+    try:
+        vector = embed_text(content)
+        record_telemetry("memory_embedding", latency_ms=(time.perf_counter() - started) * 1000,
+                         model="gemini-embedding-2", decision=operation + ("_success" if vector else "_not_configured"))
+        return vector
+    except Exception as exc:
+        record_telemetry("memory_embedding", latency_ms=(time.perf_counter() - started) * 1000,
+                         model="gemini-embedding-2", decision=operation + "_failed_" + type(exc).__name__)
+        return None
+
+
 def store_installation_memory(tenant: str, content: str) -> dict[str, Any]:
     content = content.strip()
     if not content:
         raise ValueError("A memória não pode ficar vazia.")
     now = datetime.now(timezone.utc)
     expires_at = (now + __import__("datetime").timedelta(days=30)).isoformat()
-    embedding = None
-    try:
-        embedding = embed_text(content)
-    except Exception as exc:
-        record_telemetry("memory_embedding", decision="write_fallback_" + type(exc).__name__)
+    embedding = create_memory_embedding(content, "write")
     embedding_json = json.dumps(embedding, separators=(",", ":")) if embedding else None
     with connect_db() as db:
         if is_postgres(db):
@@ -425,14 +434,12 @@ def load_installation_memories(tenant: str, query: str) -> list[str]:
     with connect_db() as db:
         execute(db, "DELETE FROM memories WHERE installation_id = ? AND expires_at IS NOT NULL AND expires_at <= ?", (tenant, now))
         rows = execute(db, "SELECT id, content, created_at, expires_at, embedding_json FROM memories WHERE installation_id = ? ORDER BY id DESC LIMIT 100", (tenant,)).fetchall()
-    try:
-        query_vector = embed_text(query)
-        if query_vector:
-            semantic = rank_semantic(query_vector, list(rows), limit=8)
-            if semantic:
-                return [item["content"] for item in semantic]
-    except Exception as exc:
-        record_telemetry("memory_embedding", decision="chat_fallback_" + type(exc).__name__)
+    query_vector = create_memory_embedding(query, "chat")
+    if query_vector:
+        semantic = rank_semantic(query_vector, list(rows), limit=8)
+        if semantic:
+            record_telemetry("memory_retrieval", tool_name="semantic_memory", decision="chat_tenant_scoped_cosine")
+            return [item["content"] for item in semantic]
     return rank_memories(query, rows, limit=8)
 
 
@@ -1022,11 +1029,7 @@ def search_memory(q: str, tenant: str = Depends(require_installation_auth)) -> d
         rows = execute(db,
             "SELECT id, content, created_at, expires_at, embedding_json FROM memories WHERE installation_id = ? ORDER BY id DESC LIMIT 300",
             (tenant,)).fetchall()
-    query_vector = None
-    try:
-        query_vector = embed_text(q)
-    except Exception as exc:
-        record_telemetry("memory_embedding", decision="query_fallback_" + type(exc).__name__)
+    query_vector = create_memory_embedding(q, "search")
     if query_vector:
         semantic = rank_semantic(query_vector, list(rows), limit=8)
         if semantic:
