@@ -354,3 +354,65 @@ class UltronTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_ios_self_registration_is_idempotent_and_uses_client_generated_secret(self):
+        installation_id = "ios-" + uuid.uuid4().hex
+        token = uuid.uuid4().hex + uuid.uuid4().hex
+        payload = {"installation_id": installation_id, "installation_token": token}
+        first = client.post("/v2/installations/register", json=payload)
+        second = client.post("/v2/installations/register", json=payload)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertTrue(first.json()["registered"])
+        auth = {"X-Installation-ID": installation_id, "X-Installation-Token": token}
+        saved = client.post(
+            "/v2/memory",
+            json={"kind": "semantic", "content": "preferência de idioma: português brasileiro"},
+            headers=auth,
+        )
+        self.assertEqual(saved.status_code, 200)
+        listed = client.get("/v2/memory", headers=auth)
+        self.assertEqual(listed.status_code, 200)
+        self.assertIn("português brasileiro", listed.text)
+
+    def test_ios_self_registration_rejects_a_different_token_for_same_installation(self):
+        installation_id = "ios-" + uuid.uuid4().hex
+        first_token = uuid.uuid4().hex + uuid.uuid4().hex
+        second_token = uuid.uuid4().hex + uuid.uuid4().hex
+        first = client.post(
+            "/v2/installations/register",
+            json={"installation_id": installation_id, "installation_token": first_token},
+        )
+        conflict = client.post(
+            "/v2/installations/register",
+            json={"installation_id": installation_id, "installation_token": second_token},
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(conflict.status_code, 409)
+
+    def test_v2_brain_run_receives_bounded_history_and_requires_installation_auth(self):
+        installation_id = "ios-" + uuid.uuid4().hex
+        token = uuid.uuid4().hex + uuid.uuid4().hex
+        registered = client.post(
+            "/v2/installations/register",
+            json={"installation_id": installation_id, "installation_token": token},
+        )
+        self.assertEqual(registered.status_code, 200)
+        auth = {"X-Installation-ID": installation_id, "X-Installation-Token": token}
+        fixture = {
+            "synthesis": "Resposta contextual",
+            "cycle_evaluation": {"score": 0.8, "passed": True, "stage_count": 3, "checks": {}},
+            "research": {"count": 0},
+        }
+        with patch("backend.app.execute_brain_cycle", return_value=fixture) as cycle:
+            response = client.post(
+                "/v2/brain/run",
+                json={"goal": "Continue a conversa", "history": ["user: oi", "assistant: olá"]},
+                headers=auth,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["synthesis"], "Resposta contextual")
+        self.assertEqual(cycle.call_args.kwargs["history"], ["user: oi", "assistant: olá"])
+        denied = client.post("/v2/brain/run", json={"goal": "sem credencial"})
+        self.assertEqual(denied.status_code, 401)
+
