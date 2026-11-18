@@ -95,7 +95,7 @@ jobs:
         run: |
           gh pr create --base main --head "$REPAIR_BRANCH" \
             --title "ULTRON: tested autonomous repair" \
-            --body "## Evidências\n- Candidate branch: $REPAIR_BRANCH\n- Baseline and post-patch unit-test logs are attached in the workflow artifact.\n- Only Ruff safe fixes were allowed.\n- Hard cap: 10 files / 300 changed lines.\n- No production deploy is performed by this workflow."
+            --body "## Evidências\n- Candidate branch: $REPAIR_BRANCH\n- Baseline and post-patch unit-test logs are attached in the workflow artifact.\n- Only Ruff safe fixes were allowed.\n- Configurable expanded budget: 30 files / 1,000 changed lines / 30-minute cycle.\n- No production deploy is performed by this workflow."
       - name: Publish investigation report branch
         id: publish_report
         env:
