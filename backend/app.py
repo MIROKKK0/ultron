@@ -214,14 +214,16 @@ def record_telemetry(event_type: str, *, route: str = "", method: str = "",
     """Persist metadata only: never prompts, outputs, IPs, installation IDs or secrets."""
     try:
         with connect_db() as db:
+            created_at = datetime.now(timezone.utc).isoformat()
             execute(db, """INSERT INTO telemetry_events
                 (event_type, route, method, status_code, latency_ms, model, input_tokens,
                  output_tokens, estimated_cost_usd, tool_name, decision, quality_score, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (event_type[:60], route[:160], method[:12], status_code,
                  max(0.0, float(latency_ms)), model[:100], input_tokens, output_tokens,
-                 estimated_cost_usd, tool_name[:80], decision[:120], quality_score,
-                 datetime.now(timezone.utc).isoformat()))
+                 estimated_cost_usd, tool_name[:80], decision[:120], quality_score, created_at))
+            retention_cutoff = (datetime.now(timezone.utc) - __import__("datetime").timedelta(days=30)).isoformat()
+            execute(db, "DELETE FROM telemetry_events WHERE created_at < ?", (retention_cutoff,))
     except Exception:
         return
 
