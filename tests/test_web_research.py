@@ -26,6 +26,19 @@ class WebResearchTests(unittest.TestCase):
         self.assertEqual(result["results"][0]["url"], "https://www.youtube.com/watch?v=abc123")
         self.assertIn("YouTube", result["summary"])
 
+    def test_video_search_excludes_unrelated_wikipedia_and_keeps_youtube_links(self):
+        from backend.web_research import search_web
+        raw = [
+            {"title": "Minecraft survival gameplay", "content": "https://www.youtube.com/watch?v=abc123", "description": "Minecraft gameplay"},
+            {"title": "Video - Wikipedia", "content": "https://en.wikipedia.org/wiki/Video", "description": "Definition of video"},
+            {"title": "GTA V cars", "content": "https://www.youtube.com/watch?v=car123", "description": "Cars in GTA V"},
+        ]
+        result = search_web("vídeo do YouTube sobre minecraft", searcher=lambda *a, **k: raw)
+        self.assertEqual(result["search_type"], "video")
+        self.assertEqual(result["count"], 1)
+        self.assertIn("youtube.com", result["results"][0]["url"])
+        self.assertIn("Minecraft", result["results"][0]["title"])
+
     def test_video_search_returns_clear_empty_result_when_no_relevant_youtube_video(self):
         def videos(query, **kwargs):
             return [{
