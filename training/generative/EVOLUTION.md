@@ -56,3 +56,5 @@ medidas do Transformer Tiny nem do serviço Render.
 - Criar benchmark fixo com casos fora do treino, revisão humana A/B e taxa de
   alucinação/citação correta; publicar baseline e resultado de cada checkpoint.
 - Treinar em hardware separado; não fazer treino contínuo no processo de API.
+
+- No endpoint de chat deve chamar resultados brutos de "síntese Gemini": quando o provedor não responde, a interface recebe aviso explícito e os links continuam sendo os originais da busca.
