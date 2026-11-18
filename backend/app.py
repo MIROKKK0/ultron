@@ -23,6 +23,9 @@ from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposa
 from backend.brain import run_multitask
 from backend.cognitive_workspace import CognitiveWorkspace
 from backend.memory_system import MemoryStore
+from backend.local_vector_index import LocalVectorIndex
+from backend.specialist_agents import run_specialist
+from backend.learning_gate import evaluate_learning_candidate
 from backend.evidence_critic import review_evidence
 from backend.hierarchical_planner import plan_hierarchical
 from backend.tool_runtime import ToolRegistry, ToolSpec
@@ -138,6 +141,10 @@ def init_db() -> None:
                 score DOUBLE PRECISION NOT NULL, passed INTEGER NOT NULL, metrics_json TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS memory_import_receipts (
+                owner_id TEXT NOT NULL, source_hash TEXT NOT NULL, memory_id BIGINT NOT NULL,
+                created_at TEXT NOT NULL, PRIMARY KEY(owner_id, source_hash)
+            )""")
         else:
             execute(db, """
                 CREATE TABLE IF NOT EXISTS memories (
@@ -175,6 +182,10 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, installation_id TEXT NOT NULL, category TEXT NOT NULL,
                 score REAL NOT NULL, passed INTEGER NOT NULL, metrics_json TEXT NOT NULL,
                 created_at TEXT NOT NULL
+            )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS memory_import_receipts (
+                owner_id TEXT NOT NULL, source_hash TEXT NOT NULL, memory_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL, PRIMARY KEY(owner_id, source_hash)
             )""")
 
 
@@ -221,6 +232,29 @@ class TypedMemoryRequest(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
     source: str = Field(default="user_explicit", max_length=300)
     confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+
+
+class HistoryImportRecord(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+    timestamp: str = Field(default="", max_length=80)
+
+
+class HistoryImportRequest(BaseModel):
+    source_export: str = Field(min_length=1, max_length=200)
+    records: list[HistoryImportRecord] = Field(min_length=1, max_length=500)
+
+
+class MemoryCurationRequest(BaseModel):
+    candidate: str = Field(min_length=1, max_length=4000)
+    source_ids: list[int] = Field(min_length=1, max_length=20)
+
+
+class LearningEvaluationRequest(BaseModel):
+    baseline: dict[str, float]
+    candidate: dict[str, float]
+    minimum_score: float = Field(default=0.80, ge=0.0, le=1.0)
+    allowed_drop: float = Field(default=0.0, ge=0.0, le=0.10)
 
 class InstallationRequest(BaseModel):
     installation_id: str = Field(min_length=16, max_length=128)
@@ -386,7 +420,12 @@ def execute_brain_cycle(
         with connect_db() as db:
             store = MemoryStore(db)
             store.initialize()
-            typed = store.retrieve(installation_id, normalized_goal, limit=8)
+            vector_index = LocalVectorIndex(db)
+            vector_index.initialize()
+            vector_index.index_missing(installation_id)
+            typed = vector_index.search(installation_id, normalized_goal, limit=8)
+            if not typed:
+                typed = store.retrieve(installation_id, normalized_goal, limit=8)
         memories = [str(item["content"]) for item in typed]
     elif include_private_memories:
         with connect_db() as db:
@@ -403,8 +442,9 @@ def execute_brain_cycle(
     workspace.publish("goal", normalized_goal, source="user", confidence=1.0, priority=1.0)
     for memory in memories[:5]:
         workspace.publish("memory", memory, source="retrieved_memory", confidence=0.65, priority=0.7)
-    plan = plan_task(normalized_goal)
-    hierarchy = plan_hierarchical(normalized_goal)
+    planned = run_specialist("planner", {"goal": normalized_goal})["result"]
+    plan = planned["plan"]
+    hierarchy = planned["hierarchy"]
     plan["hierarchy"] = hierarchy
     workspace.publish("plan", json.dumps(plan, ensure_ascii=False), source="planner", confidence=0.9, priority=0.9)
     attended_context = [
@@ -419,7 +459,7 @@ def execute_brain_cycle(
     else:
         answer = answer_without_provider(normalized_goal, attended_context, history)
     workspace.publish("candidate_answer", answer, source="solver", confidence=0.65, priority=0.85)
-    critique = review_response(normalized_goal, answer)
+    critique = run_specialist("critic", {"goal": normalized_goal, "answer": answer})["result"]
     workspace.publish(
         "critique", json.dumps(critique, ensure_ascii=False),
         source="critic", confidence=0.5, priority=0.8,
@@ -492,7 +532,7 @@ def execute_brain_cycle(
     if research and not research.get("count", 0):
         synthesis += "\\n\\nA pesquisa não retornou fontes verificáveis."
     cycle_payload = {"agents": agents, "research": research, "review": critique}
-    cycle_evaluation = evaluate_agent_cycle(cycle_payload)
+    cycle_evaluation = run_specialist("evaluator", {"cycle": cycle_payload})["result"]
     return {
         "brain_version": "4.0.0-local-tools",
         "strategy_priorities": scores,
@@ -886,7 +926,84 @@ def add_typed_memory(payload: TypedMemoryRequest, installation_id: str = Depends
         store = MemoryStore(db)
         store.initialize()
         memory_id = store.add(installation_id, payload.kind, payload.content, payload.source, payload.confidence)
-    return {"id": memory_id, "kind": payload.kind, "stored": True}
+        vector_index = LocalVectorIndex(db)
+        vector_index.initialize()
+        vector_index.upsert(installation_id, memory_id, payload.content)
+    return {"id": memory_id, "kind": payload.kind, "stored": True, "indexed": True}
+
+
+@app.post("/v2/memory/import")
+def import_history(payload: HistoryImportRequest, installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    """Import only an explicit client export; never read the unscoped legacy conversations table."""
+    imported = 0
+    duplicates = 0
+    with connect_db() as db:
+        store = MemoryStore(db)
+        store.initialize()
+        vector_index = LocalVectorIndex(db)
+        vector_index.initialize()
+        for record in payload.records:
+            content = record.content.strip()
+            if not content:
+                continue
+            canonical = json.dumps({
+                "source_export": payload.source_export,
+                "role": record.role,
+                "timestamp": record.timestamp,
+                "content": content,
+            }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            source_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+            existing = execute(db, "SELECT memory_id FROM memory_import_receipts WHERE owner_id=? AND source_hash=?",
+                               (installation_id, source_hash)).fetchone()
+            if existing:
+                duplicates += 1
+                continue
+            memory_id = store.add(
+                installation_id, "episodic", f"{record.role}: {content}",
+                f"history_import:{payload.source_export}"[:300], 0.95,
+            )
+            vector_index.upsert(installation_id, memory_id, f"{record.role}: {content}")
+            execute(db, "INSERT INTO memory_import_receipts(owner_id,source_hash,memory_id,created_at) VALUES(?,?,?,?)",
+                    (installation_id, source_hash, memory_id, datetime.now(timezone.utc).isoformat()))
+            imported += 1
+    return {"imported": imported, "duplicates": duplicates, "scope": "authenticated_installation",
+            "source": payload.source_export, "legacy_global_history_read": False}
+
+
+@app.post("/v2/memory/curate")
+def propose_semantic_memory(payload: MemoryCurationRequest,
+                            installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    """Propose a semantic fact while retaining source references; does not auto-save."""
+    ids = list(dict.fromkeys(int(value) for value in payload.source_ids))
+    if any(value < 1 for value in ids):
+        raise HTTPException(status_code=422, detail="IDs de origem inválidos.")
+    placeholders = ",".join("?" for _ in ids)
+    with connect_db() as db:
+        rows = execute(db, f"SELECT id FROM cognitive_memories WHERE owner_id=? AND id IN ({placeholders})",
+                       tuple([installation_id] + ids)).fetchall()
+    found = {int(row["id"]) for row in rows}
+    if found != set(ids):
+        raise HTTPException(status_code=404, detail="Uma ou mais memórias de origem não pertencem a esta instalação.")
+    return run_specialist("memory_curator", {
+        "candidate": payload.candidate, "source_ids": ids,
+    })
+
+
+@app.post("/brain/learn/evaluate", dependencies=[Depends(require_api_token)])
+def evaluate_learning(payload: LearningEvaluationRequest) -> dict[str, Any]:
+    decision = evaluate_learning_candidate(
+        {"cases": payload.baseline}, {"cases": payload.candidate},
+        minimum_score=payload.minimum_score, allowed_drop=payload.allowed_drop,
+    )
+    return {
+        "accepted": decision.accepted,
+        "baseline_score": decision.baseline_score,
+        "candidate_score": decision.candidate_score,
+        "regressions": list(decision.regressions),
+        "reason": decision.reason,
+        "weights_modified": False,
+        "promotion": "blocked" if not decision.accepted else "eligible_for_review",
+    }
 
 
 @app.get("/v2/memory")
@@ -895,7 +1012,12 @@ def get_typed_memories(kind: Literal["episodic", "semantic", "procedural"] | Non
     with connect_db() as db:
         store = MemoryStore(db)
         store.initialize()
-        items = store.retrieve(installation_id, query, kind=kind, limit=20) if query else []
+        vector_index = LocalVectorIndex(db)
+        vector_index.initialize()
+        vector_index.index_missing(installation_id)
+        items = vector_index.search(installation_id, query, kind=kind, limit=20) if query else []
+        if query and not items:
+            items = store.retrieve(installation_id, query, kind=kind, limit=20)
         if not query:
             rows = execute(db, "SELECT id,kind,content,source,confidence,created_at,last_accessed_at,access_count FROM cognitive_memories WHERE owner_id=? AND (? IS NULL OR kind=?) ORDER BY id DESC LIMIT 20",
                            (installation_id, kind, kind)).fetchall()
@@ -909,6 +1031,10 @@ def delete_typed_memory(memory_id: int, installation_id: str = Depends(require_i
         store = MemoryStore(db)
         store.initialize()
         deleted = store.forget(installation_id, memory_id)
+        if deleted:
+            vector_index = LocalVectorIndex(db)
+            vector_index.initialize()
+            vector_index.delete(installation_id, memory_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Memória não encontrada.")
     return {"deleted": True}
