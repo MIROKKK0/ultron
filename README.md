@@ -13,7 +13,7 @@ ULTRON mantém um registro local, datado e verificável das conversas e decisõe
 
 ## Modelo de execução
 
-ULTRON usa um provedor compatível com a API OpenAI como mecanismo de inferência opcional. O núcleo, a memória e a trilha de auditoria continuam locais e independentes. A configuração não contém integração Gemini.
+ULTRON usa um provedor compatível com a API OpenAI como mecanismo de inferência opcional. O núcleo, a memória e a trilha de auditoria continuam locais e independentes. A configuração não acopla o núcleo a um fornecedor específico.
 
 ## Setup
 
