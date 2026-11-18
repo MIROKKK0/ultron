@@ -285,7 +285,8 @@ async def request_telemetry(request: Request, call_next):
         status = response.status_code
         return response
     finally:
-        record_telemetry("http_request", route=request.url.path, method=request.method,
+        route = getattr(request.scope.get("route"), "path", request.url.path)
+        record_telemetry("http_request", route=route, method=request.method,
                          status_code=status, latency_ms=(time.perf_counter() - started) * 1000)
 
 
@@ -379,6 +380,41 @@ def save_conversation(role: str, content: str) -> None:
             "INSERT INTO conversations(role, content, created_at) VALUES (?, ?, ?)",
             (role, content, datetime.now(timezone.utc).isoformat()),
         )
+
+
+def store_installation_memory(tenant: str, content: str) -> dict[str, Any]:
+    content = content.strip()
+    if not content:
+        raise ValueError("A memória não pode ficar vazia.")
+    now = datetime.now(timezone.utc)
+    expires_at = (now + __import__("datetime").timedelta(days=30)).isoformat()
+    embedding = None
+    try:
+        embedding = embed_text(content)
+    except Exception as exc:
+        record_telemetry("memory_embedding", decision="write_fallback_" + type(exc).__name__)
+    embedding_json = json.dumps(embedding, separators=(",", ":")) if embedding else None
+    with connect_db() as db:
+        if is_postgres(db):
+            cursor = execute(db,
+                "INSERT INTO memories(content, created_at, installation_id, expires_at, embedding_json) VALUES (?, ?, ?, ?, ?) RETURNING id",
+                (content, now.isoformat(), tenant, expires_at, embedding_json))
+            memory_id = cursor.fetchone()["id"]
+        else:
+            cursor = execute(db,
+                "INSERT INTO memories(content, created_at, installation_id, expires_at, embedding_json) VALUES (?, ?, ?, ?, ?)",
+                (content, now.isoformat(), tenant, expires_at, embedding_json))
+            memory_id = cursor.lastrowid
+    record_telemetry("memory_write", decision="stored_with_30d_ttl_and_embedding" if embedding else "stored_with_30d_ttl_lexical_fallback")
+    return {"id": memory_id, "content": content, "expires_at": expires_at}
+
+
+def list_installation_memory(tenant: str) -> list[dict[str, Any]]:
+    now = datetime.now(timezone.utc).isoformat()
+    with connect_db() as db:
+        execute(db, "DELETE FROM memories WHERE installation_id = ? AND expires_at IS NOT NULL AND expires_at <= ?", (tenant, now))
+        rows = execute(db, "SELECT id, content, created_at, expires_at FROM memories WHERE installation_id = ? ORDER BY id DESC LIMIT 50", (tenant,)).fetchall()
+    return [dict(row) for row in rows]
 
 
 def load_installation_memories(tenant: str, query: str) -> list[str]:
@@ -795,6 +831,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     installation_id = request.headers.get("X-ULTRON-Installation-ID")
     installation_token = request.headers.get("X-ULTRON-Installation-Token")
     installation_memories: list[str] = []
+    tenant: str | None = None
     if installation_id or installation_token:
         tenant = verify_installation(installation_id, installation_token)
         installation_memories = load_installation_memories(tenant, message)
@@ -838,7 +875,34 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
         except ValueError:
             response = "Não consegui interpretar essa conta com segurança. Envie apenas a expressão matemática."
     elif message.casefold().startswith("/remember ") or re.match(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", message, re.I):
-        response = "A memória pessoal exige autenticação por instalação. O chat público não grava dados compartilhados."
+        if not tenant:
+            response = "Para guardar memória privada, atualize o aplicativo para registrar esta instalação com segurança."
+        else:
+            content = message[10:].strip() if message.casefold().startswith("/remember ") else re.sub(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", "", message, flags=re.I).strip()
+            try:
+                saved = store_installation_memory(tenant, content)
+                response = f"Memória salva nesta instalação (ID {saved['id']}); expira em 30 dias."
+            except Exception:
+                response = "Não consegui salvar essa memória agora."
+    elif message.casefold() == "/memory":
+        if not tenant:
+            response = "A memória privada exige uma instalação registrada."
+        else:
+            items = list_installation_memory(tenant)
+            response = "Memórias desta instalação:\n" + "\n".join(f"{item['id']}: {item['content']}" for item in items) if items else "Ainda não há memórias salvas nesta instalação."
+    elif message.casefold().startswith("/forget "):
+        if not tenant:
+            response = "A memória privada exige uma instalação registrada."
+        else:
+            try:
+                memory_id = int(message[8:].strip())
+                with connect_db() as db:
+                    deleted = execute(db, "DELETE FROM memories WHERE id = ? AND installation_id = ?", (memory_id, tenant))
+                response = "Memória excluída desta instalação." if deleted.rowcount else "Memória não encontrada nesta instalação."
+                if deleted.rowcount:
+                    record_telemetry("memory_delete", decision="chat_scoped_delete")
+            except ValueError:
+                response = "Use /forget seguido do ID numérico da memória."
     else:
         local_skill = run_intent_skill(message)
         if local_skill:
@@ -936,39 +1000,12 @@ def register_installation(payload: InstallationRegisterRequest, request: Request
 
 @app.post("/memory")
 def add_memory(request: MemoryRequest, tenant: str = Depends(require_installation_auth)) -> dict[str, Any]:
-    content = request.content.strip()
-    now = datetime.now(timezone.utc)
-    expires_at = (now + __import__("datetime").timedelta(days=30)).isoformat()
-    embedding = None
-    try:
-        embedding = embed_text(content)
-    except Exception as exc:
-        record_telemetry("memory_embedding", decision="write_fallback_" + type(exc).__name__)
-    embedding_json = json.dumps(embedding, separators=(",", ":")) if embedding else None
-    with connect_db() as db:
-        if is_postgres(db):
-            cursor = execute(db,
-                "INSERT INTO memories(content, created_at, installation_id, expires_at, embedding_json) VALUES (?, ?, ?, ?, ?) RETURNING id",
-                (content, now.isoformat(), tenant, expires_at, embedding_json))
-            memory_id = cursor.fetchone()["id"]
-        else:
-            cursor = execute(db,
-                "INSERT INTO memories(content, created_at, installation_id, expires_at, embedding_json) VALUES (?, ?, ?, ?, ?)",
-                (content, now.isoformat(), tenant, expires_at, embedding_json))
-            memory_id = cursor.lastrowid
-    record_telemetry("memory_write", decision="stored_with_30d_ttl_and_embedding" if embedding else "stored_with_30d_ttl_lexical_fallback")
-    return {"id": memory_id, "content": content, "expires_at": expires_at}
+    return store_installation_memory(tenant, request.content)
 
 
 @app.get("/memory")
 def list_memory(tenant: str = Depends(require_installation_auth)) -> dict[str, Any]:
-    now = datetime.now(timezone.utc).isoformat()
-    with connect_db() as db:
-        execute(db, "DELETE FROM memories WHERE installation_id = ? AND expires_at IS NOT NULL AND expires_at <= ?", (tenant, now))
-        rows = execute(db,
-            "SELECT id, content, created_at, expires_at FROM memories WHERE installation_id = ? ORDER BY id DESC LIMIT 100",
-            (tenant,)).fetchall()
-    return {"items": [dict(row) for row in rows]}
+    return {"items": list_installation_memory(tenant)}
 
 
 @app.get("/memory/search")
