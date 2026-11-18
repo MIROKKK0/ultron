@@ -5,6 +5,14 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+# When invoked as `python scripts/ultron_gemini_proposer.py`, Python puts
+# the scripts/ directory on sys.path, not the repository root. Add the root
+# explicitly so the provider-independent core can be imported reliably.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
 from ultron_core.provider import build_provider
 from ultron_core.orchestrator import EvolutionOrchestrator
 
