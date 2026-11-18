@@ -350,7 +350,7 @@ private struct UltronBrainDisplay: View {
 
     var body: some View {
         VStack(spacing: 3) {
-            TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: false)) { timeline in
+            TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: !isActive)) { timeline in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 Canvas { context, size in
                     drawBrain(in: &context, size: size, time: time, active: isActive)
