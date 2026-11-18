@@ -1,12 +1,61 @@
-{"query":"Meu acesso foi bloqueado.","positive":"Não consigo entrar porque minha conta foi bloqueada."}
-{"query":"Quero consultar o histórico de compras.","positive":"Onde encontro a lista dos meus pedidos anteriores?"}
-{"query":"O programa está lento.","positive":"O aplicativo demora muito para responder."}
-{"query":"Preciso encerrar o plano mensal.","positive":"Quero cancelar a assinatura que pago todo mês."}
-{"query":"A senha atual não funciona.","positive":"Não consigo autenticar usando minha senha."}
-{"query":"Quero levar meus dados para outro aparelho.","positive":"Como transfiro as informações para um novo celular?"}
-{"query":"A cópia de segurança falhou.","positive":"O backup não foi concluído com sucesso."}
-{"query":"O servidor perdeu a conexão.","positive":"A comunicação com a API foi interrompida."}
-{"query":"Preciso corrigir uma informação armazenada.","positive":"Quero editar um dado que foi salvo na memória."}
-{"query":"Como verificar a qualidade do modelo?","positive":"Quero executar uma avaliação com casos de teste."}
-{"query":"A conversa anterior sumiu.","positive":"Não encontro as mensagens da sessão passada."}
-{"query":"O arquivo baixado está corrompido.","positive":"O documento que recebi não pode ser aberto."}
+{"query":"Minha sessão foi encerrada sem aviso.","positive":"O sistema desconectou minha conta inesperadamente."}
+{"query":"O aplicativo não reconhece minha digital.","positive":"A autenticação biométrica falha no celular."}
+{"query":"Quero trocar o e-mail da conta.","positive":"Preciso atualizar o endereço de e-mail cadastrado."}
+{"query":"Recebi uma cobrança duplicada.","positive":"O mesmo pagamento apareceu duas vezes na fatura."}
+{"query":"O pagamento ainda está pendente.","positive":"A transação não foi confirmada até agora."}
+{"query":"Não consigo anexar uma imagem.","positive":"O envio de fotos pelo aplicativo está falhando."}
+{"query":"O download parou no meio.","positive":"A transferência do arquivo foi interrompida antes de terminar."}
+{"query":"A pesquisa retorna resultados errados.","positive":"A busca está mostrando itens que não correspondem ao que digitei."}
+{"query":"Quero recuperar os dados apagados.","positive":"Preciso restaurar informações que foram excluídas."}
+{"query":"O backup ocupa espaço demais.","positive":"A cópia de segurança está usando muito armazenamento."}
+{"query":"A sincronização está duplicando registros.","positive":"Os mesmos dados aparecem repetidos depois de sincronizar."}
+{"query":"O celular ficou sem bateria durante o envio.","positive":"A sincronização foi interrompida quando o iPhone desligou."}
+{"query":"Como vejo quais aparelhos estão conectados?","positive":"Quero listar os dispositivos autorizados na minha conta."}
+{"query":"Quero desconectar um aparelho antigo.","positive":"Preciso encerrar a sessão de um dispositivo que não uso mais."}
+{"query":"A chave de acesso expirou.","positive":"O token de autenticação perdeu a validade."}
+{"query":"O código de verificação não chegou.","positive":"Não recebi o número de confirmação por SMS ou e-mail."}
+{"query":"Quero ativar a confirmação em duas etapas.","positive":"Preciso habilitar autenticação de dois fatores."}
+{"query":"Minha conta parece estar sendo usada por outra pessoa.","positive":"Suspeito de acesso não autorizado ao meu perfil."}
+{"query":"Como exporto somente algumas conversas?","positive":"Quero baixar apenas um trecho específico do histórico."}
+{"query":"Preciso importar um arquivo de conversas.","positive":"Quero carregar um histórico exportado anteriormente."}
+{"query":"A memória guardou uma informação incorreta.","positive":"Existe um dado errado salvo no registro de memória."}
+{"query":"Quero saber de onde veio essa lembrança.","positive":"Preciso consultar a origem e a procedência de uma memória."}
+{"query":"A lembrança foi resumida pelo agente.","positive":"Esse registro é uma interpretação criada pela IA, não o texto original."}
+{"query":"Não quero que o resumo substitua a mensagem original.","positive":"Preserve a conversa fonte e mantenha a síntese separada."}
+{"query":"Como verifico se o banco foi alterado?","positive":"Quero validar a integridade do arquivo SQLite e seu histórico."}
+{"query":"O registro de auditoria está inconsistente.","positive":"A cadeia de hashes do ledger não confere."}
+{"query":"Quero restaurar um backup criptografado.","positive":"Preciso recuperar os dados usando a cópia protegida."}
+{"query":"A chave do backup não está disponível.","positive":"Não tenho a credencial necessária para descriptografar o arquivo."}
+{"query":"O modelo novo ficou pior que o anterior.","positive":"O candidato apresentou regressão em relação ao baseline."}
+{"query":"Quero comparar dois checkpoints.","positive":"Preciso medir o desempenho do modelo antigo contra o novo."}
+{"query":"A busca semântica confundiu assuntos diferentes.","positive":"O recuperador trouxe memórias irrelevantes para a pergunta."}
+{"query":"Duas frases diferentes deveriam apontar para a mesma memória.","positive":"Quero encontrar paráfrases com significado equivalente."}
+{"query":"O encoder precisa funcionar sem internet.","positive":"A geração de embeddings deve ocorrer inteiramente no dispositivo."}
+{"query":"Não quero depender de uma API de terceiros.","positive":"O núcleo deve operar mesmo sem provedor externo configurado."}
+{"query":"Trocar o modelo não pode apagar minhas lembranças.","positive":"A memória precisa sobreviver à substituição do serviço de inferência."}
+{"query":"O provedor externo está fora do ar.","positive":"A API de geração não está respondendo no momento."}
+{"query":"Quero executar o assistente sem nenhuma chave.","positive":"Ative o modo local sem credenciais de serviços externos."}
+{"query":"O Transformer gerou uma resposta vazia.","positive":"A inferência local terminou sem produzir texto utilizável."}
+{"query":"O checkpoint não corresponde ao tokenizador.","positive":"O arquivo do modelo usa uma versão incompatível do tokenizer."}
+{"query":"O treinamento não foi reproduzível.","positive":"Executar novamente com a mesma semente produziu resultados diferentes."}
+{"query":"A avaliação usou exemplos vistos no treino.","positive":"Existe vazamento entre os conjuntos de treinamento e validação."}
+{"query":"Preciso de mais exemplos difíceis no benchmark.","positive":"A avaliação deve incluir negativos próximos e casos semanticamente parecidos."}
+{"query":"O teste passou sem verificar a métrica de aceitação.","positive":"A pipeline ficou verde mesmo quando o candidato não superou a referência."}
+{"query":"Quero impedir que uma atualização quebre funções antigas.","positive":"A suíte precisa detectar regressões antes de aceitar mudanças."}
+{"query":"O workflow não encontrou uma dependência Python.","positive":"A execução do GitHub Actions falhou porque faltou instalar um pacote."}
+{"query":"A branch do pull request não disparou o CI.","positive":"O filtro de branches do workflow não corresponde à base da solicitação."}
+{"query":"O build do iPhone está aguardando um runner.","positive":"A compilação iOS ainda não começou porque o executor está na fila."}
+{"query":"Quero testar a fila quando a rede voltar.","positive":"Valide o reenvio automático das memórias offline após reconectar."}
+{"query":"Uma mensagem sumiu depois de sincronizar.","positive":"O item foi removido da fila antes da confirmação do servidor."}
+{"query":"O servidor recebeu a mesma memória duas vezes.","positive":"A importação precisa deduplicar registros repetidos por hash."}
+{"query":"O horário original da conversa foi perdido.","positive":"A importação deve preservar o timestamp da mensagem de origem."}
+{"query":"Não quero importar todo o histórico automaticamente.","positive":"A leitura do histórico deve ocorrer apenas após comando explícito."}
+{"query":"A memória de uma instalação apareceu em outra.","positive":"Os dados privados precisam ficar isolados por dispositivo ou instalação."}
+{"query":"O chat público acessou dados privados.","positive":"Rotas sem autenticação não podem consultar memórias pessoais."}
+{"query":"Quero apagar uma memória específica e seus vetores.","positive":"A exclusão deve remover também os índices derivados relacionados."}
+{"query":"A consolidação juntou fatos sem mostrar as fontes.","positive":"Toda memória consolidada precisa apontar para seus registros de origem."}
+{"query":"O agente salvou uma conclusão sem minha aprovação.","positive":"A curadoria deve propor mudanças sem gravar automaticamente."}
+{"query":"Quero saber qual especialista tomou essa decisão.","positive":"O ciclo precisa registrar o papel e o resultado de cada agente."}
+{"query":"O avaliador não participou do ciclo.","positive":"Inclua a etapa de avaliação no resultado final dos especialistas."}
+{"query":"O plano precisa ser dividido em tarefas menores.","positive":"Transforme o objetivo em etapas ordenadas e verificáveis."}
+{"query":"O crítico encontrou uma afirmação sem evidência.","positive":"A revisão deve apontar conclusões que não possuem fontes confiáveis."}
