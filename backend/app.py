@@ -280,6 +280,32 @@ def answer_with_provider(message: str, memories: list[str] | None = None,
         raise HTTPException(status_code=503, detail="A pesquisa deve ser executada pela ferramenta web.")
     return generate_reply(message, history=history or [], memories=memories or [])
 
+def synthesize_research(query: str, research: dict[str, Any]) -> str:
+    """Synthesize only retrieved evidence and retain direct source/video links."""
+    results = research.get("results") or []
+    if not results:
+        return str(research.get("summary") or "A pesquisa não encontrou fontes verificáveis.")
+    evidence = []
+    for index, item in enumerate(results[:8], 1):
+        evidence.append(
+            f"{index}. {str(item.get('title', 'Fonte'))[:300]}\\n"
+            f"Resumo: {str(item.get('snippet', ''))[:1000]}\\n"
+            f"URL: {str(item.get('url', ''))[:1000]}"
+        )
+    prompt = (
+        "Responda em português brasileiro ao pedido abaixo usando exclusivamente as fontes listadas. "
+        "Não invente detalhes nem diga que assistiu ao vídeo. Diferencie fatos de inferências. "
+        "Inclua os links diretos de todos os resultados úteis. Se for busca de vídeos, liste título, "
+        "duração quando disponível e link do YouTube; não substitua por páginas genéricas.\\n\\n"
+        f"Pedido: {query}\\n\\nFontes recuperadas:\\n" + "\\n\\n".join(evidence)
+    )
+    if model_config()["configured"]:
+        try:
+            return generate_reply(prompt, history=[], memories=[])[:12000]
+        except Exception:
+            pass
+    return str(research.get("summary") or "Encontrei fontes, mas não consegui sintetizá-las agora.")
+
 
 def learned_strategy_scores() -> dict[str, float]:
     """Rank local specialist strategies using bounded explicit user feedback."""
@@ -390,7 +416,7 @@ def execute_brain_cycle(
         }
         for role in roles
     ]
-    synthesis = research["summary"] if research and research.get("count", 0) else answer
+    synthesis = synthesize_research(research_query, research) if research and research.get("count", 0) else answer
     if research and not research.get("count", 0):
         synthesis += "\\n\\nA pesquisa não retornou fontes verificáveis."
     return {
@@ -585,7 +611,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     if research_query:
         try:
             research = search_web(research_query)
-            response = research["summary"]
+            response = synthesize_research(research_query, research)
         except Exception:
             response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; os recursos locais restantes continuam disponíveis."
     elif message.casefold() == "/brain" or message.casefold().startswith("/brain "):
