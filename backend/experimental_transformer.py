@@ -10,9 +10,22 @@ def transformer_status() -> dict[str, Any]:
     return {"enabled": enabled, "available": enabled and checkpoint.is_file(),
             "checkpoint_present": checkpoint.is_file(), "checkpoint_path": str(checkpoint),
             "role": "experimental_candidate_only",
-            "training_metrics": "validation_loss/perplexity/BPB stored in checkpoint"}
+            "training_metrics": "validation_loss/perplexity/BPB stored in checkpoint",
+            "promotion_policy": "requires held-out dialogue benchmark and human approval"}
 
-def generate_experimental_candidate(prompt: str, *, history: list[str] | None = None,
+def _history_text(history: list[Any] | None) -> list[str]:
+    lines = []
+    for item in (history or [])[-6:]:
+        if isinstance(item, dict):
+            role = str(item.get("role", "user")).strip().lower()
+            content = str(item.get("content", "")).strip()
+            if role in {"user", "assistant"} and content:
+                lines.append(f"{role}: {content[:500]}")
+        elif isinstance(item, str) and item.strip():
+            lines.append(item[:500])
+    return lines
+
+def generate_experimental_candidate(prompt: str, *, history: list[Any] | None = None,
                                     memories: list[str] | None = None) -> dict[str, Any]:
     status = transformer_status()
     if not status["enabled"]:
@@ -40,13 +53,15 @@ def generate_experimental_candidate(prompt: str, *, history: list[str] | None = 
             tokenizer = ByteTokenizer()
         else:
             raise ValueError("Tokenizer incompatível.")
-        parts = [f"Memória: {x}" for x in (memories or [])[:4]]
-        parts.extend(str(x)[:500] for x in (history or [])[-4:])
-        parts.append(f"Usuário: {prompt[:1000]}\nULTRON:")
-        ids = torch.tensor([tokenizer.encode("\n".join(parts))], dtype=torch.long)
+        parts = [f"Memória: {str(x)[:500]}" for x in (memories or [])[:4]]
+        parts.extend(_history_text(history))
+        parts.append(f"Usuário: {prompt[:1000]}\\nULTRON:")
+        encoded = tokenizer.encode("\\n".join(parts))
+        # Keep the most recent user turn intact within the model's context.
+        ids = torch.tensor([encoded[-model.config.context_length:]], dtype=torch.long)
         limit = max(1, min(int(os.getenv("ULTRON_TINY_MAX_TOKENS", "48")), 96))
         with torch.inference_mode():
-            output = model.generate(ids, max_new_tokens=limit)
+            output = model.generate(ids, max_new_tokens=limit, eos_token_id=getattr(tokenizer, "eos_id", 257))
         generated = output[0, ids.shape[1]:].tolist()
         candidate = tokenizer.decode(generated).strip()
         return {"status": "candidate_generated" if candidate else "empty_candidate",
@@ -56,7 +71,10 @@ def generate_experimental_candidate(prompt: str, *, history: list[str] | None = 
                     "validation_loss": checkpoint.get("validation_loss"),
                     "validation_perplexity": checkpoint.get("validation_perplexity"),
                     "validation_bits_per_byte": checkpoint.get("validation_bits_per_byte"),
-                    "training_steps": checkpoint.get("training_steps")},
+                    "test_loss": checkpoint.get("test_loss"),
+                    "test_bits_per_byte": checkpoint.get("test_bits_per_byte"),
+                    "training_steps": checkpoint.get("training_steps"),
+                    "best_step": checkpoint.get("best_step")},
                 "promotion": "blocked_pending_dialogue_benchmarks_and_human_review"}
     except Exception as exc:
         return {"status": "failed", "error": type(exc).__name__,
