@@ -17,6 +17,11 @@ class SFTDataTests(unittest.TestCase):
             self.assertTrue((labels == -100).any())
             self.assertTrue((labels != -100).any())
 
+    def test_format_prompt_uses_shared_real_newline_separator(self):
+        from training.generative.sft import format_prompt
+        self.assertEqual(format_prompt("  teste  "), "Usuário: teste\nULTRON: ")
+        self.assertNotIn("\\n", format_prompt("teste"))
+
     def test_empty_split_is_rejected(self):
         from training.generative.sft import load_pairs
         with tempfile.TemporaryDirectory() as directory:
