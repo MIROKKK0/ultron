@@ -307,6 +307,7 @@ def synthesize_research_with_status(query: str, research: dict[str, Any]) -> tup
             synthesis_status = "gemini"
         except Exception:
             synthesis = ""
+            synthesis_status = "provider_error"
     if not synthesis:
         synthesis = str(research.get("summary") or "Encontrei fontes, mas não consegui sintetizá-las agora.")
     # Never rely on the model to reproduce URLs accurately. Attach canonical
