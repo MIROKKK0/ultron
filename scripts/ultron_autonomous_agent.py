@@ -36,7 +36,7 @@ def collect_repository_signals(root: Path) -> dict:
     markers = []
     tracked = []
     for name in sorted(root.rglob("*")):
-        if not name.is_file() or any(part in {".git", ".venv", "venv", "node_modules", "build", "dist"} for part in name.parts):
+        if not name.is_file() or name.as_posix().endswith("scripts/ultron_autonomous_agent.py") or any(part in {".git", ".venv", "venv", "node_modules", "build", "dist"} for part in name.parts):
             continue
         rel = name.relative_to(root).as_posix()
         if rel.startswith(".github/"):
@@ -67,11 +67,24 @@ def collect_github_signals() -> dict:
         runs = api_json(f"/repos/{REPO}/actions/runs?per_page=30").get("workflow_runs", [])
         for run in runs:
             if run.get("conclusion") == "failure":
-                failures.append({
+                item = {
                     "name": run.get("name"), "branch": run.get("head_branch"),
                     "sha": (run.get("head_sha") or "")[:12],
                     "created_at": run.get("created_at"), "url": run.get("html_url"),
-                })
+                    "failed_jobs": [],
+                }
+                try:
+                    jobs = api_json(f"/repos/{REPO}/actions/runs/{run['id']}/jobs?per_page=20").get("jobs", [])
+                    for job in jobs:
+                        failed_steps = [
+                            step.get("name") for step in job.get("steps", [])
+                            if step.get("conclusion") == "failure"
+                        ]
+                        if job.get("conclusion") == "failure":
+                            item["failed_jobs"].append({"job": job.get("name"), "failed_steps": failed_steps})
+                except Exception as exc:
+                    item["diagnostic_error"] = f"{type(exc).__name__}: {exc}"
+                failures.append(item)
     except Exception as exc:
         errors.append(f"actions: {type(exc).__name__}: {exc}")
 
