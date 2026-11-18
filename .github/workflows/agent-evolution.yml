@@ -7,6 +7,13 @@ on:
   pull_request:
     branches:
       - "feat/ultron-core-assistant"
+    paths:
+      - "backend/**"
+      - "scripts/agent_eval.py"
+      - "scripts/compare_agent_eval.py"
+      - "tests/**"
+      - "training/**"
+      - "docs/COGNITIVE_ARCHITECTURE_V1.md"
     types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
