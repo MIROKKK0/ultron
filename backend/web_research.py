@@ -234,9 +234,19 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
         })
     bm25 = _bm25_scores(cleaned, [(item["title"], item["snippet"]) for item in candidates])
     for item, lexical_score in zip(candidates, bm25):
+        title_overlap = _relevance(cleaned, item["title"], "")
         overlap = _relevance(cleaned, item["title"], item["snippet"])
-        item["relevance"] = round(0.65 * lexical_score + 0.25 * overlap + 0.10 * _source_prior(item["url"]), 3)
-    results = [item for item in candidates if item["relevance"] >= 0.12]
+        # A trusted-looking domain must never rescue an off-topic result.
+        # Relevance is a hard topic gate first; ranking happens only afterward.
+        item["topic_overlap"] = round(overlap, 3)
+        item["title_overlap"] = round(title_overlap, 3)
+        item["relevance"] = round(0.70 * lexical_score + 0.30 * overlap, 3)
+    results = [
+        item for item in candidates
+        if item["topic_overlap"] >= 0.20
+        and (item["title_overlap"] >= 0.10 or item["topic_overlap"] >= 0.35)
+        and item["relevance"] >= 0.18
+    ]
     results.sort(key=lambda item: item["relevance"], reverse=True)
     results = results[:limit]
     if not results:
