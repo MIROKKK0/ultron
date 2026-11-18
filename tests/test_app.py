@@ -352,6 +352,36 @@ class UltronTests(unittest.TestCase):
         search.assert_called_once_with("vídeos do YouTube sobre carros do GTA V")
 
 
+    def test_installation_brain_cycle_runs_retriever_curator_and_evaluator(self):
+        installation_id = "ios-cycle-" + uuid.uuid4().hex
+        token = uuid.uuid4().hex + uuid.uuid4().hex
+        registered = client.post(
+            "/v2/installations/register",
+            json={"installation_id": installation_id, "installation_token": token},
+        )
+        self.assertEqual(registered.status_code, 200)
+        auth = {"X-Installation-ID": installation_id, "X-Installation-Token": token}
+        saved = client.post(
+            "/v2/memory",
+            json={"kind": "episodic", "content": "Decisão aprovada: núcleo do ULTRON independente de provedores."},
+            headers=auth,
+        )
+        self.assertEqual(saved.status_code, 200)
+        with patch("backend.app.answer_without_provider", return_value="A decisão registrada mantém o núcleo independente."):
+            response = client.post(
+                "/v2/brain/run",
+                json={"goal": "Decisão aprovada: núcleo do ULTRON independente de provedores."},
+                headers=auth,
+            )
+        self.assertEqual(response.status_code, 200)
+        agents = {item["role"]: item for item in response.json()["agents"]}
+        self.assertEqual(set(agents), {"planner", "solver", "critic", "memory_retriever", "memory_curator", "evaluator"})
+        self.assertEqual(agents["memory_retriever"]["status"], "completed")
+        self.assertEqual(agents["memory_curator"]["result"]["status"], "proposal_only")
+        self.assertFalse(agents["memory_curator"]["result"]["approved"])
+        self.assertTrue(agents["evaluator"]["result"]["checks"]["planner_ran"])
+
+
 if __name__ == "__main__":
     unittest.main()
 
