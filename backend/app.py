@@ -17,7 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
-from backend.brain import run_multitask
+from backend.brain import run_multitask\nfrom backend.cognitive_workspace import CognitiveWorkspace
 from backend.generative import generate_reply, model_config
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
@@ -277,7 +277,7 @@ def answer_with_provider(message: str, memories: list[str] | None = None,
     """Use the configured generative model; never silently fake a provider response."""
     if grounded_search:
         raise HTTPException(status_code=503, detail="A pesquisa deve ser executada pela ferramenta web.")
-    return generate_reply(message)
+    return generate_reply(message, history, memories)
 
 
 def learned_strategy_scores() -> dict[str, float]:
@@ -339,12 +339,17 @@ def execute_brain_cycle(
     plan = plan_task(normalized_goal)
     if model_config()["configured"]:
         try:
-            answer = answer_with_provider(normalized_goal, memories, history)
+            answer = answer_with_provider(normalized_goal, attended_context, history)
         except Exception:
-            answer = answer_without_provider(normalized_goal, memories, history)
+            answer = answer_without_provider(normalized_goal, attended_context, history)
     else:
         answer = answer_without_provider(normalized_goal, memories, history)
+    workspace.publish("candidate_answer", answer, source="solver", confidence=0.65, priority=0.85)
     critique = review_response(normalized_goal, answer)
+    workspace.publish(
+        "critique", json.dumps(critique, ensure_ascii=False),
+        source="critic", confidence=0.5, priority=0.8,
+    )
     outputs: dict[str, dict[str, Any]] = {
         "planner": {"status": "completed", "result": plan},
         "solver": {"status": "completed", "result": {"reply": answer}},
