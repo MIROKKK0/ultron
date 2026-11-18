@@ -18,7 +18,7 @@ permissions:
 jobs:
   reproducible-training:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,8 +28,16 @@ jobs:
         run: python scripts/train_intent_model.py
       - name: Verify deterministic model artifact
         run: python scripts/train_intent_model.py --check
-      - name: Run model and skills tests
-        run: python -m unittest tests.test_intent_model tests.test_skills -v
+      - name: Run intent, skills and generative model tests
+        run: python -m unittest tests.test_intent_model tests.test_skills tests.test_generative_model tests.test_sft -v
+      - name: Train experimental instruction-tuned Transformer
+        run: python -m training.generative.sft --epochs 10 --threads 2 --output artifacts/ultron-tiny-sft.pt
+      - name: Upload experimental checkpoint and report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultron-tiny-sft-experimental
+          path: artifacts/ultron-tiny-sft.pt
+          retention-days: 14
       - name: Benchmark latency and memory
         run: python scripts/benchmark_intent_model.py --iterations 1000 | tee ultron-evolution-report.txt
       - name: Save daily evolution report
