@@ -280,11 +280,11 @@ def answer_with_provider(message: str, memories: list[str] | None = None,
         raise HTTPException(status_code=503, detail="A pesquisa deve ser executada pela ferramenta web.")
     return generate_reply(message, history=history or [], memories=memories or [])
 
-def synthesize_research(query: str, research: dict[str, Any]) -> str:
+def synthesize_research_with_status(query: str, research: dict[str, Any]) -> tuple[str, str]:
     """Synthesize only retrieved evidence and retain direct source/video links."""
     results = research.get("results") or []
     if not results:
-        return str(research.get("summary") or "A pesquisa não encontrou fontes verificáveis.")
+        return str(research.get("summary") or "A pesquisa não encontrou fontes verificáveis."), "no_results"
     evidence = []
     for index, item in enumerate(results[:8], 1):
         evidence.append(
@@ -300,7 +300,7 @@ def synthesize_research(query: str, research: dict[str, Any]) -> str:
         f"Pedido: {query}\n\nFontes recuperadas:\n" + "\n\n".join(evidence)
     )
     synthesis = ""
-    synthesis_status = "fallback"
+    synthesis_status = "provider_unavailable"
     if model_config()["configured"]:
         try:
             synthesis = generate_reply(prompt, history=[], memories=[])[:10000]
@@ -432,7 +432,7 @@ def execute_brain_cycle(
         }
         for role in roles
     ]
-    synthesis = synthesize_research(research_query, research) if research and research.get("count", 0) else answer
+    if research and research.get("count", 0):\n        synthesis, synthesis_status = synthesize_research_with_status(research_query, research)\n    else:\n        synthesis, synthesis_status = answer, "no_research"
     if research and not research.get("count", 0):
         synthesis += "\n\nA pesquisa não retornou fontes verificáveis."
     return {
@@ -444,7 +444,7 @@ def execute_brain_cycle(
         "research": research,
         "review": critique,
         "synthesis": synthesis,
-        "synthesis_status": "gemini" if research and research.get("count", 0) and model_config()["configured"] else "fallback_or_no_research",
+        "synthesis_status": synthesis_status,
         "execution_policy": (
             "Planner, solver e critic executam funções locais; pesquisa usa fontes web; "
             "decodificador linguístico local sem APIs ou tokens externos."
