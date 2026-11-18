@@ -37,6 +37,7 @@ class GenerativeModelTests(unittest.TestCase):
             "Oi",
             history=[{"role": "user", "content": "Meu nome é teste"},
                      {"role": "assistant", "content": "Olá"}],
+            memories=["Prefere respostas em português"],
         )
 
         self.assertEqual(result, "Olá! Sou o ULTRON.")
@@ -44,6 +45,9 @@ class GenerativeModelTests(unittest.TestCase):
         self.assertEqual(kwargs["json"]["model"], DEFAULT_MODEL)
         self.assertEqual(kwargs["json"]["messages"][0]["role"], "system")
         self.assertEqual(kwargs["json"]["messages"][-1]["content"], "Oi")
+        self.assertIn("Contexto recuperado", kwargs["json"]["messages"][0]["content"])
+        self.assertIn("Prefere respostas em português", kwargs["json"]["messages"][0]["content"])
+        self.assertEqual(kwargs["json"]["messages"][1]["content"], "Meu nome é teste")
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer test-secret")
 
     @patch.dict("os.environ", {"GEMINI_API_KEY": "test-secret"}, clear=True)
