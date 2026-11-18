@@ -10,6 +10,9 @@ import httpx
 
 def embed_text(text: str) -> list[float] | None:
     """Create a 768-dim vector; return None when embeddings are not configured."""
+    enabled = os.getenv("ULTRON_MEMORY_EMBEDDINGS_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
+    if not enabled:
+        return None
     key = os.getenv("GEMINI_API_KEY") or os.getenv("ULTRON_LLM_API_KEY")
     if not key:
         return None
