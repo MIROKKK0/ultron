@@ -182,7 +182,9 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
         searcher = DDGS(timeout=12).text
     raw = []
     last_error: Exception | None = None
-    for backend in ("auto", "bing,duckduckgo,yahoo,startpage"):
+    # Keep the fast automatic route first, then widen to every text engine
+    # supported by DDGS. A single blocked provider should not disable research.
+    for backend in ("auto", "bing,duckduckgo,yahoo,startpage", "all"):
         try:
             raw = searcher(
                 cleaned,
