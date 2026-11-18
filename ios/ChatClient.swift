@@ -266,6 +266,8 @@ struct ChatClient {
         onPhase: @MainActor @escaping (BrainPhase) -> Void = { _ in }
     ) async throws -> ChatResult {
         await onPhase(.connecting)
+        // Opportunistically flush previously queued writes; failures leave them encrypted locally.
+        _ = try? await syncQueuedMemories(serverURL: serverURL)
         do {
             let body = try JSONEncoder().encode(BrainRunRequest(goal: message, history: history))
             await onPhase(.processing)
