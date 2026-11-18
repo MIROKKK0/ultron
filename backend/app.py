@@ -380,7 +380,7 @@ def execute_brain_cycle(
     if research_query:
         try:
             tool_registry = ToolRegistry()
-            tool_registry.register(ToolSpec("web_search", search_web, idempotent=True, max_retries=1))
+            tool_registry.register(ToolSpec("web_search", lambda query: search_web(query), idempotent=True, max_retries=1))
             tool_execution = tool_registry.execute("web_search", query=research_query)
             if tool_execution["status"] != "completed":
                 raise RuntimeError("A ferramenta de pesquisa não concluiu.")
