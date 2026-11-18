@@ -52,12 +52,13 @@ jobs:
           path: artifacts/ultron-tiny-sft.pt
           retention-days: 14
       - name: Train task-specific ULTRON specialist
-        run: python -m training.generative.sft --dataset training/generative/ultron_specialist_v1.jsonl --epochs 15 --threads 2 --output artifacts/ultron-specialist-v1.pt
+        run: python -m training.generative.sft --dataset training/generative/ultron_specialist_v1.jsonl --epochs 60 --threads 2 --output artifacts/ultron-specialist-v1.pt
       - name: Evaluate task-specific specialist on held-out cases
         env:
           PYTHONPATH: .
         run: python scripts/evaluate_ultron_specialist.py --checkpoint artifacts/ultron-specialist-v1.pt --output ultron-specialist-eval.json
       - name: Upload task-specific model and evaluation report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ultron-specialist-v1-evaluation
