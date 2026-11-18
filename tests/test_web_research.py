@@ -64,6 +64,31 @@ class WebResearchTests(unittest.TestCase):
         self.assertEqual(result["results"][0]["url"], "https://example.org/gta-cars")
         self.assertGreaterEqual(result["results"][0]["relevance"], result["results"][1]["relevance"])
 
+
+    def test_bm25_reranker_prefers_title_and_topic_match(self):
+        from backend.web_research import _bm25_scores
+        scores = _bm25_scores("Minecraft survival", [
+            ("Minecraft survival guide", "Building and exploring"),
+            ("Cooking recipes", "Minecraft is not mentioned"),
+        ])
+        self.assertGreater(scores[0], scores[1])
+
+    def test_canonical_url_rejects_http_and_local_addresses(self):
+        from backend.web_research import _canonical_url
+        self.assertIsNone(_canonical_url("http://example.org/article"))
+        self.assertIsNone(_canonical_url("https://127.0.0.1/private"))
+        self.assertIsNone(_canonical_url("https://localhost/admin"))
+
+    def test_search_strips_tracking_parameters_and_marks_verification_limit(self):
+        raw = [{"title": "Guia Minecraft", "href": "https://example.org/guide?utm_source=mail&x=1",
+                "body": "Guia completo de Minecraft", "date": "2026-11-17"}]
+        result = search_web("Minecraft guia", searcher=lambda *a, **k: raw)
+        self.assertEqual(result["count"], 1)
+        item = result["results"][0]
+        self.assertEqual(item["url"], "https://example.org/guide?x=1")
+        self.assertEqual(item["published_at"], "2026-11-17")
+        self.assertEqual(item["source_verification"], "url_validated_content_not_independently_verified")
+
     def test_empty_query_is_rejected(self):
         with self.assertRaises(ValueError):
             search_web("   ")
