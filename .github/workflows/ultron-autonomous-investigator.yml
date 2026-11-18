@@ -42,7 +42,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install bounded static repair tool
-        run: python -m pip install --disable-pip-version-check ruff
+        run: python -m pip install --disable-pip-version-check ruff ddgs
       - name: Test investigator and repair policy
         run: python -m unittest tests.test_autonomous_agent_report tests.test_autonomous_repair_engine -v
       - name: Run investigation
