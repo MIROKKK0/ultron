@@ -126,6 +126,7 @@ def init_db() -> None:
             execute(db, """CREATE TABLE IF NOT EXISTS installation_credentials (
                 installation_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, created_at TEXT NOT NULL
             )""")
+            execute(db, "CREATE INDEX IF NOT EXISTS telemetry_created_idx ON telemetry_events(created_at)")
         else:
             execute(db, """
                 CREATE TABLE IF NOT EXISTS memories (
