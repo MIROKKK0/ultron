@@ -14,6 +14,7 @@ from pathlib import Path
 
 from openai import OpenAI
 from dotenv import load_dotenv
+from ultron_mind import MindCorpus
 
 load_dotenv()
 
@@ -43,6 +44,7 @@ Sempre use as ferramentas disponíveis quando forem úteis para responder melhor
 class MemoryManager:
     def __init__(self, db_path: Path = MEMORY_DB):
         self.db_path = db_path
+        self.mind = MindCorpus(db_path)
         self._init_db()
 
     def _init_db(self):
@@ -74,6 +76,8 @@ class MemoryManager:
                 (role, content, datetime.now().isoformat())
             )
             conn.commit()
+        speaker = role if role in {"user", "assistant", "system"} else "external"
+        self.mind.record(content, kind="conversation", speaker=speaker, source="ultron.chat")
 
     def get_recent_messages(self, limit: int = 20) -> List[Dict]:
         with sqlite3.connect(self.db_path) as conn:
@@ -198,7 +202,7 @@ class Ultron:
                 "type": "function",
                 "function": {
                     "name": "generate_prompt_for_other_ai",
-                    "description": "Gera um prompt otimizado para ser usado em outra IA (Claude, Gemini, Grok, etc.) com o objetivo de melhorar ou ensinar essa IA.",
+                    "description": "Gera um prompt otimizado para ser usado em outra IA (Claude, Grok e outros provedores compatíveis) com o objetivo de melhorar ou ensinar essa IA.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -285,7 +289,7 @@ class Ultron:
 
     def _generate_prompt_for_other_ai(self, objective: str, context: str) -> str:
         prompt = f"""Você é um especialista em prompt engineering.
-Gere o melhor prompt possível para outra IA (Claude, Gemini, Grok, GPT, etc.) com o seguinte objetivo:
+Gere o melhor prompt possível para outra IA (Claude, Grok, GPT e outros provedores compatíveis) com o seguinte objetivo:
 
 Objetivo: {objective}
 
@@ -341,6 +345,24 @@ Retorne APENAS o novo system prompt completo.
         if relevant_facts:
             facts_text = "Memórias relevantes do usuário:\n" + "\n".join(f"- {f}" for f in relevant_facts)
             messages.append({"role": "system", "content": facts_text})
+
+        mind_context = self.memory.mind.context_for(user_message, limit=5)
+        if mind_context:
+            context_text = []
+            for entry in mind_context:
+                context_text.append(
+                    f"[ORIGINAL {entry['speaker']} | {entry['created_at']}]\\n{entry['content']}"
+                )
+                for derivation in entry["derivations"]:
+                    context_text.append(
+                        f"[DERIVATION {derivation['agent']} / {derivation['derivation_type']}]\\n{derivation['content']}"
+                    )
+            messages.append({
+                "role": "system",
+                "content": "Registro local relevante. Originais e interpretações estão separados; "
+                           "trate interpretações como hipóteses, não como palavras do usuário:\\n"
+                           + "\\n\\n".join(context_text)
+            })
 
         messages.extend(self.memory.get_recent_messages(15))
 
