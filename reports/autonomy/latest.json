@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-18T04:12:38.563342+00:00",
+  "repository": "MIROKKK0/ultron",
+  "commit": "025f74a4d72999ef47d13e2eb6e3633483c1c98b",
+  "scope": "public research plus bounded deterministic repair experiment; no external code execution, merge or production deployment",
+  "local": {
+    "files_scanned": 12,
+    "maintenance_markers": []
+  },
+  "recent_failures": [],
+  "open_issues": [
+    {
+      "number": 55,
+      "title": "[ULTRON] Relatório autônomo de investigação",
+      "url": "https://github.com/MIROKKK0/ultron/issues/55"
+    }
+  ],
+  "research_leads": [
+    {
+      "name": "lufus4826-eng/veripilot",
+      "description": "VeriPilot (VeriHunt Suite) — AI Coding Agent Skills Orchestrator, Smart Router, Cumulative Overlay Engine & One-Command Suite Installer",
+      "url": "https://github.com/lufus4826-eng/veripilot",
+      "updated_at": "2026-11-18T04:12:28Z",
+      "license": "MIT"
+    },
+    {
+      "name": "NHViet03/seqaccept-artifact",
+      "description": "Artifact for the paper: Knowing When to Stop: Anytime-Valid Patch Acceptance under Adaptive Retries and Stochastic Test Runs",
+      "url": "https://github.com/NHViet03/seqaccept-artifact",
+      "updated_at": "2026-11-13T04:45:03Z",
+      "license": "MIT"
+    },
+    {
+      "name": "lufus4826-eng/veriperf",
+      "description": "VeriPerf — Statistical performance profiling and Dual-Gate sandbox optimization AI agent skill with deterministic vp.py engine (p50/p95, peak memory, >=15% speedup filter).",
+      "url": "https://github.com/lufus4826-eng/veriperf",
+      "updated_at": "2026-11-18T02:18:22Z",
+      "license": "MIT"
+    },
+    {
+      "name": "lufus4826-eng/verisec",
+      "description": "Business-Logic & Authorization Security Auditing Agent Skill with 100% Network-Isolated PoCs, Secret Redaction & Dual-Gate Patch Verification",
+      "url": "https://github.com/lufus4826-eng/verisec",
+      "updated_at": "2026-11-18T02:24:11Z",
+      "license": "MIT"
+    },
+    {
+      "name": "microtaro/llm-agents-for-image-annotation",
+      "description": "LLM agents look at your images, draw boxes and polygons, and read printed values. You approve each run.",
+      "url": "https://github.com/microtaro/llm-agents-for-image-annotation",
+      "updated_at": "2026-11-18T02:23:01Z",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "lufus4826-eng/verihunt",
+      "description": "VeriHunt — Evidence-based bug hunting AI agent skill with deterministic bh.py engine: hypothesize, prove with isolated tests, and deliver sandbox-verified fixes.",
+      "url": "https://github.com/lufus4826-eng/verihunt",
+      "updated_at": "2026-11-18T02:18:23Z",
+      "license": "MIT"
+    },
+    {
+      "name": "wontopos/wontopos-python",
+      "description": "Official Python SDK for Wontopos — long-term memory for AI agents. Identical recall in every language.",
+      "url": "https://github.com/wontopos/wontopos-python",
+      "updated_at": "2026-11-10T10:58:42Z",
+      "license": "MIT"
+    },
+    {
+      "name": "AMD-AGI/AgentKernelArena",
+      "description": "AgentKernelArena is a platform for evaluating and training AI agents for GPU kernel optimization, combining realistic tasks, correctness validation, and performance-based rewards for reinforcement learning.",
+      "url": "https://github.com/AMD-AGI/AgentKernelArena",
+      "updated_at": "2026-11-11T05:38:56Z",
+      "license": "Apache-2.0"
+    }
+  ],
+  "web_research": [],
+  "reproduction_attempts": [],
+  "collection_errors": [
+    "web_research: DDGSException: No results found."
+  ],
+  "priorities": [
+    "Agrupar issues abertas por componente e evitar criar tarefas duplicadas.",
+    "Revisar manualmente relevância, licença, segurança e data das referências públicas antes de adotar qualquer técnica.",
+    "Expandir receitas de reparo somente quando houver falha reproduzível, teste de regressão e evidência de não regressão."
+  ]
+}

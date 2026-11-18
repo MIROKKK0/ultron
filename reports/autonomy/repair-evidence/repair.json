@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-11-18T04:12:38.653625+00:00",
+  "checkpoint": {
+    "checkpoint_id": "ad6cc14a-7a4c-46ec-bc18-7f55d672dbdd",
+    "created_at": "2026-11-18T04:12:38.620432+00:00",
+    "base_commit": "025f74a4d72999ef47d13e2eb6e3633483c1c98b",
+    "working_tree_before_repair": [
+      "?? reports/",
+      "?? scripts/__pycache__/",
+      "?? tests/__pycache__/"
+    ],
+    "restore_strategy": "git restore --source=HEAD --staged --worktree -- changed tracked files"
+  },
+  "repair_type": "ruff_safe_fixes_only",
+  "baseline_tests": {
+    "returncode": 5,
+    "stdout": "",
+    "stderr": "\n----------------------------------------------------------------------\nRan 0 tests in 0.000s\n\nNO TESTS RAN\n"
+  },
+  "repair_tool": {
+    "returncode": 125,
+    "stdout": "",
+    "stderr": "skipped: baseline tests failed"
+  },
+  "changed_files": [],
+  "changed_file_count": 0,
+  "changed_line_count": 0,
+  "budgets": {
+    "max_files": 30,
+    "max_changed_lines": 1000,
+    "cycle_seconds": 1800,
+    "test_timeout_seconds": 600
+  },
+  "candidate_ready": false,
+  "final_tests": null,
+  "final_lint": null,
+  "rollback": null,
+  "decision": "Baseline tests failed; repair was not attempted.",
+  "elapsed_seconds": 0.037,
+  "budget_remaining_seconds": 1799
+}
