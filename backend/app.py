@@ -288,16 +288,16 @@ def synthesize_research(query: str, research: dict[str, Any]) -> str:
     evidence = []
     for index, item in enumerate(results[:8], 1):
         evidence.append(
-            f"{index}. {str(item.get('title', 'Fonte'))[:300]}\\n"
-            f"Resumo: {str(item.get('snippet', ''))[:1000]}\\n"
+            f"{index}. {str(item.get('title', 'Fonte'))[:300]}\n"
+            f"Resumo: {str(item.get('snippet', ''))[:1000]}\n"
             f"URL: {str(item.get('url', ''))[:1000]}"
         )
     prompt = (
         "Responda em português brasileiro ao pedido abaixo usando exclusivamente as fontes listadas. "
         "Não invente detalhes nem diga que assistiu ao vídeo. Diferencie fatos de inferências. "
         "Inclua os links diretos de todos os resultados úteis. Se for busca de vídeos, liste título, "
-        "duração quando disponível e link do YouTube; não substitua por páginas genéricas.\\n\\n"
-        f"Pedido: {query}\\n\\nFontes recuperadas:\\n" + "\\n\\n".join(evidence)
+        "duração quando disponível e link do YouTube; não substitua por páginas genéricas.\n\n"
+        f"Pedido: {query}\n\nFontes recuperadas:\n" + "\n\n".join(evidence)
     )
     synthesis = ""
     synthesis_status = "fallback"
@@ -319,7 +319,7 @@ def synthesize_research(query: str, research: dict[str, Any]) -> str:
             extra = f" — {item.get('duration')}" if item.get("duration") else ""
             source_lines.append(f"{index}. [{title}]({url}){extra}")
     if source_lines:
-        synthesis += "\\n\\nFontes consultadas (links originais da busca):\\n" + "\\n".join(source_lines)
+        synthesis += "\n\nFontes consultadas (links originais da busca):\n" + "\n".join(source_lines)
     return synthesis[:12000]
 
 
@@ -434,7 +434,7 @@ def execute_brain_cycle(
     ]
     synthesis = synthesize_research(research_query, research) if research and research.get("count", 0) else answer
     if research and not research.get("count", 0):
-        synthesis += "\\n\\nA pesquisa não retornou fontes verificáveis."
+        synthesis += "\n\nA pesquisa não retornou fontes verificáveis."
     return {
         "brain_version": "4.0.0-local-tools",
         "strategy_priorities": scores,
