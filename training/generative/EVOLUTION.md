@@ -71,3 +71,5 @@ com o treino, contra a versão anterior e contra Gemini:
 Usar comparação A/B cega com avaliadores humanos. Reprovar qualquer regressão
 grave de segurança ou fabricação de citações. Guardar dataset, versão, seed,
 hash do checkpoint, relatório e possibilidade de rollback.
+
+A suíte de CI também verifica que o fallback de pesquisa mantém os links originais e declara explicitamente quando não houve síntese Gemini.
