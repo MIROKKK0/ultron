@@ -32,6 +32,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Test autonomous report logic
+        run: python -m unittest tests.test_autonomous_agent_report -v
       - name: Run bounded investigation
         env:
           GITHUB_TOKEN: ${{ github.token }}
