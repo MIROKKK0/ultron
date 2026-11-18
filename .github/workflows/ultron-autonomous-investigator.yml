@@ -3,7 +3,7 @@ name: ULTRON autonomous investigator and repair experiment
 on:
   workflow_dispatch:
   push:
-    branches: ["main", "feat/ultron-autonomous-investigator-main"]
+    branches: ["main", "feat/ultron-autonomous-investigator-main", "feat/ultron-gemini-investigator-bridge"]
     paths:
       - "scripts/ultron_autonomous_agent.py"
       - "scripts/ultron_repair_engine.py"
@@ -57,8 +57,16 @@ jobs:
         run: python scripts/ultron_autonomous_agent.py
       - name: Run isolated repair experiment
         id: repair
+        env:
+          ULTRON_PROVIDER: gemini
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python scripts/ultron_repair_engine.py
+          if [ -n "$GEMINI_API_KEY" ]; then
+            python scripts/ultron_gemini_proposer.py
+          else
+            echo "GEMINI_API_KEY not configured; using deterministic Ruff-only repair."
+            python scripts/ultron_repair_engine.py
+          fi
           if python -c "import json; d=json.load(open('reports/autonomy/repair-evidence/repair.json')); raise SystemExit(0 if d['candidate_ready'] else 1)"; then
             echo "candidate_ready=true" >> "$GITHUB_OUTPUT"
           else
@@ -95,7 +103,7 @@ jobs:
         run: |
           gh pr create --base main --head "$REPAIR_BRANCH" \
             --title "ULTRON: tested autonomous repair" \
-            --body "## Evidências\n- Candidate branch: $REPAIR_BRANCH\n- Baseline and post-patch unit-test logs are attached in the workflow artifact.\n- Only Ruff safe fixes were allowed.\n- Configurable expanded budget: 30 files / 1,000 changed lines / 30-minute cycle.\n- No production deploy is performed by this workflow."
+            --body "## Evidências\n- Candidate branch: $REPAIR_BRANCH\n- Baseline and post-patch unit-test logs are attached in the workflow artifact.\n- Gemini proposal (when GEMINI_API_KEY is configured) or Ruff safe fixes; ULTRON validates patch paths, budget, tests and lint.\n- Configurable expanded budget: 30 files / 1,000 changed lines / 30-minute cycle.\n- No production deploy is performed by this workflow."
       - name: Publish investigation report branch
         id: publish_report
         env:
