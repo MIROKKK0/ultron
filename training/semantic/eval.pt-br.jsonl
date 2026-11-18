@@ -1,0 +1,12 @@
+{"query":"Meu acesso foi bloqueado.","positive":"Não consigo entrar porque minha conta foi bloqueada."}
+{"query":"Quero consultar o histórico de compras.","positive":"Onde encontro a lista dos meus pedidos anteriores?"}
+{"query":"O programa está lento.","positive":"O aplicativo demora muito para responder."}
+{"query":"Preciso encerrar o plano mensal.","positive":"Quero cancelar a assinatura que pago todo mês."}
+{"query":"A senha atual não funciona.","positive":"Não consigo autenticar usando minha senha."}
+{"query":"Quero levar meus dados para outro aparelho.","positive":"Como transfiro as informações para um novo celular?"}
+{"query":"A cópia de segurança falhou.","positive":"O backup não foi concluído com sucesso."}
+{"query":"O servidor perdeu a conexão.","positive":"A comunicação com a API foi interrompida."}
+{"query":"Preciso corrigir uma informação armazenada.","positive":"Quero editar um dado que foi salvo na memória."}
+{"query":"Como verificar a qualidade do modelo?","positive":"Quero executar uma avaliação com casos de teste."}
+{"query":"A conversa anterior sumiu.","positive":"Não encontro as mensagens da sessão passada."}
+{"query":"O arquivo baixado está corrompido.","positive":"O documento que recebi não pode ser aberto."}
