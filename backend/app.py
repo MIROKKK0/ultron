@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_multitask
 from backend.generative import generate_reply, model_config
+from backend.experimental_transformer import generate_experimental_candidate, transformer_status
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
 from backend.public_access import enforce_public_limit
@@ -274,10 +275,10 @@ def answer_without_provider(message: str, memories: list[str] | None = None,
 
 def answer_with_provider(message: str, memories: list[str] | None = None,
     history: list[str] | None = None, grounded_search: bool = False) -> str:
-    """Use the configured generative model; never silently fake a provider response."""
+    """Use the configured generative model with bounded conversation context."""
     if grounded_search:
         raise HTTPException(status_code=503, detail="A pesquisa deve ser executada pela ferramenta web.")
-    return generate_reply(message)
+    return generate_reply(message, history=history or [], memories=memories or [])
 
 
 def learned_strategy_scores() -> dict[str, float]:
@@ -345,10 +346,14 @@ def execute_brain_cycle(
     else:
         answer = answer_without_provider(normalized_goal, memories, history)
     critique = review_response(normalized_goal, answer)
+    tiny_candidate = generate_experimental_candidate(
+        normalized_goal, history=history or [], memories=memories
+    )
     outputs: dict[str, dict[str, Any]] = {
         "planner": {"status": "completed", "result": plan},
         "solver": {"status": "completed", "result": {"reply": answer}},
         "critic": {"status": "completed", "result": critique},
+        "transformer": {"status": tiny_candidate.get("status", "unavailable"), "result": tiny_candidate},
     }
 
     research_query = (
@@ -432,6 +437,7 @@ def brain_status(request: Request) -> dict[str, Any]:
         "generative_language_model_configured": model_config()["configured"],
         "generative_model": model_config()["model"],
         "generative_provider": model_config()["provider"],
+        "own_transformer": transformer_status(),
         "language_decoder": "hosted_generative_with_local_fallback" if model_config()["configured"] else "local_deterministic_with_intent_classifier",
         "intent_model": model_status(),
         "external_ai_tokens_required": True,
@@ -527,6 +533,7 @@ def health() -> dict[str, Any]:
         "generative_language_model_configured": model_config()["configured"],
         "generative_model": model_config()["model"],
         "generative_provider": model_config()["provider"],
+        "own_transformer": transformer_status(),
         "neural_core_configured": False,
         "external_ai_tokens_required": True,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
@@ -676,6 +683,7 @@ def runtime_status(request: Request) -> dict[str, Any]:
         "generative_model_configured": model_config()["configured"],
         "generative_model": model_config()["model"],
         "generative_provider": model_config()["provider"],
+        "own_transformer": transformer_status(),
         "external_ai_providers": model_config()["configured"],
     }
 
