@@ -13,6 +13,7 @@ import torch
 
 from training.generative.model import ModelConfig, UltronTinyGPT
 from training.generative.tokenizer import ByteTokenizer
+from training.generative.sft import format_prompt
 
 
 def normalize(text: str) -> str:
@@ -93,7 +94,9 @@ def main() -> None:
     args = parser.parse_args()
     report = evaluate(args.checkpoint, args.dataset, seed=args.seed)
     Path(args.output).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({k: v for k, v in report.items() if k != "results"}, ensure_ascii=False))
+    print(json.dumps({k: v for k, v in report.items() if k not in {"results", "baseline_results"}}, ensure_ascii=False))
+    if report["criterion_coverage_delta"] <= 0:
+        raise SystemExit("O checkpoint não superou a inicialização não treinada no benchmark retido.")
 
 
 if __name__ == "__main__":
