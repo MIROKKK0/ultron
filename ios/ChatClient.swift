@@ -5,6 +5,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     let role: Role
     let text: String
     let strategy: String?
+    let createdAt: Date?
 
     enum Role: String, Codable { case user, assistant }
 
@@ -13,6 +14,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.role = role
         self.text = text
         self.strategy = strategy
+        self.createdAt = Date()
     }
 }
 
