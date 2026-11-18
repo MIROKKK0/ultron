@@ -29,6 +29,7 @@ from backend.runtime_diagnostics import memory_snapshot
 from backend.intent_model import model_status
 from backend.skills import list_skills, run_intent_skill, run_named_skill
 from backend.web_research import search_web
+from backend.semantic_memory import embed_text, rank_semantic
 
 APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -112,6 +113,7 @@ def init_db() -> None:
             )""")
             execute(db, "ALTER TABLE memories ADD COLUMN IF NOT EXISTS installation_id TEXT")
             execute(db, "ALTER TABLE memories ADD COLUMN IF NOT EXISTS expires_at TEXT")
+            execute(db, "ALTER TABLE memories ADD COLUMN IF NOT EXISTS embedding_json TEXT")
             execute(db, "CREATE INDEX IF NOT EXISTS memories_installation_idx ON memories(installation_id, id DESC)")
             execute(db, """CREATE TABLE IF NOT EXISTS telemetry_events (
                 id BIGSERIAL PRIMARY KEY, event_type TEXT NOT NULL, route TEXT NOT NULL DEFAULT '',
@@ -156,6 +158,7 @@ def init_db() -> None:
             for statement in (
                 "ALTER TABLE memories ADD COLUMN installation_id TEXT",
                 "ALTER TABLE memories ADD COLUMN expires_at TEXT",
+                "ALTER TABLE memories ADD COLUMN embedding_json TEXT",
             ):
                 try:
                     execute(db, statement)
@@ -382,7 +385,15 @@ def load_installation_memories(tenant: str, query: str) -> list[str]:
     now = datetime.now(timezone.utc).isoformat()
     with connect_db() as db:
         execute(db, "DELETE FROM memories WHERE installation_id = ? AND expires_at IS NOT NULL AND expires_at <= ?", (tenant, now))
-        rows = execute(db, "SELECT content, created_at FROM memories WHERE installation_id = ? ORDER BY id DESC LIMIT 100", (tenant,)).fetchall()
+        rows = execute(db, "SELECT id, content, created_at, expires_at, embedding_json FROM memories WHERE installation_id = ? ORDER BY id DESC LIMIT 100", (tenant,)).fetchall()
+    try:
+        query_vector = embed_text(query)
+        if query_vector:
+            semantic = rank_semantic(query_vector, list(rows), limit=8)
+            if semantic:
+                return [item["content"] for item in semantic]
+    except Exception as exc:
+        record_telemetry("memory_embedding", decision="chat_fallback_" + type(exc).__name__)
     return rank_memories(query, rows, limit=8)
 
 
@@ -928,18 +939,24 @@ def add_memory(request: MemoryRequest, tenant: str = Depends(require_installatio
     content = request.content.strip()
     now = datetime.now(timezone.utc)
     expires_at = (now + __import__("datetime").timedelta(days=30)).isoformat()
+    embedding = None
+    try:
+        embedding = embed_text(content)
+    except Exception as exc:
+        record_telemetry("memory_embedding", decision="write_fallback_" + type(exc).__name__)
+    embedding_json = json.dumps(embedding, separators=(",", ":")) if embedding else None
     with connect_db() as db:
         if is_postgres(db):
             cursor = execute(db,
-                "INSERT INTO memories(content, created_at, installation_id, expires_at) VALUES (?, ?, ?, ?) RETURNING id",
-                (content, now.isoformat(), tenant, expires_at))
+                "INSERT INTO memories(content, created_at, installation_id, expires_at, embedding_json) VALUES (?, ?, ?, ?, ?) RETURNING id",
+                (content, now.isoformat(), tenant, expires_at, embedding_json))
             memory_id = cursor.fetchone()["id"]
         else:
             cursor = execute(db,
-                "INSERT INTO memories(content, created_at, installation_id, expires_at) VALUES (?, ?, ?, ?)",
-                (content, now.isoformat(), tenant, expires_at))
+                "INSERT INTO memories(content, created_at, installation_id, expires_at, embedding_json) VALUES (?, ?, ?, ?, ?)",
+                (content, now.isoformat(), tenant, expires_at, embedding_json))
             memory_id = cursor.lastrowid
-    record_telemetry("memory_write", decision="stored_with_30d_ttl")
+    record_telemetry("memory_write", decision="stored_with_30d_ttl_and_embedding" if embedding else "stored_with_30d_ttl_lexical_fallback")
     return {"id": memory_id, "content": content, "expires_at": expires_at}
 
 
@@ -963,8 +980,18 @@ def search_memory(q: str, tenant: str = Depends(require_installation_auth)) -> d
     with connect_db() as db:
         execute(db, "DELETE FROM memories WHERE installation_id = ? AND expires_at IS NOT NULL AND expires_at <= ?", (tenant, now))
         rows = execute(db,
-            "SELECT id, content, created_at, expires_at FROM memories WHERE installation_id = ? ORDER BY id DESC LIMIT 300",
+            "SELECT id, content, created_at, expires_at, embedding_json FROM memories WHERE installation_id = ? ORDER BY id DESC LIMIT 300",
             (tenant,)).fetchall()
+    query_vector = None
+    try:
+        query_vector = embed_text(q)
+    except Exception as exc:
+        record_telemetry("memory_embedding", decision="query_fallback_" + type(exc).__name__)
+    if query_vector:
+        semantic = rank_semantic(query_vector, list(rows), limit=8)
+        if semantic:
+            record_telemetry("memory_retrieval", tool_name="semantic_memory", decision="tenant_scoped_cosine")
+            return {"items": semantic, "method": "gemini_embedding_2_cosine", "semantic_embeddings": True}
     ranked = []
     for row in rows:
         content = str(row["content"])
@@ -973,7 +1000,7 @@ def search_memory(q: str, tenant: str = Depends(require_installation_auth)) -> d
         if overlap:
             ranked.append((overlap, dict(row)))
     ranked.sort(key=lambda pair: (pair[0], pair[1]["created_at"]), reverse=True)
-    record_telemetry("memory_retrieval", decision="tenant_scoped_lexical_rank")
+    record_telemetry("memory_retrieval", decision="tenant_scoped_lexical_fallback")
     return {"items": [dict(item, relevance=round(score, 3)) for score, item in ranked[:8]],
             "method": "tenant_scoped_lexical_overlap", "semantic_embeddings": False}
 
