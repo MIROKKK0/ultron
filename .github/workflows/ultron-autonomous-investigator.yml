@@ -29,6 +29,7 @@ jobs:
     timeout-minutes: 12
     env:
       ULTRON_CYCLE_BUDGET_MINUTES: "12"
+      ULTRON_CYCLE_BUDGET_SECONDS: "720"
       ULTRON_MAX_REPAIR_FILES: "10"
       ULTRON_MAX_REPAIR_LINES: "300"
       ULTRON_RESEARCH_RESULT_LIMIT: "8"
@@ -88,6 +89,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPAIR_BRANCH: ${{ steps.publish_repair.outputs.branch }}
+          REPORT_BRANCH: ${{ steps.publish_report.outputs.branch }}
         run: |
           gh pr create --base main --head "$REPAIR_BRANCH" \
             --title "ULTRON: tested autonomous repair" \
@@ -106,10 +108,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore(autonomy): publish verified investigation evidence"
           REPORT_COMMIT="$(git rev-parse HEAD)"
+          REPORT_BRANCH="ultron/autonomy-findings-${GITHUB_RUN_ID}"
           git fetch origin main
-          git checkout -B ultron/autonomy-findings origin/main
+          git checkout -b "$REPORT_BRANCH" origin/main
           git cherry-pick "$REPORT_COMMIT"
-          git push --force origin ultron/autonomy-findings
+          git push origin "$REPORT_BRANCH"
+          echo "branch=$REPORT_BRANCH" >> "$GITHUB_OUTPUT"
           echo "changed=true" >> "$GITHUB_OUTPUT"
       - name: Create or update investigation issue
         if: steps.publish_report.outputs.changed == 'true'
@@ -127,7 +131,10 @@ jobs:
             const { owner, repo } = context.repo;
             const listed = await github.rest.issues.listForRepo({ owner, repo, state: 'open', per_page: 100 });
             const existing = listed.data.find(item => !item.pull_request && item.title === title);
-            const compare = `https://github.com/${owner}/${repo}/compare/main...ultron/autonomy-findings?expand=1`;
+            const reportBranch = process.env.REPORT_BRANCH;
+            const compare = reportBranch
+              ? `https://github.com/${owner}/${repo}/compare/main...${reportBranch}?expand=1`
+              : `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
             const repair = process.env.REPAIR_BRANCH
               ? `\n\nRepair branch: https://github.com/${owner}/${repo}/tree/${process.env.REPAIR_BRANCH}\nPR attempt: ${process.env.REPAIR_PR_RESULT}`
               : '\n\nNo repair candidate passed the regression gate in this cycle.';
