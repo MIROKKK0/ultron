@@ -1,6 +1,13 @@
 name: ULTRON PT-BR Semantic Encoder Training
 
 on:
+  push:
+    branches: ["ultron/**"]
+    paths:
+      - "training/generative/train_semantic_encoder.py"
+      - "training/semantic/**"
+      - "backend/local_neural_encoder.py"
+      - ".github/workflows/semantic-encoder.yml"
   pull_request:
     branches: ["ultron/**", "integration/ultron-unified-core-2026-11-18"]
     paths:
