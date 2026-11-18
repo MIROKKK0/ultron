@@ -14,12 +14,20 @@ class AutonomousAgentReportTests(unittest.TestCase):
             "recent_failures": [],
             "open_issues": [],
             "research_leads": [],
+            "web_research": [{
+                "query": "python repair testing",
+                "title": "Testing guide",
+                "url": "https://example.org/testing",
+                "snippet": "Regression testing reference",
+            }],
             "collection_errors": ["research: TimeoutError"],
             "priorities": ["Nenhum problema acionável foi confirmado."],
         }
         markdown = render_markdown(report)
         self.assertIn("Nenhuma falha recente encontrada.", markdown)
         self.assertIn("TimeoutError", markdown)
+        self.assertIn("Testing guide", markdown)
+        self.assertIn("https://example.org/testing", markdown)
         self.assertIn("não altera código-fonte", markdown.lower())
 
     def test_report_lists_observed_failure_with_sha(self):
