@@ -5,7 +5,7 @@ on:
   schedule:
     - cron: "17 14 * * *"
   pull_request:
-    branches: ["feat/ultron-core-assistant"]
+    branches: ["main", "feat/ultron-core-assistant"]
     paths:
       - "training/**"
       - "scripts/train_intent_model.py"
