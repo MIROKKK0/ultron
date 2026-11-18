@@ -6,6 +6,10 @@ import torch
 from .model import ModelConfig, UltronTinyGPT
 from .tokenizer import ByteTokenizer
 
+def format_prompt(prompt: str) -> str:
+    return "Usuário: " + prompt.strip() + "\nULTRON: "
+
+
 def load_pairs(path: str, split: str, context_length: int):
     tokenizer = ByteTokenizer()
     pairs = []
@@ -18,7 +22,7 @@ def load_pairs(path: str, split: str, context_length: int):
         prompt, completion = row.get("prompt"), row.get("completion")
         if not isinstance(prompt, str) or not isinstance(completion, str) or not prompt.strip() or not completion.strip():
             raise ValueError(f"Linha {line_no}: prompt/completion inválidos")
-        prefix = tokenizer.encode("Usuário: " + prompt.strip() + "\nULTRON: ", add_special_tokens=False)
+        prefix = tokenizer.encode(format_prompt(prompt), add_special_tokens=False)
         answer = tokenizer.encode(completion.strip(), add_special_tokens=False) + [257]
         # Preserve the complete target and the most recent part of long prompts.
         answer = answer[: max(1, context_length // 2)]
