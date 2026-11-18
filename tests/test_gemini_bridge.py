@@ -79,7 +79,8 @@ class GeminiBridgeTests(unittest.TestCase):
     def test_request_proposal_propagates_transport_failure_for_failure_evidence(self):
         from scripts.ultron_gemini_proposer import request_proposal
 
-        client = __import__("unittest").mock.MagicMock()
+        from unittest.mock import MagicMock
+        client = MagicMock()
         client.chat.completions.create.side_effect = TimeoutError("simulated timeout")
         with patch("scripts.ultron_gemini_proposer.build_provider", return_value=(client, "gemini-3.8-flash")):
             with self.assertRaises(TimeoutError):
