@@ -14,7 +14,7 @@
 ## What it can do
 
 1. Inspect recent Actions failures, failed steps, issues and maintenance markers.
-2. Research public GitHub repositories and record source URLs, update dates and declared licenses.
+2. Search the public web with DDGS (up to two queries / eight results) and research public GitHub repositories; record URLs, snippets, update dates and declared licenses.
 3. Re-run one eligible failed workflow to test whether the failure reproduces.
 4. Run a deterministic repair experiment using Ruff's documented safe fixes only.
 5. Run the repository unit-test suite before and after the candidate patch, then run a final Ruff lint gate.
@@ -26,7 +26,7 @@
 
 - This is not a general-purpose autonomous coding model. It does not invent arbitrary semantic fixes.
 - Ruff safe fixes cover a narrow class of Python static issues; they do not repair arbitrary Swift, backend logic, architecture, or product behavior.
-- Public GitHub search is not unrestricted crawling of the entire internet.
+- Public search uses metasearch providers and GitHub's public API; it is not unrestricted crawling, authenticated browsing or access to paywalled/private content.
 - It does not access private credentials, secrets, personal accounts, or external systems.
 - It does not deploy releases or promote model weights.
 
