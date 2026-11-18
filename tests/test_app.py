@@ -43,7 +43,8 @@ class UltronTests(unittest.TestCase):
             result = synthesize_research("vídeo Minecraft", fixture)
         self.assertIn("https://www.youtube.com/watch?v=abc123", result)
         self.assertIn("Minecraft gameplay", result)
-        self.assertIn("Fontes consultadas", result)\n        self.assertIn("não consegui gerar a síntese pelo Gemini", result)
+        self.assertIn("Fontes consultadas", result)
+        self.assertIn("não consegui gerar a síntese pelo Gemini", result)
 
     def test_natural_language_calculation_does_not_need_slash_command(self):
         response = client.post("/chat", json={"message": "Quanto é 12 vezes (3+4)?"})
