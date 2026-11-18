@@ -57,7 +57,7 @@ jobs:
         working-directory: candidate
         run: python -m unittest discover -s tests -v
       - name: Evaluate baseline
-        run: ULTRON_SOURCE_ROOT=baseline python candidate/scripts/agent_eval.py --output baseline-evaluation.json
+        run: ULTRON_SOURCE_ROOT=baseline python candidate/scripts/agent_eval.py --output baseline-evaluation.json || true
       - name: Evaluate candidate
         run: ULTRON_SOURCE_ROOT=candidate python candidate/scripts/agent_eval.py --output candidate-evaluation.json
       - name: Require measurable improvement and zero regressions
