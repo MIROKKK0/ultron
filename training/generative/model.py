@@ -101,6 +101,7 @@ class UltronTinyGPT(nn.Module):
         temperature: float = 0.0,
         top_k: int | None = None,
         generator: torch.Generator | None = None,
+        eos_token_id: int | None = None,
     ) -> torch.Tensor:
         """Generate greedily by default, or sample with temperature/top-k."""
         if input_ids.ndim != 2 or input_ids.shape[0] < 1 or input_ids.shape[1] < 1:
@@ -112,6 +113,7 @@ class UltronTinyGPT(nn.Module):
         was_training = self.training
         try:
             self.eval()
+            finished = torch.zeros(input_ids.shape[0], dtype=torch.bool, device=input_ids.device)
             for _ in range(max(0, min(max_new_tokens, 256))):
                 context = input_ids[:, -self.config.context_length:]
                 logits, _ = self(context)
@@ -126,7 +128,12 @@ class UltronTinyGPT(nn.Module):
                         next_logits = next_logits.masked_fill(next_logits < threshold, float("-inf"))
                     probabilities = F.softmax(next_logits, dim=-1)
                     next_token = torch.multinomial(probabilities, 1, generator=generator)
+                if eos_token_id is not None:
+                    next_token = torch.where(finished[:, None], torch.full_like(next_token, eos_token_id), next_token)
+                    finished = finished | next_token.squeeze(-1).eq(eos_token_id)
                 input_ids = torch.cat((input_ids, next_token), dim=1)
+                if eos_token_id is not None and bool(finished.all()):
+                    break
             return input_ids
         finally:
             self.train(was_training)

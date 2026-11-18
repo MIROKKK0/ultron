@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 struct ChatMessage: Identifiable, Codable, Equatable {
     let id: UUID
@@ -14,6 +15,73 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.text = text
         self.strategy = strategy
     }
+}
+
+private struct InstallationCredentials: Codable {
+    let id: String
+    let token: String
+    var registered: Bool
+}
+
+private enum InstallationIdentity {
+    private static let account = "installation-credentials"
+    private static var service: String { Bundle.main.bundleIdentifier ?? "com.ultron.app" }
+
+    static func load() throws -> InstallationCredentials {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecSuccess, let data = item as? Data,
+           let stored = try? JSONDecoder().decode(InstallationCredentials.self, from: data) {
+            return stored
+        }
+        guard status == errSecItemNotFound else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
+        let credentials = InstallationCredentials(
+            id: UUID().uuidString.lowercased(),
+            token: UUID().uuidString.replacingOccurrences(of: "-", with: "") +
+                   UUID().uuidString.replacingOccurrences(of: "-", with: ""),
+            registered: false
+        )
+        try save(credentials)
+        return credentials
+    }
+
+    static func save(_ credentials: InstallationCredentials) throws {
+        let data = try JSONEncoder().encode(credentials)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            var insert = query
+            attributes.forEach { insert[$0.key] = $0.value }
+            let addStatus = SecItemAdd(insert as CFDictionary, nil)
+            guard addStatus == errSecSuccess else {
+                throw NSError(domain: NSOSStatusErrorDomain, code: Int(addStatus))
+            }
+        } else if status != errSecSuccess {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
+    }
+}
+
+private struct InstallationRegistration: Encodable {
+    let installation_id: String
+    let installation_token: String
 }
 
 private struct ChatRequest: Encodable {
@@ -65,6 +133,34 @@ enum ChatClientError: LocalizedError {
 private struct HealthResponse: Decodable { let status: String }
 
 struct ChatClient {
+    private func installationHeaders() throws -> [String: String] {
+        let credentials = try InstallationIdentity.load()
+        return [
+            "X-ULTRON-Installation-ID": credentials.id,
+            "X-ULTRON-Installation-Token": credentials.token
+        ]
+    }
+
+    private func registerInstallationIfNeeded(serverURL: String) async throws {
+        var credentials = try InstallationIdentity.load()
+        guard !credentials.registered else { return }
+        guard let url = endpoint("/installations/register", serverURL: serverURL) else {
+            throw ChatClientError.invalidServerURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(
+            InstallationRegistration(installation_id: credentials.id, installation_token: credentials.token)
+        )
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw ChatClientError.serverError(http.statusCode) }
+        credentials.registered = true
+        try InstallationIdentity.save(credentials)
+    }
+
     private func endpoint(_ path: String, serverURL: String) -> URL? {
         guard let base = URL(string: serverURL.trimmingCharacters(in: .whitespacesAndNewlines)),
               base.scheme?.lowercased() == "https",
@@ -101,6 +197,7 @@ struct ChatClient {
         request.httpMethod = "POST"
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try installationHeaders().forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         request.httpBody = try JSONEncoder().encode(ChatRequest(message: message, history: history))
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
@@ -117,6 +214,14 @@ struct ChatClient {
         history: [String] = [],
         onPhase: @MainActor @escaping (BrainPhase) -> Void = { _ in }
     ) async throws -> ChatResult {
+        // Registration is an optional capability on older production backends.
+        // A 404 must not block ordinary chat; the server can still handle /chat
+        // statelessly until the installation-aware backend is deployed.
+        do {
+            try await registerInstallationIfNeeded(serverURL: serverURL)
+        } catch ChatClientError.serverError(let code) where code == 404 {
+            // Continue without installation-scoped memory on legacy servers.
+        }
         guard let url = endpoint("/chat/stream", serverURL: serverURL) else {
             throw ChatClientError.invalidServerURL
         }
@@ -125,6 +230,7 @@ struct ChatClient {
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        try installationHeaders().forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         request.httpBody = try JSONEncoder().encode(ChatRequest(message: message, history: history))
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)

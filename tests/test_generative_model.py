@@ -38,6 +38,15 @@ class TinyTransformerTests(unittest.TestCase):
         logits_b, _ = model(b)
         self.assertTrue(torch.allclose(logits_a[:, :4], logits_b[:, :4], atol=1e-6))
 
+    def test_generation_stops_when_eos_is_emitted(self):
+        from training.generative.model import ModelConfig, UltronTinyGPT
+        model = UltronTinyGPT(ModelConfig(context_length=16, width=32, layers=1, heads=4))
+        model.generate = lambda input_ids, max_new_tokens=64, **kwargs: torch.cat(
+            [input_ids, torch.tensor([[257]], dtype=torch.long)], dim=1
+        )
+        generated = model.generate(torch.tensor([[1, 2]]), max_new_tokens=8, eos_token_id=257)
+        self.assertEqual(generated[0, -1].item(), 257)
+
     def test_generate_restores_training_mode(self):
         from training.generative.model import ModelConfig, UltronTinyGPT
         model = UltronTinyGPT(ModelConfig(context_length=16, width=32, layers=1, heads=4))
