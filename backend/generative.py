@@ -6,8 +6,6 @@ from typing import Any
 
 import httpx
 
-DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
-DEFAULT_MODEL = "gemini-3.8-flash"
 SYSTEM_PROMPT = """Você é o ULTRON, um assistente geral em português brasileiro.
 Responda diretamente, com clareza, profundidade proporcional à pergunta e passos úteis.
 Use o contexto da conversa somente quando ele estiver explicitamente fornecido.
@@ -23,15 +21,17 @@ disponível; não apresente conhecimento desatualizado como fato atual.
 
 
 def model_config() -> dict[str, Any]:
-    api_key = os.getenv("ULTRON_LLM_API_KEY") or os.getenv("GEMINI_API_KEY")
-    base_url = os.getenv("ULTRON_LLM_BASE_URL", DEFAULT_BASE_URL).strip().rstrip("/")
-    model = os.getenv("ULTRON_LLM_MODEL", DEFAULT_MODEL).strip()
+    """Optional provider adapter; the default runtime remains entirely local."""
+    api_key = os.getenv("ULTRON_LLM_API_KEY")
+    base_url = os.getenv("ULTRON_LLM_BASE_URL", "").strip().rstrip("/")
+    model = os.getenv("ULTRON_LLM_MODEL", "").strip()
+    configured = bool(api_key and base_url and model)
     return {
-        "configured": bool(api_key and base_url and model),
-        "provider": "gemini" if "generativelanguage.googleapis.com" in base_url else "openai_compatible",
-        "model": model if api_key else None,
-        "base_url": base_url if api_key else None,
-        "api_key": api_key,
+        "configured": configured,
+        "provider": "external_openai_compatible" if configured else "local_only",
+        "model": model if configured else None,
+        "base_url": base_url if configured else None,
+        "api_key": api_key if configured else None,
     }
 
 
