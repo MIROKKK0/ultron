@@ -299,12 +299,28 @@ def synthesize_research(query: str, research: dict[str, Any]) -> str:
         "duração quando disponível e link do YouTube; não substitua por páginas genéricas.\\n\\n"
         f"Pedido: {query}\\n\\nFontes recuperadas:\\n" + "\\n\\n".join(evidence)
     )
+    synthesis = ""
+    synthesis_status = "fallback"
     if model_config()["configured"]:
         try:
-            return generate_reply(prompt, history=[], memories=[])[:12000]
+            synthesis = generate_reply(prompt, history=[], memories=[])[:10000]
+            synthesis_status = "gemini"
         except Exception:
-            pass
-    return str(research.get("summary") or "Encontrei fontes, mas não consegui sintetizá-las agora.")
+            synthesis = ""
+    if not synthesis:
+        synthesis = str(research.get("summary") or "Encontrei fontes, mas não consegui sintetizá-las agora.")
+    # Never rely on the model to reproduce URLs accurately. Attach canonical
+    # links from the retrieval layer after synthesis, including video URLs.
+    source_lines = []
+    for index, item in enumerate(results[:8], 1):
+        url = str(item.get("url", "")).strip()
+        title = str(item.get("title", "Fonte")).strip()
+        if url.startswith(("https://", "http://")):
+            extra = f" — {item.get('duration')}" if item.get("duration") else ""
+            source_lines.append(f"{index}. [{title}]({url}){extra}")
+    if source_lines:
+        synthesis += "\\n\\nFontes consultadas (links originais da busca):\\n" + "\\n".join(source_lines)
+    return synthesis[:12000]
 
 
 def learned_strategy_scores() -> dict[str, float]:
@@ -428,7 +444,7 @@ def execute_brain_cycle(
         "research": research,
         "review": critique,
         "synthesis": synthesis,
-        "synthesis_status": "completed",
+        "synthesis_status": "gemini" if research and research.get("count", 0) and model_config()["configured"] else "fallback_or_no_research",
         "execution_policy": (
             "Planner, solver e critic executam funções locais; pesquisa usa fontes web; "
             "decodificador linguístico local sem APIs ou tokens externos."
