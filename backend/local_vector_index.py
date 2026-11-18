@@ -56,9 +56,15 @@ def cosine(left: dict[str, float], right: dict[str, float]) -> float:
 
 
 class LocalVectorIndex:
-    def __init__(self, db: Any, vectorizer: LocalSparseVectorizer | None = None) -> None:
+    def __init__(self, db: Any, vectorizer: Any | None = None) -> None:
         self.db = db
-        self.vectorizer = vectorizer or LocalSparseVectorizer()
+        if vectorizer is not None:
+            self.vectorizer = vectorizer
+        elif __import__("os").getenv("ULTRON_MEMORY_ENCODER", "lexical").strip().lower() == "neural":
+            from backend.local_neural_encoder import LocalNeuralEncoder
+            self.vectorizer = LocalNeuralEncoder()
+        else:
+            self.vectorizer = LocalSparseVectorizer()
 
     def _execute(self, query: str, params: tuple = ()):
         if self.db.__class__.__module__.startswith("psycopg"):
@@ -113,6 +119,9 @@ class LocalVectorIndex:
     def search(self, owner_id: str, query: str, *, kind: str | None = None, limit: int = 8) -> list[dict]:
         if not 1 <= int(limit) <= 50:
             raise ValueError("limit deve ficar entre 1 e 50.")
+        # Re-encode bounded batches when the encoder version changes. Source
+        # memories remain untouched; only derived vectors are migrated.
+        self.index_missing(owner_id, limit=5000)
         query_vector = self.vectorizer.encode(query)
         if not query_vector:
             return []
@@ -140,7 +149,7 @@ class LocalVectorIndex:
                 "id": int(item["memory_id"]), "kind": item["kind"], "content": item["content"],
                 "source": item["source"], "confidence": float(item["confidence"]),
                 "created_at": item["created_at"], "score": round(score, 6),
-                "retrieval": "local_sparse_vector",
+                "retrieval": getattr(self.vectorizer, "RETRIEVAL_KIND", "local_sparse_vector"),
                 "encoder_version": self.vectorizer.VERSION,
             })
         return selected
