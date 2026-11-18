@@ -20,7 +20,7 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    BrainMonitorView(phase: brainPhase)
+                    UltronBrainDisplay(isActive: isSending, phase: brainPhase.title)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("ULTRON").font(.headline.weight(.bold)).tracking(1.5)
                         Text(isSending ? brainPhase.title : (serverOnline ? "API conectada" : (serverStatusChecked ? "API indisponível" : "Verificando API"))).font(.caption).foregroundStyle(.secondary)
@@ -338,5 +338,131 @@ private struct SettingsView: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+
+/// Human-brain silhouette with a low-power ambient pulse.
+/// Activity accelerates only while the real request pipeline is running.
+private struct UltronBrainDisplay: View {
+    let isActive: Bool
+    let phase: String
+
+    var body: some View {
+        VStack(spacing: 3) {
+            TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: !isActive)) { timeline in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                Canvas { context, size in
+                    drawBrain(in: &context, size: size, time: time, active: isActive)
+                }
+                .frame(width: 76, height: 62)
+            }
+            Text(isActive ? phase : "monitorando")
+                .font(.system(size: 8, weight: .medium, design: .rounded))
+                .foregroundStyle(isActive ? Color.cyan : Color.secondary)
+                .lineLimit(1)
+                .frame(width: 82)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isActive ? "Cérebro neural ativo: \(phase)" : "Cérebro neural em monitoramento")
+    }
+
+    private func drawBrain(
+        in context: inout GraphicsContext,
+        size: CGSize,
+        time: TimeInterval,
+        active: Bool
+    ) {
+        let scale = CGAffineTransform(scaleX: size.width, y: size.height)
+        let speed = active ? 2.8 : 0.55
+        let pulse = 0.5 + 0.5 * sin(time * speed)
+
+        // Two joined hemispheres form a recognizable anatomical silhouette.
+        var outline = Path()
+        outline.move(to: CGPoint(x: 0.50, y: 0.15))
+        outline.addCurve(to: CGPoint(x: 0.10, y: 0.43),
+                        control1: CGPoint(x: 0.30, y: 0.00),
+                        control2: CGPoint(x: 0.08, y: 0.17))
+        outline.addCurve(to: CGPoint(x: 0.22, y: 0.83),
+                        control1: CGPoint(x: 0.00, y: 0.61),
+                        control2: CGPoint(x: 0.10, y: 0.82))
+        outline.addCurve(to: CGPoint(x: 0.49, y: 0.91),
+                        control1: CGPoint(x: 0.30, y: 0.97),
+                        control2: CGPoint(x: 0.42, y: 0.98))
+        outline.addCurve(to: CGPoint(x: 0.78, y: 0.83),
+                        control1: CGPoint(x: 0.58, y: 0.98),
+                        control2: CGPoint(x: 0.70, y: 0.97))
+        outline.addCurve(to: CGPoint(x: 0.90, y: 0.43),
+                        control1: CGPoint(x: 0.90, y: 0.82),
+                        control2: CGPoint(x: 1.00, y: 0.61))
+        outline.addCurve(to: CGPoint(x: 0.50, y: 0.15),
+                        control1: CGPoint(x: 0.92, y: 0.17),
+                        control2: CGPoint(x: 0.70, y: 0.00))
+        outline.closeSubpath()
+        outline = outline.applying(scale)
+
+        let glow = Color.cyan.opacity(active ? 0.28 + pulse * 0.35 : 0.12 + pulse * 0.08)
+        context.fill(outline, with: .color(Color.cyan.opacity(0.07)))
+        context.stroke(outline, with: .color(glow), lineWidth: 1.5)
+
+        // Central fissure separates the hemispheres.
+        var fissure = Path()
+        fissure.move(to: CGPoint(x: 0.50, y: 0.16))
+        fissure.addCurve(to: CGPoint(x: 0.50, y: 0.88),
+                         control1: CGPoint(x: 0.46, y: 0.37),
+                         control2: CGPoint(x: 0.54, y: 0.62))
+        context.stroke(fissure.applying(scale),
+                       with: .color(Color.cyan.opacity(0.48)),
+                       style: StrokeStyle(lineWidth: 0.8, dash: [2, 2]))
+
+        // Cortical folds: paired curved grooves, not random decorative rings.
+        let folds: [[CGPoint]] = [
+            [CGPoint(x: 0.15, y: 0.36), CGPoint(x: 0.27, y: 0.23), CGPoint(x: 0.39, y: 0.34)],
+            [CGPoint(x: 0.12, y: 0.53), CGPoint(x: 0.25, y: 0.42), CGPoint(x: 0.40, y: 0.52)],
+            [CGPoint(x: 0.18, y: 0.69), CGPoint(x: 0.29, y: 0.59), CGPoint(x: 0.43, y: 0.68)],
+            [CGPoint(x: 0.85, y: 0.36), CGPoint(x: 0.73, y: 0.23), CGPoint(x: 0.61, y: 0.34)],
+            [CGPoint(x: 0.88, y: 0.53), CGPoint(x: 0.75, y: 0.42), CGPoint(x: 0.60, y: 0.52)],
+            [CGPoint(x: 0.82, y: 0.69), CGPoint(x: 0.71, y: 0.59), CGPoint(x: 0.57, y: 0.68)]
+        ]
+        for points in folds {
+            var groove = Path()
+            groove.move(to: points[0])
+            groove.addQuadCurve(to: points[2], control: points[1])
+            context.stroke(groove.applying(scale),
+                           with: .color(Color.cyan.opacity(0.42)),
+                           style: StrokeStyle(lineWidth: 0.9, lineCap: .round))
+        }
+
+        // Neural links and firing points pulse faster during real inference.
+        let nodes: [CGPoint] = [
+            CGPoint(x: 0.20, y: 0.34), CGPoint(x: 0.31, y: 0.29),
+            CGPoint(x: 0.39, y: 0.46), CGPoint(x: 0.25, y: 0.59),
+            CGPoint(x: 0.36, y: 0.73), CGPoint(x: 0.61, y: 0.30),
+            CGPoint(x: 0.72, y: 0.35), CGPoint(x: 0.78, y: 0.55),
+            CGPoint(x: 0.64, y: 0.66), CGPoint(x: 0.52, y: 0.48)
+        ]
+        let links = [(0, 1), (1, 2), (2, 3), (3, 4), (2, 9),
+                     (9, 5), (5, 6), (6, 7), (7, 8), (8, 9), (1, 5), (3, 8)]
+        for (index, pair) in links.enumerated() {
+            var link = Path()
+            link.move(to: nodes[pair.0])
+            link.addLine(to: nodes[pair.1])
+            let signal = 0.12 + 0.55 * (0.5 + 0.5 * sin(time * speed + Double(index) * 0.83))
+            context.stroke(link.applying(scale),
+                           with: .color(Color.cyan.opacity(active ? signal : signal * 0.42)),
+                           lineWidth: 0.7)
+        }
+        for (index, point) in nodes.enumerated() {
+            let firing = 0.5 + 0.5 * sin(time * speed + Double(index) * 1.17)
+            let radius = active ? 1.8 + firing * 2.0 : 1.2 + firing * 0.8
+            let rect = CGRect(
+                x: point.x * size.width - radius,
+                y: point.y * size.height - radius,
+                width: radius * 2,
+                height: radius * 2
+            )
+            context.fill(Path(ellipseIn: rect),
+                         with: .color(Color.cyan.opacity(active ? 0.45 + firing * 0.55 : 0.25 + firing * 0.25)))
+        }
     }
 }
