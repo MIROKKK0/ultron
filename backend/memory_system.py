@@ -55,7 +55,7 @@ class MemoryStore:
         )""")
 
     def add(self, owner_id: str, kind: str, content: str, source: str,
-            confidence: float = 0.7) -> int:
+            confidence: float = 0.7, created_at: str | None = None) -> int:
         if not owner_id or len(owner_id) > 160 or kind not in KINDS:
             raise ValueError("Escopo ou tipo de memória inválido.")
         content = str(content).strip()
@@ -64,9 +64,18 @@ class MemoryStore:
         if not 0 <= float(confidence) <= 1:
             raise ValueError("Confiança deve estar entre 0 e 1.")
         now = datetime.now(timezone.utc).isoformat()
+        stored_created_at = now
+        if created_at:
+            try:
+                parsed = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise ValueError("Timestamp de origem inválido.") from exc
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            stored_created_at = parsed.astimezone(timezone.utc).isoformat()
         cursor = self._execute(
             "INSERT INTO cognitive_memories(owner_id,kind,content,source,confidence,created_at,last_accessed_at,access_count) VALUES(?,?,?,?,?,?,?,0) RETURNING id",
-            (owner_id, kind, content, str(source)[:300], float(confidence), now, now))
+            (owner_id, kind, content, str(source)[:300], float(confidence), stored_created_at, now))
         inserted = cursor.fetchone()
         return int(inserted["id"] if isinstance(inserted, dict) else inserted[0])
 
