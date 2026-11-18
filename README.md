@@ -1,46 +1,30 @@
-# Ultron — IA Pessoal Avançada
+# ULTRON — IA Pessoal com Núcleo de Memória Próprio
 
-IA pessoal poderosa, estilo ChatGPT, com memória persistente, ferramentas, auto-aperfeiçoamento e capacidade de interagir com outras IAs.
+ULTRON mantém um registro local, datado e verificável das conversas e decisões. O texto original permanece separado das interpretações produzidas por agentes. Provedores de IA são motores substituíveis; nenhum deles é dono da memória ou da identidade do ULTRON.
 
-absolute olliE.
+## Núcleo de memória
 
-## Capacidades
+- Registro append-only em SQLite, com origem, autor, data UTC e hash SHA-256.
+- Resumos, tags e interpretações ficam em registros derivados separados.
+- Revisões acrescentam novas entradas e preservam versões anteriores.
+- Relações explícitas entre entradas e busca textual local.
+- Ledger encadeado por hashes, com verificação de integridade.
+- Nenhuma chamada de rede é feita pelo módulo de memória.
 
-- **Conversasção natural** — Interface CLI estilo ChatGPT
-- **Memória de longo prazo** — Lembra preferências, fatos e contexto do usuário (SQLite)
-- **Ferramentas**:
-  - Busca web (DuckDuckGo)
-  - Calculadora
-  - Salvar/recuperar memória
-  - Gerar prompts otimizados para outras IAs (Claude, Gemini, Grok, etc.)
-  - Auto-aperfeiçoamento (atualiza o próprio system prompt)
-- **Multi-provedor** — Funciona com OpenAI, OpenRouter, Groq, Together, etc.
-- **Auto-evolutivo** — Analisa interações e melhora seu próprio comportamento
+## Modelo de execução
+
+ULTRON usa um provedor compatível com a API OpenAI como mecanismo de inferência opcional. O núcleo, a memória e a trilha de auditoria continuam locais e independentes. A configuração não acopla o núcleo a um fornecedor específico.
 
 ## Setup
 
 ```bash
-# 1. Clone e entre no diretório
 git clone https://github.com/MIROKKK0/ultron.git
 cd ultron
-
-# 2. Instale dependências
 pip install -r requirements.txt
-
-# 3. Configure a API
 cp .env.example .env
-# Edite o .env e coloque sua chave
 ```
 
-### Arquivo .env
-
-```env
-OPENAI_API_KEY=sk-...
-# Opcional: use OpenRouter, Groq, etc.
-# OPENAI_BASE_URL=https://openrouter.ai/api/v1
-# ULTRON_MODEL=anthropic/claude-sonnet-4
-# ULTRON_MODEL=gpt-4o
-```
+Configure `OPENAI_API_KEY` e, opcionalmente, `OPENAI_BASE_URL` e `ULTRON_MODEL` para um endpoint compatível. O provedor pode ser substituído sem migrar ou apagar `~/.ultron/memory.db`.
 
 ## Uso
 
@@ -48,24 +32,23 @@ OPENAI_API_KEY=sk-...
 python ultron.py
 ```
 
-### Comandos especiais
+Comandos: `sair` encerra; `melhorar` propõe uma revisão do prompt de comportamento.
 
-- `sair` / `exit` / `quit` — Encerra
-- `melhorar` — Força auto-aperfeiçoamento (analisa conversas e atualiza system prompt)
+## Testes
+
+```bash
+python -m unittest discover -s tests -v
+```
 
 ## Arquitetura
 
-- `ultron.py` — Agente principal com loop de ferramentas
-- Memória em `~/.ultron/memory.db` (SQLite)
-- System prompt em `~/.ultron/system_prompt.txt` (editável e auto-atualizável)
+- `ultron.py`: loop conversacional, ferramentas e integração com o núcleo.
+- `ultron_mind.py`: memória local, proveniência, derivações, relações e ledger.
+- `~/.ultron/memory.db`: banco persistente.
+- `~/.ultron/system_prompt.txt`: instruções comportamentais editáveis.
 
-## Melhorias futuras possíveis
+Detalhes técnicos: [docs/MIND_CORE.md](docs/MIND_CORE.md).
 
-- Interface web (Streamlit/Gradio)
-- Voz (Whisper + TTS)
-- Mais ferramentas (arquivo, código, calendário)
-- Integração com MCP
-- RAG com documentos pessoais
-- Multi-agente (especialistas)
+## Próximas camadas
 
-absolute olliE pro Sam.
+Índice semântico local, importadores com deduplicação, backup criptografado, conectores consentidos e avaliação automatizada. Cada camada deve permanecer substituível e não pode sobrescrever o registro original.
