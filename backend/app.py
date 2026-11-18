@@ -214,7 +214,9 @@ class ChatRequest(BaseModel):
 
 class MemoryRequest(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
-\nclass TypedMemoryRequest(BaseModel):
+
+
+class TypedMemoryRequest(BaseModel):
     kind: Literal["episodic", "semantic", "procedural"]
     content: str = Field(min_length=1, max_length=4000)
     source: str = Field(default="user_explicit", max_length=300)
