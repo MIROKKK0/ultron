@@ -2,13 +2,13 @@ name: ULTRON iOS Build
 
 on:
   push:
-    branches: ["main", "feat/mandatory-fly-brain-core", "feat/ultron-core-assistant"]
+    branches: ["main", "feat/mandatory-fly-brain-core", "feat/ultron-core-assistant", "ultron/**"]
     paths:
       - "ios/**"
       - "project.yml"
       - ".github/workflows/ios-build.yml"
   pull_request:
-    branches: ["main", "feat/ultron-core-assistant"]
+    branches: ["main", "feat/ultron-core-assistant", "ultron/**", "integration/ultron-unified-core-2026-11-18"]
     paths:
       - "ios/**"
       - "project.yml"
