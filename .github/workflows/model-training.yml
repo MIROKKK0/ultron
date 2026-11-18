@@ -13,6 +13,8 @@ on:
       - "backend/app.py"
       - "backend/generative.py"
       - "backend/web_research.py"
+      - "backend/semantic_memory.py"
+      - "scripts/evaluate_ultron_specialist.py"
       - "backend/experimental_transformer.py"
       - "tests/**"
       - ".github/workflows/model-training.yml"
