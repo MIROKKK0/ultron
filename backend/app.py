@@ -934,7 +934,7 @@ def register_installation(payload: InstallationRegisterRequest, request: Request
     return {"registered": True, "installation_id": tenant}
 
 
-@app.post("/memory", dependencies=[Depends(require_installation_auth)])
+@app.post("/memory")
 def add_memory(request: MemoryRequest, tenant: str = Depends(require_installation_auth)) -> dict[str, Any]:
     content = request.content.strip()
     now = datetime.now(timezone.utc)
@@ -960,7 +960,7 @@ def add_memory(request: MemoryRequest, tenant: str = Depends(require_installatio
     return {"id": memory_id, "content": content, "expires_at": expires_at}
 
 
-@app.get("/memory", dependencies=[Depends(require_installation_auth)])
+@app.get("/memory")
 def list_memory(tenant: str = Depends(require_installation_auth)) -> dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
     with connect_db() as db:
@@ -971,7 +971,7 @@ def list_memory(tenant: str = Depends(require_installation_auth)) -> dict[str, A
     return {"items": [dict(row) for row in rows]}
 
 
-@app.get("/memory/search", dependencies=[Depends(require_installation_auth)])
+@app.get("/memory/search")
 def search_memory(q: str, tenant: str = Depends(require_installation_auth)) -> dict[str, Any]:
     query_terms = {term.casefold() for term in re.findall(r"[\wÀ-ÿ]{2,}", q) if term}
     if not query_terms:
@@ -1005,7 +1005,7 @@ def search_memory(q: str, tenant: str = Depends(require_installation_auth)) -> d
             "method": "tenant_scoped_lexical_overlap", "semantic_embeddings": False}
 
 
-@app.delete("/memory/{memory_id}", dependencies=[Depends(require_installation_auth)])
+@app.delete("/memory/{memory_id}")
 def delete_memory(memory_id: int, tenant: str = Depends(require_installation_auth)) -> dict[str, bool]:
     with connect_db() as db:
         cursor = execute(db, "DELETE FROM memories WHERE id = ? AND installation_id = ?", (memory_id, tenant))
