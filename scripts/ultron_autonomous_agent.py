@@ -32,6 +32,15 @@ def api_json(path: str) -> object:
         return json.loads(response.read().decode("utf-8"))
 
 
+def api_post(path: str) -> dict:
+    request = urllib.request.Request(API + path, data=b"{}", headers=HEADERS, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return {"status": response.status, "result": "rerun_requested"}
+    except Exception as exc:
+        return {"status": "error", "result": f"{type(exc).__name__}: {exc}"}
+
+
 def collect_repository_signals(root: Path) -> dict:
     markers = []
     tracked = []
@@ -63,6 +72,7 @@ def collect_github_signals() -> dict:
     issues = []
     research = []
     errors = []
+    reproduction_attempts = []
     try:
         runs = api_json(f"/repos/{REPO}/actions/runs?per_page=30").get("workflow_runs", [])
         for run in runs:
@@ -71,8 +81,20 @@ def collect_github_signals() -> dict:
                     "name": run.get("name"), "branch": run.get("head_branch"),
                     "sha": (run.get("head_sha") or "")[:12],
                     "created_at": run.get("created_at"), "url": run.get("html_url"),
-                    "failed_jobs": [],
+                    "run_id": run.get("id"), "run_attempt": run.get("run_attempt"),
+                    "workflow_name": run.get("name"), "failed_jobs": [],
                 }
+                # Re-run at most one recent failed run once to test reproducibility.
+                # Never re-run this investigator itself or a run already retried.
+                if (len(reproduction_attempts) == 0
+                    and run.get("name") != "ULTRON autonomous investigator and repair experiment"
+                    and int(run.get("run_attempt") or 1) == 1
+                    and run.get("id")):
+                    attempt = api_post(f"/repos/{REPO}/actions/runs/{run['id']}/rerun-failed-jobs")
+                    reproduction_attempts.append({
+                        "run_id": run.get("id"), "url": run.get("html_url"),
+                        "attempt": attempt,
+                    })
                 try:
                     jobs = api_json(f"/repos/{REPO}/actions/runs/{run['id']}/jobs?per_page=20").get("jobs", [])
                     for job in jobs:
@@ -114,7 +136,8 @@ def collect_github_signals() -> dict:
     except Exception as exc:
         errors.append(f"research: {type(exc).__name__}: {exc}")
 
-    return {"recent_failures": failures, "open_issues": issues, "research_leads": research, "collection_errors": errors}
+    return {"recent_failures": failures, "open_issues": issues, "research_leads": research,
+            "reproduction_attempts": reproduction_attempts, "collection_errors": errors}
 
 
 def build_report(root: Path, generated_at: str | None = None) -> dict:
@@ -164,6 +187,8 @@ def render_markdown(report: dict) -> str:
         "## Falhas recentes",
     ]
     lines += [f"- [{item['name']}]({item['url']}) — branch `{item['branch']}`, SHA `{item['sha']}`, {item['created_at']}" for item in report["recent_failures"]] or ["- Nenhuma falha recente encontrada."]
+    lines += ["", "## Tentativas de reprodução"]
+    lines += [f"- [Run {item['run_id']}]({item['url']}) — {item['attempt']['result']} (status: {item['attempt']['status']})" for item in report.get("reproduction_attempts", [])] or ["- Nenhuma repetição necessária ou elegível."]
     lines += ["", "## Marcadores de manutenção"]
     lines += [f"- `{item['file']}:{item['line']}` — {item['marker']}: {item['text']}" for item in local["maintenance_markers"]] or ["- Nenhum marcador encontrado."]
     lines += ["", "## Issues abertas"]
