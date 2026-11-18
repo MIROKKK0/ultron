@@ -12,15 +12,12 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
-from openai import OpenAI
+from ultron_core.provider import build_provider
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Configuração
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-MODEL = os.getenv("ULTRON_MODEL", "gpt-4o-mini")
 DATA_DIR = Path.home() / ".ultron"
 DATA_DIR.mkdir(exist_ok=True)
 MEMORY_DB = DATA_DIR / "memory.db"
@@ -116,10 +113,7 @@ class MemoryManager:
 
 class Ultron:
     def __init__(self):
-        if not OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY não definida. Crie um arquivo .env")
-
-        self.client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
+        self.client, self.model = build_provider()
         self.memory = MemoryManager()
         self.system_prompt = self._load_system_prompt()
         self.tools = self._define_tools()
@@ -295,7 +289,7 @@ O prompt deve ser claro, estruturado, com instruções precisas, exemplos se nec
 Retorne apenas o prompt otimizado, sem explicações adicionais.
 """
         response = self.client.chat.completions.create(
-            model=MODEL,
+            model=self.model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7
         )
@@ -322,7 +316,7 @@ Sugira um novo system prompt melhorado que incorpore aprendizados. Seja específ
 Retorne APENAS o novo system prompt completo.
 """
         response = self.client.chat.completions.create(
-            model=MODEL,
+            model=self.model,
             messages=[{"role": "user", "content": analysis_prompt}],
             temperature=0.5
         )
@@ -346,7 +340,7 @@ Retorne APENAS o novo system prompt completo.
 
         for _ in range(5):
             response = self.client.chat.completions.create(
-                model=MODEL,
+                model=self.model,
                 messages=messages,
                 tools=self.tools,
                 tool_choice="auto",
@@ -371,7 +365,7 @@ Retorne APENAS o novo system prompt completo.
                 })
 
         final_response = self.client.chat.completions.create(
-            model=MODEL,
+            model=self.model,
             messages=messages,
             temperature=0.7
         )
@@ -415,5 +409,5 @@ if __name__ == "__main__":
         ultron.interactive()
     except ValueError as e:
         print(f"Erro de configuração: {e}")
-        print("Crie um arquivo .env com OPENAI_API_KEY=sua_chave")
-        print("Opcional: ULTRON_MODEL=gpt-4o, OPENAI_BASE_URL=https://openrouter.ai/api/v1")
+        print("Configure ULTRON_PROVIDER e a chave correspondente no arquivo .env")
+        print("Exemplo: ULTRON_PROVIDER=gemini e GEMINI_API_KEY=sua_chave")

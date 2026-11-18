@@ -34,13 +34,15 @@ cp .env.example .env
 
 ### Arquivo .env
 
+Escolha um provedor sem alterar o núcleo ou a memória. Para Gemini:
+
 ```env
-OPENAI_API_KEY=sk-...
-# Opcional: use OpenRouter, Groq, etc.
-# OPENAI_BASE_URL=https://openrouter.ai/api/v1
-# ULTRON_MODEL=anthropic/claude-sonnet-4
-# ULTRON_MODEL=gpt-4o
+ULTRON_PROVIDER=gemini
+GEMINI_API_KEY=sua_chave
+GEMINI_MODEL=gemini-2.5-flash
 ```
+
+Também há adaptadores `openai`, `openrouter` e `custom` (API compatível com OpenAI). Veja `.env.example`.
 
 ## Uso
 
@@ -55,9 +57,15 @@ python ultron.py
 
 ## Arquitetura
 
-- `ultron.py` — Agente principal com loop de ferramentas
-- Memória em `~/.ultron/memory.db` (SQLite)
-- System prompt em `~/.ultron/system_prompt.txt` (editável e auto-atualizável)
+- `ultron.py` — interface e loop de ferramentas
+- `ultron_core/provider.py` — adaptador de modelo substituível
+- `ultron_core/governance.py` — regras determinísticas de aprovação
+- `ultron_core/orchestrator.py` — validação de caminhos e execução limitada de testes
+- Memória em `~/.ultron/memory.db` (SQLite), independente do provedor
+- Identidade em `~/.ultron/system_prompt.txt`, independente do provedor
+- `ARCHITECTURE.md` — fronteiras de propriedade e fluxo de evolução
+
+O modelo conectado propõe; ULTRON controla memória, execução, testes e critérios. Testes verdes liberam uma alteração para revisão por PR, nunca publicação direta automática.
 
 ## Melhorias futuras possíveis
 
