@@ -15,8 +15,8 @@ def build_prompt(message: str, memories: list[str] | None = None,
     """Build a bounded prompt that reserves the tail for the current user request."""
     if budget < 32:
         raise ValueError("Prompt budget is too small.")
-    memory_text = " | ".join(str(item).strip()[:36] for item in (memories or [])[:2])
-    history_text = " | ".join(str(item).strip()[:24] for item in (history or [])[-1:])
+    memory_text = str((memories or [""])[0]).strip()[:40]
+    history_text = str((history or [""])[-1]).strip()[:8]
     prefix = f"ULTRON. Memorias: {memory_text}. Histórico: {history_text}. Pergunta: "
     question_budget = max(24, budget - len(prefix.encode("utf-8")))
     question = str(message).strip()
