@@ -42,7 +42,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install bounded static repair tool
-        run: python -m pip install --disable-pip-version-check ruff ddgs
+        run: python -m pip install --disable-pip-version-check -r requirements.txt ruff ddgs pytest
       - name: Test investigator and repair policy
         run: python -m unittest tests.test_autonomous_agent_report tests.test_autonomous_repair_engine -v
       - name: Run investigation
@@ -91,7 +91,7 @@ jobs:
         run: |
           gh pr create --base main --head "$REPAIR_BRANCH" \
             --title "ULTRON: tested autonomous repair" \
-            --body "## Evidências\n- Candidate branch: `$REPAIR_BRANCH`\n- Baseline and post-patch unit-test logs are attached in the workflow artifact.\n- Only Ruff safe fixes were allowed.\n- Hard cap: 10 files / 300 changed lines.\n- No production deploy is performed by this workflow."
+            --body "## Evidências\n- Candidate branch: $REPAIR_BRANCH\n- Baseline and post-patch unit-test logs are attached in the workflow artifact.\n- Only Ruff safe fixes were allowed.\n- Hard cap: 10 files / 300 changed lines.\n- No production deploy is performed by this workflow."
       - name: Publish investigation report branch
         id: publish_report
         env:
