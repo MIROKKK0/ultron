@@ -17,7 +17,8 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
-from backend.brain import run_multitask\nfrom backend.cognitive_workspace import CognitiveWorkspace
+from backend.brain import run_multitask
+from backend.cognitive_workspace import CognitiveWorkspace
 from backend.generative import generate_reply, model_config
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
