@@ -177,28 +177,38 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
             "summary": "Vídeos do YouTube encontrados e ordenados por relevância:\n" + summary,
         }
 
+    fallback_backends = ("duckduckgo", "brave", "mojeek", "startpage", "yahoo", "wikipedia", "grokipedia")
     if searcher is None:
         from ddgs import DDGS
-        searcher = DDGS(timeout=12).text
+        from ddgs.engines import ENGINES
+        client = DDGS(timeout=6)
+        searcher = client.text
+        available_backends = tuple(ENGINES.get("text", {}).keys())
+    else:
+        # Deterministic fallback order for injected searchers and unit tests.
+        available_backends = fallback_backends
+
     raw = []
-    last_error: Exception | None = None
-    # Keep the fast automatic route first, then widen to every text engine
-    # supported by DDGS. A single blocked provider should not disable research.
-    for backend in ("auto", "bing,duckduckgo,yahoo,startpage", "all"):
+    errors: list[Exception] = []
+    search_kwargs = {
+        "region": "br-pt",
+        "safesearch": "moderate",
+        "max_results": max(1, min(limit * 2, 16)),
+    }
+    # Try DDGS automatic selection first. Some hosts/IPs are temporarily
+    # blocked by every engine selected by auto, so then isolate engines one by one.
+    for backend in ("auto", *available_backends):
         try:
-            raw = searcher(
-                cleaned,
-                region="br-pt",
-                safesearch="moderate",
-                max_results=max(1, min(limit * 2, 16)),
-                backend=backend,
-            )
+            raw = searcher(cleaned, **search_kwargs, backend=backend)
             if raw:
                 break
         except Exception as exc:
-            last_error = exc
-    if not raw and last_error is not None:
-        raise RuntimeError("Todos os mecanismos de pesquisa falharam temporariamente.") from last_error
+            errors.append(exc)
+
+    if not raw and errors:
+        # Keep the original cause chained for diagnostics, without returning
+        # provider details or query text to the public chat.
+        raise RuntimeError("Todos os mecanismos de pesquisa falharam temporariamente.") from errors[-1]
 
     candidates = []
     seen = set()
