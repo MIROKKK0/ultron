@@ -367,6 +367,7 @@ def execute_brain_cycle(
     history: list[str] | None = None,
     *,
     include_private_memories: bool = True,
+    installation_id: str | None = None,
 ) -> dict[str, Any]:
     """Run real local planner/solver/critic tools; research intents use web search.
 
@@ -376,7 +377,13 @@ def execute_brain_cycle(
     if not normalized_goal:
         raise ValueError("Informe o objetivo.")
 
-    if include_private_memories:
+    if include_private_memories and installation_id:
+        with connect_db() as db:
+            store = MemoryStore(db)
+            store.initialize()
+            typed = store.retrieve(installation_id, normalized_goal, limit=8)
+        memories = [str(item["content"]) for item in typed]
+    elif include_private_memories:
         with connect_db() as db:
             rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
         memories = rank_memories(normalized_goal, rows, limit=8)
@@ -536,6 +543,40 @@ def brain_status(request: Request) -> dict[str, Any]:
         "memory_enabled": True,
         "autonomous_production_changes": False,
     }
+
+@app.post("/v2/brain/run")
+def installation_brain_run(payload: BrainRequest, installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    """Run the cognitive cycle using only this installation's typed memories."""
+    try:
+        result = execute_brain_cycle(payload.goal.strip(), include_private_memories=True,
+                                     installation_id=installation_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    evaluation = result.get("cycle_evaluation", {})
+    metrics = {
+        "cycle_score": float(evaluation.get("score", 0.0)),
+        "stage_count": int(evaluation.get("stage_count", 0)),
+        "checks": {key: bool(value) for key, value in evaluation.get("checks", {}).items()},
+        "research_result_count": int((result.get("research") or {}).get("count", 0)),
+    }
+    with connect_db() as db:
+        execute(db, "INSERT INTO agent_evaluations(installation_id,category,score,passed,metrics_json,created_at) VALUES(?,?,?,?,?,?)",
+                (installation_id, "brain_cycle", metrics["cycle_score"], int(bool(evaluation.get("passed"))),
+                 json.dumps(metrics, separators=(",", ":"), sort_keys=True),
+                 datetime.now(timezone.utc).isoformat()))
+    result["evaluation_persisted"] = True
+    result["evaluation_privacy"] = "metrics_only_no_prompt_or_response_content"
+    return result
+
+
+@app.get("/v2/evaluations")
+def installation_evaluations(installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    with connect_db() as db:
+        rows = execute(db, "SELECT category,score,passed,metrics_json,created_at FROM agent_evaluations WHERE installation_id=? ORDER BY id DESC LIMIT 50",
+                       (installation_id,)).fetchall()
+    return {"items": [{**dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows],
+            "scope": "authenticated_installation", "stored_content": False}
+
 
 @app.post("/brain/run", dependencies=[Depends(require_api_token)])
 def brain_run(payload: BrainRequest) -> dict[str, Any]:
