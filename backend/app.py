@@ -819,43 +819,97 @@ def runtime_status(request: Request) -> dict[str, Any]:
 
 
 @app.post("/memory", dependencies=[Depends(require_api_token)])
-def add_memory(request: MemoryRequest) -> dict[str, Any]:
+def add_memory(request: MemoryRequest, installation_id: str | None = Header(default=None, alias="X-ULTRON-Installation-ID")) -> dict[str, Any]:
+    tenant = installation_scope(installation_id)
     content = request.content.strip()
+    now = datetime.now(timezone.utc)
+    expires_at = (now + __import__("datetime").timedelta(days=30)).isoformat()
     with connect_db() as db:
         if is_postgres(db):
-            cursor = execute(
-                db,
-                "INSERT INTO memories(content, created_at) VALUES (?, ?) RETURNING id",
-                (content, datetime.now(timezone.utc).isoformat()),
-            )
+            cursor = execute(db,
+                "INSERT INTO memories(content, created_at, installation_id, expires_at) VALUES (?, ?, ?, ?) RETURNING id",
+                (content, now.isoformat(), tenant, expires_at))
             memory_id = cursor.fetchone()["id"]
         else:
-            cursor = execute(
-                db,
-                "INSERT INTO memories(content, created_at) VALUES (?, ?)",
-                (content, datetime.now(timezone.utc).isoformat()),
-            )
+            cursor = execute(db,
+                "INSERT INTO memories(content, created_at, installation_id, expires_at) VALUES (?, ?, ?, ?)",
+                (content, now.isoformat(), tenant, expires_at))
             memory_id = cursor.lastrowid
-    return {"id": memory_id, "content": content}
+    record_telemetry("memory_write", decision="stored_with_30d_ttl")
+    return {"id": memory_id, "content": content, "expires_at": expires_at}
 
 
 @app.get("/memory", dependencies=[Depends(require_api_token)])
-def list_memory() -> dict[str, Any]:
+def list_memory(installation_id: str | None = Header(default=None, alias="X-ULTRON-Installation-ID")) -> dict[str, Any]:
+    tenant = installation_scope(installation_id)
+    now = datetime.now(timezone.utc).isoformat()
     with connect_db() as db:
-        rows = execute(
-            db,
-            "SELECT id, content, created_at FROM memories ORDER BY id DESC LIMIT 100",
-        ).fetchall()
+        execute(db, "DELETE FROM memories WHERE installation_id = ? AND expires_at IS NOT NULL AND expires_at <= ?", (tenant, now))
+        rows = execute(db,
+            "SELECT id, content, created_at, expires_at FROM memories WHERE installation_id = ? ORDER BY id DESC LIMIT 100",
+            (tenant,)).fetchall()
     return {"items": [dict(row) for row in rows]}
 
 
-@app.delete("/memory/{memory_id}", dependencies=[Depends(require_api_token)])
-def delete_memory(memory_id: int) -> dict[str, bool]:
+@app.get("/memory/search", dependencies=[Depends(require_api_token)])
+def search_memory(q: str, installation_id: str | None = Header(default=None, alias="X-ULTRON-Installation-ID")) -> dict[str, Any]:
+    tenant = installation_scope(installation_id)
+    query_terms = {term.casefold() for term in re.findall(r"[\wÀ-ÿ]{2,}", q) if term}
+    if not query_terms:
+        raise HTTPException(status_code=400, detail="Informe uma consulta com termos úteis.")
+    now = datetime.now(timezone.utc).isoformat()
     with connect_db() as db:
-        cursor = execute(db, "DELETE FROM memories WHERE id = ?", (memory_id,))
+        execute(db, "DELETE FROM memories WHERE installation_id = ? AND expires_at IS NOT NULL AND expires_at <= ?", (tenant, now))
+        rows = execute(db,
+            "SELECT id, content, created_at, expires_at FROM memories WHERE installation_id = ? ORDER BY id DESC LIMIT 300",
+            (tenant,)).fetchall()
+    ranked = []
+    for row in rows:
+        content = str(row["content"])
+        terms = {term.casefold() for term in re.findall(r"[\wÀ-ÿ]{2,}", content)}
+        overlap = len(query_terms & terms) / max(1, len(query_terms))
+        if overlap:
+            ranked.append((overlap, dict(row)))
+    ranked.sort(key=lambda pair: (pair[0], pair[1]["created_at"]), reverse=True)
+    record_telemetry("memory_retrieval", decision="tenant_scoped_lexical_rank")
+    return {"items": [dict(item, relevance=round(score, 3)) for score, item in ranked[:8]],
+            "method": "tenant_scoped_lexical_overlap", "semantic_embeddings": False}
+
+
+@app.delete("/memory/{memory_id}", dependencies=[Depends(require_api_token)])
+def delete_memory(memory_id: int, installation_id: str | None = Header(default=None, alias="X-ULTRON-Installation-ID")) -> dict[str, bool]:
+    tenant = installation_scope(installation_id)
+    with connect_db() as db:
+        cursor = execute(db, "DELETE FROM memories WHERE id = ? AND installation_id = ?", (memory_id, tenant))
     if cursor.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Memória não encontrada.")
+        raise HTTPException(status_code=404, detail="Memória não encontrada nesta instalação.")
+    record_telemetry("memory_delete", decision="tenant_scoped_delete")
     return {"deleted": True}
+
+
+@app.get("/telemetry/summary", dependencies=[Depends(require_api_token)])
+def telemetry_summary() -> dict[str, Any]:
+    cutoff = (datetime.now(timezone.utc) - __import__("datetime").timedelta(days=7)).isoformat()
+    with connect_db() as db:
+        rows = execute(db, "SELECT event_type, status_code, latency_ms, input_tokens, output_tokens, estimated_cost_usd, quality_score FROM telemetry_events WHERE created_at >= ? ORDER BY id DESC LIMIT 10000", (cutoff,)).fetchall()
+    request_rows = [row for row in rows if row["event_type"] == "http_request"]
+    latencies = sorted(float(row["latency_ms"] or 0) for row in request_rows)
+    def percentile(values: list[float], p: float) -> float | None:
+        if not values:
+            return None
+        return round(values[min(len(values) - 1, int((len(values) - 1) * p))], 2)
+    failures = sum(1 for row in request_rows if int(row["status_code"] or 0) >= 500)
+    return {
+        "window_days": 7, "request_count": len(request_rows),
+        "failure_count": failures,
+        "failure_rate": round(failures / len(request_rows), 4) if request_rows else None,
+        "latency_ms": {"p50": percentile(latencies, 0.50), "p95": percentile(latencies, 0.95)},
+        "input_tokens": sum(int(row["input_tokens"] or 0) for row in rows),
+        "output_tokens": sum(int(row["output_tokens"] or 0) for row in rows),
+        "estimated_cost_usd": round(sum(float(row["estimated_cost_usd"] or 0) for row in rows), 6),
+        "quality_samples": sum(1 for row in rows if row["quality_score"] is not None),
+        "privacy": "No prompts, completions, IP addresses, installation IDs or secrets are stored."
+    }
 
 
 @app.get("/self", dependencies=[Depends(require_api_token)])
