@@ -17,6 +17,10 @@ INSTALL_B = {"X-ULTRON-Installation-ID": "22222222-2222-4222-8222-222222222222",
 
 
 class UltronTests(unittest.TestCase):
+    def setUp(self):
+        from backend.public_access import _EVENTS
+        _EVENTS.clear()
+
     def test_root_and_local_self_command(self):
         root = client.get("/")
         self.assertEqual(root.status_code, 200)
@@ -298,7 +302,7 @@ class UltronTests(unittest.TestCase):
             response = client.post("/chat", json={"message": "Explique um conceito avançado de física"},
                                    headers=INSTALL_A)
         self.assertEqual(response.status_code, 200)
-        self.assertIn("PostgreSQL e Python", generated.call_args.args[2])
+        self.assertTrue(any("PostgreSQL e Python" in item for item in generated.call_args.args[2]))
         with patch("backend.app.model_config", return_value={"configured": True}), \
              patch("backend.app.generate_and_record", return_value="Resposta sem memória") as generated_other:
             client.post("/chat", json={"message": "Explique um conceito avançado de física"},
