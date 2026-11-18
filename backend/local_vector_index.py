@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -60,7 +61,7 @@ class LocalVectorIndex:
         self.db = db
         if vectorizer is not None:
             self.vectorizer = vectorizer
-        elif __import__("os").getenv("ULTRON_MEMORY_ENCODER", "lexical").strip().lower() == "neural":
+        elif os.getenv("ULTRON_MEMORY_ENCODER", "lexical").strip().lower() == "neural":
             from backend.local_neural_encoder import LocalNeuralEncoder
             self.vectorizer = LocalNeuralEncoder()
         else:
