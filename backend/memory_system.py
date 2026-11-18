@@ -33,7 +33,7 @@ class MemoryStore:
 
     def initialize(self) -> None:
         primary_key = "BIGSERIAL PRIMARY KEY" if self.db.__class__.__module__.startswith("psycopg") else "INTEGER PRIMARY KEY AUTOINCREMENT"
-        self.db.execute(f"""CREATE TABLE IF NOT EXISTS cognitive_memories (
+        self._execute(f"""CREATE TABLE IF NOT EXISTS cognitive_memories (
             id {primary_key},
             owner_id TEXT NOT NULL,
             kind TEXT NOT NULL,
@@ -44,7 +44,7 @@ class MemoryStore:
             last_accessed_at TEXT NOT NULL,
             access_count INTEGER NOT NULL DEFAULT 0
         )""")
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_cognitive_memory_owner_kind ON cognitive_memories(owner_id, kind, id)")
+        self._execute("CREATE INDEX IF NOT EXISTS idx_cognitive_memory_owner_kind ON cognitive_memories(owner_id, kind, id)")
 
     def add(self, owner_id: str, kind: str, content: str, source: str,
             confidence: float = 0.7) -> int:
@@ -56,7 +56,7 @@ class MemoryStore:
         if not 0 <= float(confidence) <= 1:
             raise ValueError("Confiança deve estar entre 0 e 1.")
         now = datetime.now(timezone.utc).isoformat()
-        cursor = self.db.execute(
+        cursor = self._execute(
             "INSERT INTO cognitive_memories(owner_id,kind,content,source,confidence,created_at,last_accessed_at,access_count) VALUES(?,?,?,?,?,?,?,0) RETURNING id",
             (owner_id, kind, content, str(source)[:300], float(confidence), now, now))
         return int(cursor.fetchone()[0])
@@ -64,7 +64,7 @@ class MemoryStore:
     def retrieve(self, owner_id: str, query: str, kind: str | None = None, limit: int = 8) -> list[dict]:
         if kind is not None and kind not in KINDS:
             raise ValueError("Tipo de memória inválido.")
-        rows = self.db.execute(
+        rows = self._execute(
             "SELECT id,kind,content,source,confidence,created_at,last_accessed_at,access_count FROM cognitive_memories WHERE owner_id=? AND (? IS NULL OR kind=?) ORDER BY id DESC LIMIT 200",
             (owner_id, kind, kind)).fetchall()
         terms = set(re.findall(r"[a-zà-ú0-9]{3,}", query.casefold()))
@@ -80,10 +80,10 @@ class MemoryStore:
         selected = [item for _, item in scored[:max(1, min(int(limit), 20))]]
         now = datetime.now(timezone.utc).isoformat()
         for item in selected:
-            self.db.execute("UPDATE cognitive_memories SET last_accessed_at=?, access_count=access_count+1 WHERE id=? AND owner_id=?",
+            self._execute("UPDATE cognitive_memories SET last_accessed_at=?, access_count=access_count+1 WHERE id=? AND owner_id=?",
                             (now, item["id"], owner_id))
         return selected
 
     def forget(self, owner_id: str, memory_id: int) -> bool:
-        cursor = self.db.execute("DELETE FROM cognitive_memories WHERE id=? AND owner_id=?", (int(memory_id), owner_id))
+        cursor = self._execute("DELETE FROM cognitive_memories WHERE id=? AND owner_id=?", (int(memory_id), owner_id))
         return cursor.rowcount > 0
