@@ -169,6 +169,7 @@ load_associative_memory()
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
+    history: list[str] = Field(default_factory=list, max_length=8)
 
 
 class MemoryRequest(BaseModel):
@@ -336,7 +337,13 @@ def execute_brain_cycle(
     # Each specialist now performs its actual local function instead of returning
     # a decorative placeholder string.
     plan = plan_task(normalized_goal)
-    answer = answer_without_provider(normalized_goal, memories, history)
+    if model_config()["configured"]:
+        try:
+            answer = answer_with_provider(normalized_goal, memories, history)
+        except Exception:
+            answer = answer_without_provider(normalized_goal, memories, history)
+    else:
+        answer = answer_without_provider(normalized_goal, memories, history)
     critique = review_response(normalized_goal, answer)
     outputs: dict[str, dict[str, Any]] = {
         "planner": {"status": "completed", "result": plan},
@@ -602,8 +609,13 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
         if local_skill:
             response = local_skill
         elif model_config()["configured"]:
+            parsed_history = []
+            for item in payload.history[-8:]:
+                role, separator, content = item.partition(":")
+                if separator and role.strip() in ("user", "assistant") and content.strip():
+                    parsed_history.append({"role": role.strip(), "content": content.strip()[:1000]})
             try:
-                response = answer_with_provider(message)
+                response = generate_reply(message, parsed_history)
             except Exception:
                 response = "O modelo generativo está configurado, mas falhou ao responder agora. Tente novamente; não vou substituir a resposta por uma resposta local fingindo ser IA generativa."
         else:
