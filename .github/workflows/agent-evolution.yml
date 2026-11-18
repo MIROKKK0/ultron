@@ -1,0 +1,78 @@
+name: ULTRON Agent Evolution Gate
+
+on:
+  push:
+    branches:
+      - "experiments/**"
+  workflow_dispatch:
+    inputs:
+      candidate_branch:
+        description: "Branch experimental a avaliar"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ultron-evolution-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Select candidate branch
+        id: candidate
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.candidate_branch }}" ]; then
+            echo "branch=${{ inputs.candidate_branch }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "branch=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.candidate.outputs.branch }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run complete regression suite
+        run: python -m unittest discover -s tests -v
+      - name: Run frozen PT-BR agent benchmark
+        run: python scripts/agent_eval.py --output agent-evaluation-report.json
+      - name: Open PR only after all gates pass
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const head = `${context.repo.owner}:${{ steps.candidate.outputs.branch }}`;
+            const base = "feat/ultron-core-assistant";
+            const existing = await github.rest.pulls.list({
+              owner: context.repo.owner, repo: context.repo.repo,
+              head, base, state: "open"
+            });
+            if (existing.data.length) {
+              core.info(`PR já existe: ${existing.data[0].html_url}`);
+              return;
+            }
+            const pr = await github.rest.pulls.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              head: "${{ steps.candidate.outputs.branch }}",
+              base,
+              title: "ULTRON: candidato de autoevolução validado",
+              body: [
+                "## Candidato avaliado automaticamente",
+                "",
+                "A suíte de regressão completa e o benchmark PT-BR passaram.",
+                "Este PR ainda exige revisão humana; o workflow não faz merge nem deploy.",
+                "",
+                "Relatório: `agent-evaluation-report.json`",
+                "Critérios: evidência, relevância da pesquisa, planejamento, observação de ferramentas, retries seguros e gate anti-regressão."
+              ].join("\n")
+            });
+            core.info(`PR criado: ${pr.data.html_url}`);
