@@ -26,6 +26,11 @@ class MemoryStore:
     def __init__(self, db: Any):
         self.db = db
 
+    def _execute(self, query: str, params: tuple = ()):
+        if self.db.__class__.__module__.startswith("psycopg"):
+            query = query.replace("?", "%s")
+        return self.db.execute(query, params)
+
     def initialize(self) -> None:
         primary_key = "BIGSERIAL PRIMARY KEY" if self.db.__class__.__module__.startswith("psycopg") else "INTEGER PRIMARY KEY AUTOINCREMENT"
         self.db.execute(f"""CREATE TABLE IF NOT EXISTS cognitive_memories (
