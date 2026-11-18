@@ -293,5 +293,17 @@ class UltronTests(unittest.TestCase):
         )
 
 
+    def test_natural_language_youtube_video_request_uses_video_search(self):
+        fixture = {"summary": "Vídeos do YouTube encontrados", "count": 1, "results": []}
+        with patch("backend.app.search_web", return_value=fixture) as search:
+            response = client.post(
+                "/chat",
+                json={"message": "Me mostre vídeos do YouTube sobre carros do GTA V"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Vídeos do YouTube", response.json()["reply"])
+        search.assert_called_once_with("vídeos do YouTube sobre carros do GTA V")
+
+
 if __name__ == "__main__":
     unittest.main()
