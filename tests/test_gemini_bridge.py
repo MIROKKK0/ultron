@@ -12,7 +12,7 @@ class GeminiBridgeTests(unittest.TestCase):
         with patch.dict("os.environ", {"ULTRON_PROVIDER": "gemini", "GEMINI_API_KEY": "test-key"}, clear=True):
             config = ProviderConfig.from_env()
         self.assertEqual(config.name, "gemini")
-        self.assertEqual(config.model, "gemini-2.5-flash")
+        self.assertEqual(config.model, "gemini-3.8-flash")
         self.assertEqual(config.api_key, "test-key")
 
     def test_provider_requires_key_without_exposing_it(self):
