@@ -989,6 +989,31 @@ def propose_semantic_memory(payload: MemoryCurationRequest,
     })
 
 
+@app.post("/v2/memory/curate/commit")
+def commit_semantic_memory(payload: MemoryCurationRequest,
+                           installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    """Persist an explicitly submitted semantic fact with auditable source links."""
+    ids = list(dict.fromkeys(int(value) for value in payload.source_ids))
+    if any(value < 1 for value in ids):
+        raise HTTPException(status_code=422, detail="IDs de origem inválidos.")
+    with connect_db() as db:
+        store = MemoryStore(db)
+        store.initialize()
+        memory_id = store.add(
+            installation_id, "semantic", payload.candidate,
+            "user_approved_semantic_consolidation", 0.85,
+        )
+        try:
+            store.link_sources(installation_id, memory_id, ids)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        vector_index = LocalVectorIndex(db)
+        vector_index.initialize()
+        vector_index.upsert(installation_id, memory_id, payload.candidate)
+    return {"id": memory_id, "kind": "semantic", "stored": True,
+            "source_memory_ids": ids, "indexed": True}
+
+
 @app.post("/brain/learn/evaluate", dependencies=[Depends(require_api_token)])
 def evaluate_learning(payload: LearningEvaluationRequest) -> dict[str, Any]:
     decision = evaluate_learning_candidate(
