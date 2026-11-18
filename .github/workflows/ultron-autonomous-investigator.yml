@@ -7,6 +7,8 @@ on:
     paths:
       - "scripts/ultron_autonomous_agent.py"
       - "scripts/ultron_repair_engine.py"
+      - "scripts/ultron_gemini_proposer.py"
+      - "ultron_core/**"
       - "tests/**"
       - ".github/workflows/ultron-autonomous-investigator.yml"
   issues:
