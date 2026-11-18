@@ -189,14 +189,14 @@ def build_report(root: Path, generated_at: str | None = None) -> dict:
         priorities.append("Revisar manualmente relevância, licença, segurança e data das referências públicas antes de adotar qualquer técnica.")
     if not priorities:
         priorities.append("Nenhum problema acionável foi confirmado nesta execução; aguardar novos sinais sem inventar correções.")
-    priorities.append("Próxima fase: habilitar reparos determinísticos cobertos por testes; nenhuma alteração de produto é aplicada por este ciclo.")
+    priorities.append("Expandir receitas de reparo somente quando houver falha reproduzível, teste de regressão e evidência de não regressão.")
 
     return {
         "schema_version": 1,
         "generated_at": generated_at or datetime.now(timezone.utc).isoformat(),
         "repository": REPO,
         "commit": os.environ.get("GITHUB_SHA", "local"),
-        "scope": "bounded read-only investigation; no external code execution, source edits, merge or deployment",
+        "scope": "public research plus bounded deterministic repair experiment; no external code execution, merge or production deployment",
         "local": local,
         **remote,
         "priorities": priorities,
@@ -237,8 +237,8 @@ def render_markdown(report: dict) -> str:
         lines += ["", "## Falhas de coleta", *[f"- {error}" for error in report["collection_errors"]]]
     lines += [
         "", "## Limites desta versão",
-        "- O agente observa sinais reais e publica um relatório auditável.",
-        "- Não executa código de terceiros, não altera código-fonte, não faz merge e não implanta.",
+        "- O agente observa sinais reais, pesquisa a web pública e publica evidências auditáveis.",
+        "- Pode aplicar apenas correções estáticas seguras do Ruff em branch isolada; exige testes e lint verdes. Não executa código de terceiros, não faz merge e não implanta.",
         "- Uma referência pública não é prova de qualidade; licença e segurança exigem revisão.",
         "- Uma falha de coleta é reportada como falha, nunca convertida em resultado inventado.",
     ]
