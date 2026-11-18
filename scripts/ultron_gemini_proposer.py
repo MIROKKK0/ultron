@@ -151,8 +151,21 @@ if __name__ == "__main__":
     except Exception as exc:
         evidence = Path.cwd() / "reports/autonomy/repair-evidence"
         evidence.mkdir(parents=True, exist_ok=True)
-        failure = {"candidate_ready": False, "decision": f"Gemini proposal failed: {type(exc).__name__}", "changed_files": []}
-        (evidence / "repair.json").write_text(json.dumps(failure, indent=2) + "\\n", encoding="utf-8")
-        (evidence / "repair.md").write_text("# Gemini repair proposal\\n\\n" + failure["decision"] + "\\n", encoding="utf-8")
+        # Record safe diagnostics without exposing credentials or response bodies.
+        failure = {
+            "candidate_ready": False,
+            "decision": f"Gemini proposal failed: {type(exc).__name__}",
+            "provider": os.getenv("ULTRON_PROVIDER", "gemini"),
+            "http_status": getattr(exc, "status_code", None),
+            "error_code": getattr(exc, "code", None),
+            "changed_files": [],
+        }
+        (evidence / "repair.json").write_text(
+            json.dumps(failure, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        (evidence / "repair.md").write_text(
+            "# Gemini repair proposal\n\n" + failure["decision"] + "\n",
+            encoding="utf-8",
+        )
         print(json.dumps(failure))
         raise SystemExit(0)
