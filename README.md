@@ -111,3 +111,18 @@ zero, com tokenizador byte-level e corpus autoral pequeno. Ele é separado do
 classificador de intenções de produção e ainda não está integrado ao chat.
 Consulte `training/generative/README.md`; o checkpoint resultante é experimental
 e não equivale a um modelo de linguagem grande.
+
+
+## Memória cognitiva local e agentes
+
+- `POST /v2/memory`: grava memória episódica, semântica ou procedural isolada por instalação.
+- `GET /v2/memory?query=...`: recupera registros com índice vetorial local e fallback lexical.
+- `POST /v2/memory/import`: importa até 500 mensagens user/assistant de uma exportação explícita do cliente; repetição é deduplicada por hash. A rota não lê o histórico global legado.
+- `POST /v2/memory/curate`: prepara uma proposta semântica ligada às memórias de origem.
+- `POST /v2/memory/curate/commit`: grava uma consolidação semântica solicitada, mantendo relações explícitas com as fontes.
+- `DELETE /v2/memory/{id}`: remove a memória e seus vetores/links.
+- `POST /brain/learn/evaluate`: compara candidato e baseline nos mesmos casos congelados e bloqueia regressões.
+
+O índice vetorial desta versão usa hashing esparso de palavras e n-gramas, sem serviço externo ou download de modelo. Ele melhora similaridade lexical e morfológica; não é um embedding neural nem compreensão semântica profunda. A interface permite substituir o encoder por um modelo local validado. O núcleo, a identidade, a memória e a avaliação continuam operando sem chaves de IA externas.
+
+Detalhes: [docs/MEMORY_AGENTS_LEARNING_V2.md](docs/MEMORY_AGENTS_LEARNING_V2.md).
