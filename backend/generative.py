@@ -42,8 +42,13 @@ def generate_reply(message: str, history: list[dict[str, str]] | None = None) ->
         raise RuntimeError("O modelo generativo não está configurado.")
     messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     for item in (history or [])[-8:]:
-        role = item.get("role")
-        content = item.get("content", "")
+        if isinstance(item, dict):
+            role, content = item.get("role"), item.get("content", "")
+        elif isinstance(item, str) and ":" in item:
+            role, content = item.split(":", 1)
+            role = role.strip()
+        else:
+            continue
         if role in ("user", "assistant") and isinstance(content, str) and content.strip():
             messages.append({"role": role, "content": content[:4000]})
     messages.append({"role": "user", "content": message[:8000]})
