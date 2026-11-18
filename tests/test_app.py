@@ -300,9 +300,13 @@ class UltronTests(unittest.TestCase):
         self.assertNotIn("content", payload)
 
     def test_public_remember_command_never_writes_shared_memory(self):
-        before = client.get("/memory", headers=AUTH).json()["items"]
+        client.post("/installations/register", json={
+            "installation_id": INSTALL_A["X-ULTRON-Installation-ID"],
+            "installation_token": INSTALL_A["X-ULTRON-Installation-Token"],
+        })
+        before = client.get("/memory", headers=INSTALL_A).json()["items"]
         response = client.post("/chat", json={"message": "/remember segredo de teste"})
-        after = client.get("/memory", headers=AUTH).json()["items"]
+        after = client.get("/memory", headers=INSTALL_A).json()["items"]
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(after), len(before))
         self.assertIn("autenticação", response.json()["reply"].lower())
