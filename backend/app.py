@@ -22,6 +22,7 @@ from backend.cognitive_workspace import CognitiveWorkspace
 from backend.evidence_critic import review_evidence
 from backend.hierarchical_planner import plan_hierarchical
 from backend.tool_runtime import ToolRegistry, ToolSpec
+from backend.agent_evaluation import evaluate_agent_cycle, evaluate_search_result
 from backend.generative import generate_reply, model_config
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
@@ -427,9 +428,13 @@ def execute_brain_cycle(
         }
         for role in roles
     ]
+    if research is not None:
+        research["quality_evaluation"] = evaluate_search_result(research_query or normalized_goal, research)
     synthesis = research["summary"] if research and research.get("count", 0) else answer
     if research and not research.get("count", 0):
         synthesis += "\\n\\nA pesquisa não retornou fontes verificáveis."
+    cycle_payload = {"agents": agents, "research": research, "review": critique}
+    cycle_evaluation = evaluate_agent_cycle(cycle_payload)
     return {
         "brain_version": "4.0.0-local-tools",
         "strategy_priorities": scores,
@@ -439,6 +444,7 @@ def execute_brain_cycle(
         "research": research,
         "review": critique,
         "cognitive_workspace": workspace.snapshot(),
+        "cycle_evaluation": cycle_evaluation,
         "synthesis": synthesis,
         "synthesis_status": "completed",
         "execution_policy": (
