@@ -17,7 +17,7 @@ class ProviderConfig:
         name = os.getenv("ULTRON_PROVIDER", "gemini").strip().lower()
         settings = {
             "gemini": ("GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_BASE_URL",
-                       "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta/openai/"),
+                       "gemini-3.8-flash", "https://generativelanguage.googleapis.com/v1beta/openai/"),
             "openai": ("OPENAI_API_KEY", "ULTRON_MODEL", "OPENAI_BASE_URL",
                        "gpt-4o-mini", "https://api.openai.com/v1"),
             "openrouter": ("OPENROUTER_API_KEY", "OPENROUTER_MODEL", "OPENROUTER_BASE_URL",
