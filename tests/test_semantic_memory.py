@@ -5,6 +5,12 @@ from backend.semantic_memory import cosine_similarity, rank_semantic
 
 
 class SemanticMemoryTests(unittest.TestCase):
+    def test_embedding_is_disabled_without_explicit_privacy_opt_in(self):
+        from unittest.mock import patch
+        from backend.semantic_memory import embed_text
+        with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}, clear=True):
+            self.assertIsNone(embed_text("memória privada"))
+
     def test_cosine_similarity_is_one_for_same_vector(self):
         self.assertAlmostEqual(cosine_similarity([1.0, 0.0], [1.0, 0.0]), 1.0)
 
