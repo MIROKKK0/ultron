@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import ast
 import hmac
+import hashlib
+import secrets
+import time
 import json
 import operator
 import os
@@ -19,6 +22,11 @@ from pydantic import BaseModel, Field
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_multitask
 from backend.cognitive_workspace import CognitiveWorkspace
+from backend.memory_system import MemoryStore
+from backend.evidence_critic import review_evidence
+from backend.hierarchical_planner import plan_hierarchical
+from backend.tool_runtime import ToolRegistry, ToolSpec
+from backend.agent_evaluation import evaluate_agent_cycle, evaluate_search_result
 from backend.generative import generate_reply, model_config
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
@@ -54,6 +62,19 @@ def require_api_token(authorization: str | None = Header(default=None)) -> bool:
     if scheme.lower() != "bearer" or not hmac.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="Token de acesso inválido.")
     return True
+
+
+def require_installation(x_installation_id: str | None = Header(default=None),
+                          x_installation_token: str | None = Header(default=None)) -> str:
+    if not x_installation_id or not x_installation_token:
+        raise HTTPException(status_code=401, detail="Identidade da instalação ausente.")
+    supplied_hash = hashlib.sha256(x_installation_token.encode("utf-8")).hexdigest()
+    with connect_db() as db:
+        row = execute(db, "SELECT token_hash FROM installations WHERE installation_id=? AND revoked_at IS NULL",
+                      (x_installation_id,)).fetchone()
+    if not row or not hmac.compare_digest(str(row["token_hash"]), supplied_hash):
+        raise HTTPException(status_code=401, detail="Credencial da instalação inválida.")
+    return x_installation_id
 
 
 def connect_db():
@@ -108,6 +129,15 @@ def init_db() -> None:
                 state_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS installations (
+                installation_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, created_at TEXT NOT NULL,
+                revoked_at TEXT
+            )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS agent_evaluations (
+                id BIGSERIAL PRIMARY KEY, installation_id TEXT NOT NULL, category TEXT NOT NULL,
+                score DOUBLE PRECISION NOT NULL, passed INTEGER NOT NULL, metrics_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )""")
         else:
             execute(db, """
                 CREATE TABLE IF NOT EXISTS memories (
@@ -136,6 +166,15 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 state_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL
+            )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS installations (
+                installation_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, created_at TEXT NOT NULL,
+                revoked_at TEXT
+            )""")
+            execute(db, """CREATE TABLE IF NOT EXISTS agent_evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, installation_id TEXT NOT NULL, category TEXT NOT NULL,
+                score REAL NOT NULL, passed INTEGER NOT NULL, metrics_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
             )""")
 
 
@@ -175,6 +214,17 @@ class ChatRequest(BaseModel):
 
 class MemoryRequest(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
+
+
+class TypedMemoryRequest(BaseModel):
+    kind: Literal["episodic", "semantic", "procedural"]
+    content: str = Field(min_length=1, max_length=4000)
+    source: str = Field(default="user_explicit", max_length=300)
+    confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+
+class InstallationRequest(BaseModel):
+    installation_id: str = Field(min_length=16, max_length=128)
+
 
 
 class ReviewRequest(BaseModel):
@@ -317,6 +367,7 @@ def execute_brain_cycle(
     history: list[str] | None = None,
     *,
     include_private_memories: bool = True,
+    installation_id: str | None = None,
 ) -> dict[str, Any]:
     """Run real local planner/solver/critic tools; research intents use web search.
 
@@ -326,7 +377,13 @@ def execute_brain_cycle(
     if not normalized_goal:
         raise ValueError("Informe o objetivo.")
 
-    if include_private_memories:
+    if include_private_memories and installation_id:
+        with connect_db() as db:
+            store = MemoryStore(db)
+            store.initialize()
+            typed = store.retrieve(installation_id, normalized_goal, limit=8)
+        memories = [str(item["content"]) for item in typed]
+    elif include_private_memories:
         with connect_db() as db:
             rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
         memories = rank_memories(normalized_goal, rows, limit=8)
@@ -342,6 +399,8 @@ def execute_brain_cycle(
     for memory in memories[:5]:
         workspace.publish("memory", memory, source="retrieved_memory", confidence=0.65, priority=0.7)
     plan = plan_task(normalized_goal)
+    hierarchy = plan_hierarchical(normalized_goal)
+    plan["hierarchy"] = hierarchy
     workspace.publish("plan", json.dumps(plan, ensure_ascii=False), source="planner", confidence=0.9, priority=0.9)
     attended_context = [
         f"{entry.kind}: {entry.content}"
@@ -374,7 +433,17 @@ def execute_brain_cycle(
     research: dict[str, Any] | None = None
     if research_query:
         try:
-            research = search_web(research_query)
+            tool_registry = ToolRegistry()
+            tool_registry.register(ToolSpec("web_search", lambda query: search_web(query), idempotent=True, max_retries=1))
+            tool_execution = tool_registry.execute("web_search", query=research_query)
+            if tool_execution["status"] != "completed":
+                raise RuntimeError("A ferramenta de pesquisa não concluiu.")
+            research = tool_execution["observation"]
+            research["tool_execution"] = {
+                "tool": tool_execution["tool"],
+                "attempts": tool_execution["attempts"],
+                "recovered": tool_execution["recovered"],
+            }
             workspace.publish(
                 "research", research.get("summary", "Pesquisa sem resumo"),
                 source="web_research", confidence=0.75 if research.get("count", 0) else 0.2,
@@ -392,6 +461,13 @@ def execute_brain_cycle(
                 "result": {"error": "Pesquisa web indisponível no momento."},
             }
 
+    evidence_items = (research or {}).get("results", []) if isinstance(research, dict) else []
+    evidence_review = review_evidence(normalized_goal, answer, evidence_items)
+    critique["evidence_review"] = evidence_review
+    critique["needs_human_or_source_check"] = evidence_review["needs_human_or_source_check"]
+    workspace.publish("evidence_review", json.dumps(evidence_review, ensure_ascii=False),
+                      source="evidence_critic", confidence=0.8, priority=0.9)
+
     roles = sorted(
         outputs,
         key=lambda role: float(scores.get(role, 0.0)),
@@ -405,9 +481,13 @@ def execute_brain_cycle(
         }
         for role in roles
     ]
+    if research is not None:
+        research["quality_evaluation"] = evaluate_search_result(research_query or normalized_goal, research)
     synthesis = research["summary"] if research and research.get("count", 0) else answer
     if research and not research.get("count", 0):
         synthesis += "\\n\\nA pesquisa não retornou fontes verificáveis."
+    cycle_payload = {"agents": agents, "research": research, "review": critique}
+    cycle_evaluation = evaluate_agent_cycle(cycle_payload)
     return {
         "brain_version": "4.0.0-local-tools",
         "strategy_priorities": scores,
@@ -417,6 +497,7 @@ def execute_brain_cycle(
         "research": research,
         "review": critique,
         "cognitive_workspace": workspace.snapshot(),
+        "cycle_evaluation": cycle_evaluation,
         "synthesis": synthesis,
         "synthesis_status": "completed",
         "execution_policy": (
@@ -462,6 +543,40 @@ def brain_status(request: Request) -> dict[str, Any]:
         "memory_enabled": True,
         "autonomous_production_changes": False,
     }
+
+@app.post("/v2/brain/run")
+def installation_brain_run(payload: BrainRequest, installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    """Run the cognitive cycle using only this installation's typed memories."""
+    try:
+        result = execute_brain_cycle(payload.goal.strip(), include_private_memories=True,
+                                     installation_id=installation_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    evaluation = result.get("cycle_evaluation", {})
+    metrics = {
+        "cycle_score": float(evaluation.get("score", 0.0)),
+        "stage_count": int(evaluation.get("stage_count", 0)),
+        "checks": {key: bool(value) for key, value in evaluation.get("checks", {}).items()},
+        "research_result_count": int((result.get("research") or {}).get("count", 0)),
+    }
+    with connect_db() as db:
+        execute(db, "INSERT INTO agent_evaluations(installation_id,category,score,passed,metrics_json,created_at) VALUES(?,?,?,?,?,?)",
+                (installation_id, "brain_cycle", metrics["cycle_score"], int(bool(evaluation.get("passed"))),
+                 json.dumps(metrics, separators=(",", ":"), sort_keys=True),
+                 datetime.now(timezone.utc).isoformat()))
+    result["evaluation_persisted"] = True
+    result["evaluation_privacy"] = "metrics_only_no_prompt_or_response_content"
+    return result
+
+
+@app.get("/v2/evaluations")
+def installation_evaluations(installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    with connect_db() as db:
+        rows = execute(db, "SELECT category,score,passed,metrics_json,created_at FROM agent_evaluations WHERE installation_id=? ORDER BY id DESC LIMIT 50",
+                       (installation_id,)).fetchall()
+    return {"items": [{**dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows],
+            "scope": "authenticated_installation", "stored_content": False}
+
 
 @app.post("/brain/run", dependencies=[Depends(require_api_token)])
 def brain_run(payload: BrainRequest) -> dict[str, Any]:
@@ -700,6 +815,67 @@ def runtime_status(request: Request) -> dict[str, Any]:
         "generative_provider": model_config()["provider"],
         "external_ai_providers": model_config()["configured"],
     }
+
+
+@app.post("/installations/register", dependencies=[Depends(require_api_token)])
+def register_installation(payload: InstallationRequest) -> dict[str, Any]:
+    """Provision a per-installation credential; only an administrator can mint it."""
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    now = datetime.now(timezone.utc).isoformat()
+    with connect_db() as db:
+        existing = execute(db, "SELECT installation_id FROM installations WHERE installation_id=?",
+                           (payload.installation_id,)).fetchone()
+        if existing:
+            raise HTTPException(status_code=409, detail="Instalação já registrada; revogue e registre novamente.")
+        execute(db, "INSERT INTO installations(installation_id,token_hash,created_at,revoked_at) VALUES(?,?,?,NULL)",
+                (payload.installation_id, token_hash, now))
+    return {"installation_id": payload.installation_id, "installation_token": token,
+            "warning": "Guarde o token no Keychain do iOS; ele não será exibido novamente."}
+
+
+@app.delete("/installations/{installation_id}", dependencies=[Depends(require_api_token)])
+def revoke_installation(installation_id: str) -> dict[str, bool]:
+    with connect_db() as db:
+        cursor = execute(db, "UPDATE installations SET revoked_at=? WHERE installation_id=? AND revoked_at IS NULL",
+                         (datetime.now(timezone.utc).isoformat(), installation_id))
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Instalação não encontrada ou já revogada.")
+    return {"revoked": True}
+
+
+@app.post("/v2/memory")
+def add_typed_memory(payload: TypedMemoryRequest, installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    with connect_db() as db:
+        store = MemoryStore(db)
+        store.initialize()
+        memory_id = store.add(installation_id, payload.kind, payload.content, payload.source, payload.confidence)
+    return {"id": memory_id, "kind": payload.kind, "stored": True}
+
+
+@app.get("/v2/memory")
+def get_typed_memories(kind: Literal["episodic", "semantic", "procedural"] | None = None,
+                       query: str = "", installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    with connect_db() as db:
+        store = MemoryStore(db)
+        store.initialize()
+        items = store.retrieve(installation_id, query, kind=kind, limit=20) if query else []
+        if not query:
+            rows = execute(db, "SELECT id,kind,content,source,confidence,created_at,last_accessed_at,access_count FROM cognitive_memories WHERE owner_id=? AND (? IS NULL OR kind=?) ORDER BY id DESC LIMIT 20",
+                           (installation_id, kind, kind)).fetchall()
+            items = [dict(row) for row in rows]
+    return {"items": items, "scope": "authenticated_installation"}
+
+
+@app.delete("/v2/memory/{memory_id}")
+def delete_typed_memory(memory_id: int, installation_id: str = Depends(require_installation)) -> dict[str, bool]:
+    with connect_db() as db:
+        store = MemoryStore(db)
+        store.initialize()
+        deleted = store.forget(installation_id, memory_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Memória não encontrada.")
+    return {"deleted": True}
 
 
 @app.post("/memory", dependencies=[Depends(require_api_token)])

@@ -89,6 +89,18 @@ class WebResearchTests(unittest.TestCase):
         self.assertEqual(item["published_at"], "2026-11-17")
         self.assertEqual(item["source_verification"], "url_validated_content_not_independently_verified")
 
+    def test_off_topic_results_are_rejected_even_when_domain_has_source_prior(self):
+        raw = [
+            {"title": "ESPN fantasy basketball draft picks", "href": "https://www.reddit.com/r/fantasybball/example",
+             "body": "Import pre-draft order and keeper league strategy"},
+            {"title": "Python 3.12 documentation", "href": "https://docs.python.org/3.12/",
+             "body": "Official Python language documentation and release notes"},
+        ]
+        result = search_web("documentação oficial do Python 3.12", searcher=lambda *a, **k: raw)
+        self.assertEqual(result["count"], 1)
+        self.assertIn("docs.python.org", result["results"][0]["url"])
+        self.assertNotIn("reddit.com", str(result["results"]))
+
     def test_empty_query_is_rejected(self):
         with self.assertRaises(ValueError):
             search_web("   ")

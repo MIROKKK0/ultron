@@ -1,0 +1,15 @@
+{
+  "benchmark": "ultron-agent-ptbr-v1",
+  "score": 1,
+  "passed": true,
+  "checks": {
+    "hierarchical_dependencies": true,
+    "scenario_simulation": true,
+    "critic_flags_unverified_claims": true,
+    "search_rejects_off_topic": true,
+    "tool_observation": true,
+    "no_unsafe_retry": true,
+    "promotion_gate": true
+  },
+  "privacy": "no prompts, responses, identifiers or personal content recorded"
+}
