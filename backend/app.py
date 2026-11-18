@@ -858,7 +858,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
             try:
                 brain_result = execute_brain_cycle(
                     goal,
-                    include_private_memories=True,
+                    include_private_memories=bool(tenant),
                     installation_id=installation_id,
                 )
                 response = brain_result["synthesis"]
@@ -876,7 +876,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
             response = "Não consegui interpretar essa conta com segurança. Envie apenas a expressão matemática."
     elif message.casefold().startswith("/remember ") or re.match(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", message, re.I):
         if not tenant:
-            response = "Para guardar memória privada, atualize o aplicativo para registrar esta instalação com segurança."
+            response = "A autenticação por instalação é necessária. Atualize o aplicativo para registrar esta instalação com segurança."
         else:
             content = message[10:].strip() if message.casefold().startswith("/remember ") else re.sub(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", "", message, flags=re.I).strip()
             try:
