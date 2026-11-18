@@ -165,7 +165,7 @@ class UltronTests(unittest.TestCase):
                     "/brain/run", json={"goal": "Planejar uma melhoria"}, headers=AUTH
                 )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["agents"]), 3)
+        self.assertEqual(len(response.json()["agents"]), 4)
         self.assertEqual(response.json()["synthesis"], "perspectiva")
 
 
@@ -205,6 +205,7 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(payload["review"]["checks"]["has_answer"], True)
         self.assertEqual(payload["synthesis"], fixture["summary"])
         self.assertIn("researcher", [item["role"] for item in payload["agents"]])
+        self.assertIn("transformer", [item["role"] for item in payload["agents"]])
         researcher = next(item for item in payload["agents"] if item["role"] == "researcher")
         self.assertEqual(researcher["status"], "completed")
         search.assert_called_once_with("FlyWire connectome")
@@ -221,7 +222,7 @@ class UltronTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["synthesis"], "Resposta local")
         self.assertEqual(next(item for item in payload["agents"] if item["role"] == "researcher")["status"], "failed")
-        self.assertEqual(len(payload["agents"]), 4)
+        self.assertEqual(len(payload["agents"]), 5)
 
     def test_research_endpoint_returns_source_linked_results(self):
         fixture = {"query": "memória de agentes", "count": 1, "results": [{"title": "Paper", "url": "https://example.org/paper", "snippet": "Resumo"}], "summary": "Fontes"}
