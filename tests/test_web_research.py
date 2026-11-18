@@ -93,6 +93,26 @@ class WebResearchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             search_web("   ")
 
+    def test_general_search_falls_back_to_all_engines(self):
+        calls = []
+
+        def flaky_search(query, **kwargs):
+            calls.append(kwargs.get("backend"))
+            if kwargs.get("backend") == "auto":
+                raise RuntimeError("temporary provider failure")
+            if kwargs.get("backend") == "bing,duckduckgo,yahoo,startpage":
+                return []
+            return [{
+                "title": "Documentação oficial do Python",
+                "href": "https://docs.python.org/3/",
+                "body": "Documentação da linguagem Python.",
+            }]
+
+        result = search_web("documentação Python", searcher=flaky_search)
+        self.assertEqual(calls, ["auto", "bing,duckduckgo,yahoo,startpage", "all"])
+        self.assertEqual(result["count"], 1)
+        self.assertIn("docs.python.org", result["results"][0]["url"])
+
 
 if __name__ == "__main__":
     unittest.main()
