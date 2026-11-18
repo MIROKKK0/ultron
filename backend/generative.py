@@ -35,7 +35,7 @@ def model_config() -> dict[str, Any]:
     }
 
 
-def generate_reply(message: str, history: list[dict[str, str]] | None = None, memories: list[str] | None = None) -> str:
+def generate_reply_with_usage(message: str, history: list[dict[str, str]] | None = None, memories: list[str] | None = None) -> tuple[str, dict[str, int | None]]:
     """Generate a grounded conversational answer; secrets remain environment-only."""
     config = model_config()
     if not config["configured"]:
@@ -82,4 +82,16 @@ def generate_reply(message: str, history: list[dict[str, str]] | None = None, me
     answer = str(content or "").strip()
     if not answer:
         raise RuntimeError("O provedor retornou uma resposta vazia.")
-    return answer[:12000]
+    usage = payload.get("usage") or {}
+    prompt_tokens = usage.get("prompt_tokens", usage.get("input_tokens"))
+    completion_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
+    return answer[:12000], {
+        "input_tokens": int(prompt_tokens) if isinstance(prompt_tokens, (int, float)) else None,
+        "output_tokens": int(completion_tokens) if isinstance(completion_tokens, (int, float)) else None,
+    }
+
+
+def generate_reply(message: str, history: list[dict[str, str]] | None = None, memories: list[str] | None = None) -> str:
+    """Compatibility wrapper returning only generated text."""
+    answer, _usage = generate_reply_with_usage(message, history, memories)
+    return answer
