@@ -92,6 +92,24 @@ class LocalVectorIndex:
         self._execute("DELETE FROM cognitive_memory_vectors WHERE owner_id=? AND memory_id=?",
                       (owner_id, int(memory_id)))
 
+    def index_missing(self, owner_id: str, *, limit: int = 5000) -> int:
+        if not 1 <= int(limit) <= 10000:
+            raise ValueError("limit deve ficar entre 1 e 10000.")
+        rows = self._execute("""SELECT m.id,m.content FROM cognitive_memories m
+            LEFT JOIN cognitive_memory_vectors v
+              ON v.owner_id=m.owner_id AND v.memory_id=m.id
+            WHERE m.owner_id=? AND v.memory_id IS NULL
+            ORDER BY m.id LIMIT ?""", (owner_id, int(limit))).fetchall()
+        indexed = 0
+        for row in rows:
+            item = dict(row) if not isinstance(row, dict) else row
+            try:
+                self.upsert(owner_id, int(item["id"]), str(item["content"]))
+                indexed += 1
+            except ValueError:
+                continue
+        return indexed
+
     def search(self, owner_id: str, query: str, *, kind: str | None = None, limit: int = 8) -> list[dict]:
         if not 1 <= int(limit) <= 50:
             raise ValueError("limit deve ficar entre 1 e 50.")
