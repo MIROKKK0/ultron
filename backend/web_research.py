@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Callable
 from typing import Any
 from urllib.parse import urlparse
@@ -12,16 +13,20 @@ VIDEO_TERMS = re.compile(
 )
 STOP_WORDS = {
     "para", "com", "sem", "sobre", "mais", "melhor", "video", "videos",
-    "youtube", "vídeo", "vídeos", "vídeo", "quero", "procure", "pesquise", "encontre", "mostre",
+    "youtube", "vídeo", "vídeos", "quero", "procure", "pesquise", "encontre", "mostre",
     "por", "uma", "uns", "dos", "das", "que", "de", "do", "da", "no", "na", "em", "e", "um", "the", "and", "for",
 }
 
 
 def _terms(value: str) -> set[str]:
+    # Normalize accents so "vídeo", "videos" and provider title variants
+    # compare consistently without treating generic intent words as topics.
+    normalized = unicodedata.normalize("NFKD", value.casefold())
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
     return {
-        token.casefold()
-        for token in re.findall(r"[a-zà-ÿ0-9]{2,}", value)
-        if token.casefold() not in STOP_WORDS
+        token
+        for token in re.findall(r"[a-z0-9]{2,}", normalized)
+        if token not in STOP_WORDS
     }
 
 
