@@ -3,14 +3,20 @@ name: ULTRON autonomous investigator and repair experiment
 on:
   workflow_dispatch:
   push:
-    branches: ["feat/ultron-autonomous-investigator-main"]
+    branches: ["main", "feat/ultron-autonomous-investigator-main"]
     paths:
       - "scripts/ultron_autonomous_agent.py"
       - "scripts/ultron_repair_engine.py"
       - "tests/**"
       - ".github/workflows/ultron-autonomous-investigator.yml"
+  issues:
+    types: [opened, reopened, labeled]
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [opened, reopened, synchronize]
   schedule:
-    # Four bounded cycles per day; GitHub schedule is best-effort.
+    # Six-hour heartbeat; GitHub schedule is best-effort.
     - cron: "23 */6 * * *"
 
 permissions:
