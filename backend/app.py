@@ -320,7 +320,12 @@ def synthesize_research_with_status(query: str, research: dict[str, Any]) -> tup
             source_lines.append(f"{index}. [{title}]({url}){extra}")
     if source_lines:
         synthesis += "\n\nFontes consultadas (links originais da busca):\n" + "\n".join(source_lines)
-    return synthesis[:12000]
+    return synthesis[:12000], synthesis_status
+
+
+def synthesize_research(query: str, research: dict[str, Any]) -> str:
+    """Backward-compatible text-only wrapper for chat responses."""
+    return synthesize_research_with_status(query, research)[0]
 
 
 def learned_strategy_scores() -> dict[str, float]:
