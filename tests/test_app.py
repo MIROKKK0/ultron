@@ -131,6 +131,48 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(response.json()["strategy"], {"planner", "solver", "critic"})
 
+    def test_installation_memory_is_isolated_and_requires_installation_token(self):
+        headers = {**AUTH}
+        first_id = "install-test-alpha-0001"
+        second_id = "install-test-beta-0002"
+        first = client.post("/installations/register", json={"installation_id": first_id}, headers=headers)
+        second = client.post("/installations/register", json={"installation_id": second_id}, headers=headers)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        first_auth = {"X-Installation-ID": first_id, "X-Installation-Token": first.json()["installation_token"]}
+        second_auth = {"X-Installation-ID": second_id, "X-Installation-Token": second.json()["installation_token"]}
+        saved = client.post("/v2/memory", json={"kind": "episodic", "content": "reunião do projeto alpha"}, headers=first_auth)
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(client.get("/v2/memory", headers=second_auth).json()["items"], [])
+        self.assertEqual(client.get("/v2/memory", headers=first_auth).json()["items"][0]["content"], "reunião do projeto alpha")
+        denied = client.get("/v2/memory", headers={"X-Installation-ID": first_id})
+        self.assertEqual(denied.status_code, 401)
+
+    def test_installation_brain_cycle_persists_metrics_without_prompt_or_answer(self):
+        installation_id = "install-test-eval-0003"
+        registered = client.post("/installations/register", json={"installation_id": installation_id}, headers=AUTH)
+        auth = {"X-Installation-ID": installation_id, "X-Installation-Token": registered.json()["installation_token"]}
+        fixture = {"brain_version": "test", "cycle_evaluation": {"score": .9, "passed": True,
+                   "stage_count": 3, "checks": {"planner_ran": True}},
+                   "research": {"count": 2}, "synthesis": "PRIVATE ANSWER SHOULD NOT BE STORED"}
+        with patch("backend.app.execute_brain_cycle", return_value=fixture):
+            response = client.post("/v2/brain/run", json={"goal": "PRIVATE PROMPT SHOULD NOT BE STORED"}, headers=auth)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["evaluation_persisted"])
+        report = client.get("/v2/evaluations", headers=auth).json()
+        self.assertEqual(len(report["items"]), 1)
+        serialized = str(report)
+        self.assertNotIn("PRIVATE PROMPT", serialized)
+        self.assertNotIn("PRIVATE ANSWER", serialized)
+
+    def test_installation_credentials_can_be_revoked(self):
+        installation_id = "install-test-revoke-0004"
+        registered = client.post("/installations/register", json={"installation_id": installation_id}, headers=AUTH)
+        auth = {"X-Installation-ID": installation_id, "X-Installation-Token": registered.json()["installation_token"]}
+        revoked = client.delete(f"/installations/{installation_id}", headers=AUTH)
+        self.assertEqual(revoked.status_code, 200)
+        self.assertEqual(client.get("/v2/memory", headers=auth).status_code, 401)
+
     def test_reward_learning_and_recall_endpoints_are_protected_and_functional(self):
         learned = client.post(
             "/brain/learn",
