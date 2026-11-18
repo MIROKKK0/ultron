@@ -11,7 +11,7 @@ import re
 import sys
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 API = "https://api.github.com"
@@ -86,7 +86,12 @@ def collect_github_signals() -> dict:
                 }
                 # Re-run at most one recent failed run once to test reproducibility.
                 # Never re-run this investigator itself or a run already retried.
-                if (len(reproduction_attempts) == 0
+                try:
+                    run_time = datetime.fromisoformat((run.get("created_at") or "").replace("Z", "+00:00"))
+                    is_recent = datetime.now(timezone.utc) - run_time <= timedelta(days=7)
+                except ValueError:
+                    is_recent = False
+                if (len(reproduction_attempts) == 0 and is_recent
                     and run.get("name") != "ULTRON autonomous investigator and repair experiment"
                     and int(run.get("run_attempt") or 1) == 1
                     and run.get("id")):
