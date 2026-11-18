@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-18T04:01:26.920852+00:00",
+  "repository": "MIROKKK0/ultron",
+  "commit": "6288853e6273699d1cba58c1eaaa45967951795d",
+  "scope": "public research plus bounded deterministic repair experiment; no external code execution, merge or production deployment",
+  "local": {
+    "files_scanned": 12,
+    "maintenance_markers": []
+  },
+  "recent_failures": [
+    {
+      "name": "ULTRON CI",
+      "branch": "ultron/autonomy-findings",
+      "sha": "969f494c8207",
+      "created_at": "2026-11-18T03:49:45Z",
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44233118249",
+      "run_id": 44233118249,
+      "run_attempt": 1,
+      "workflow_name": "ULTRON CI",
+      "failed_jobs": []
+    }
+  ],
+  "open_issues": [
+    {
+      "number": 55,
+      "title": "[ULTRON] Relatório autônomo de investigação",
+      "url": "https://github.com/MIROKKK0/ultron/issues/55"
+    }
+  ],
+  "research_leads": [
+    {
+      "name": "DeanYang1204/makefun-news-image-20261117",
+      "description": "One image summing up Tuesday 17 November 2026 world news: markets plunge, Hormuz tanker attack, Kyiv bridges hit, US-Russia-China summit set. Built by an AI agent for make.fun's news-image bounty, $250 in USDC.",
+      "url": "https://github.com/DeanYang1204/makefun-news-image-20261117",
+      "updated_at": "2026-11-18T04:01:18Z",
+      "license": "MIT"
+    },
+    {
+      "name": "charleschen246/DBT_Stream_Projects",
+      "description": "dbt project modeling Netflix, Prime Video, Disney+ and Hulu catalogs: staging → intermediate → star schema, reconciliation tests, dbt Semantic Layer, CI",
+      "url": "https://github.com/charleschen246/DBT_Stream_Projects",
+      "updated_at": "2026-11-18T03:14:27Z",
+      "license": null
+    },
+    {
+      "name": "ult666666/saas-analytics-warehouse",
+      "description": "Analytics engineering for a fictional SaaS company: seeded data generator, tested dbt + DuckDB warehouse (MRR movements, cohort retention, unit economics) and a reproducible report.",
+      "url": "https://github.com/ult666666/saas-analytics-warehouse",
+      "updated_at": "2026-11-05T16:42:09Z",
+      "license": "MIT"
+    },
+    {
+      "name": "imatixofficel/Scanner-matix",
+      "description": "🔍 Clean Cloudflare IPs, tested every 10 minutes. Real speed. Real results. No duplicates. No fake data. Just fast IPs for your VLESS configs.",
+      "url": "https://github.com/imatixofficel/Scanner-matix",
+      "updated_at": "2026-11-14T14:17:36Z",
+      "license": null
+    }
+  ],
+  "web_research": [],
+  "reproduction_attempts": [
+    {
+      "run_id": 44233118249,
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44233118249",
+      "attempt": {
+        "status": "error",
+        "result": "HTTPError: HTTP Error 403: Forbidden"
+      }
+    }
+  ],
+  "collection_errors": [
+    "web_research: DDGSException: No results found."
+  ],
+  "priorities": [
+    "Reproduzir a falha mais recente em runner limpo; identificar job/step e registrar o teste que falha antes de editar.",
+    "Agrupar issues abertas por componente e evitar criar tarefas duplicadas.",
+    "Revisar manualmente relevância, licença, segurança e data das referências públicas antes de adotar qualquer técnica.",
+    "Expandir receitas de reparo somente quando houver falha reproduzível, teste de regressão e evidência de não regressão."
+  ]
+}

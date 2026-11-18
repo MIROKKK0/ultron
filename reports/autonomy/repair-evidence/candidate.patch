@@ -1,0 +1,158 @@
+diff --git a/scripts/ultron_autonomous_agent.py b/scripts/ultron_autonomous_agent.py
+index b24f93b..2a48e4a 100644
+--- a/scripts/ultron_autonomous_agent.py
++++ b/scripts/ultron_autonomous_agent.py
+@@ -11,7 +11,7 @@ import re
+ import sys
+ import urllib.parse
+ import urllib.request
+-from datetime import datetime, timedelta, timezone
++from datetime import UTC, datetime, timedelta
+ from pathlib import Path
+ 
+ API = "https://api.github.com"
+@@ -58,7 +58,7 @@ def collect_repository_signals(root: Path) -> dict:
+         except OSError:
+             continue
+         for number, line in enumerate(lines, 1):
+-            match = re.search(r"\b(TODO|FIXME|HACK|XXX)\b", line, re.I)
++            match = re.search(r"\b(TODO|FIXME|HACK|XXX)\b", line, re.IGNORECASE)
+             if match:
+                 markers.append({
+                     "file": rel, "line": number, "marker": match.group(1).upper(),
+@@ -88,7 +88,7 @@ def collect_github_signals() -> dict:
+                 # Never re-run this investigator itself or a run already retried.
+                 try:
+                     run_time = datetime.fromisoformat((run.get("created_at") or "").replace("Z", "+00:00"))
+-                    is_recent = datetime.now(timezone.utc) - run_time <= timedelta(days=7)
++                    is_recent = datetime.now(UTC) - run_time <= timedelta(days=7)
+                 except ValueError:
+                     is_recent = False
+                 if (len(reproduction_attempts) == 0 and is_recent
+@@ -193,7 +193,7 @@ def build_report(root: Path, generated_at: str | None = None) -> dict:
+ 
+     return {
+         "schema_version": 1,
+-        "generated_at": generated_at or datetime.now(timezone.utc).isoformat(),
++        "generated_at": generated_at or datetime.now(UTC).isoformat(),
+         "repository": REPO,
+         "commit": os.environ.get("GITHUB_SHA", "local"),
+         "scope": "public research plus bounded deterministic repair experiment; no external code execution, merge or production deployment",
+diff --git a/scripts/ultron_repair_engine.py b/scripts/ultron_repair_engine.py
+index dc8ca20..25f875c 100644
+--- a/scripts/ultron_repair_engine.py
++++ b/scripts/ultron_repair_engine.py
+@@ -10,7 +10,7 @@ import json
+ import os
+ import subprocess
+ import sys
+-from datetime import datetime, timezone
++from datetime import UTC, datetime
+ from pathlib import Path
+ 
+ MAX_FILES = int(os.environ.get("ULTRON_MAX_REPAIR_FILES", "10"))
+@@ -70,7 +70,7 @@ def main() -> int:
+     file_count, line_count = diff_stats()
+ 
+     report = {
+-        "generated_at": datetime.now(timezone.utc).isoformat(),
++        "generated_at": datetime.now(UTC).isoformat(),
+         "repair_type": "ruff_safe_fixes_only",
+         "baseline_tests": baseline,
+         "repair_tool": ruff,
+diff --git a/tests/test_autonomous_agent_report.py b/tests/test_autonomous_agent_report.py
+index 996edd8..251bc04 100644
+--- a/tests/test_autonomous_agent_report.py
++++ b/tests/test_autonomous_agent_report.py
+@@ -1,6 +1,4 @@
+-import tempfile
+ import unittest
+-from pathlib import Path
+ 
+ from scripts.ultron_autonomous_agent import render_markdown
+ 
+diff --git a/ultron.py b/ultron.py
+index 1e4b8d1..0af2e55 100644
+--- a/ultron.py
++++ b/ultron.py
+@@ -5,15 +5,14 @@ Estilo ChatGPT com memória persistente, ferramentas, auto-aperfeiçoamento e in
+ absolute olliE.
+ """
+ 
+-import os
+ import json
++import os
+ import sqlite3
+ from datetime import datetime
+-from typing import List, Dict, Any, Optional
+ from pathlib import Path
+ 
+-from openai import OpenAI
+ from dotenv import load_dotenv
++from openai import OpenAI
+ 
+ load_dotenv()
+ 
+@@ -75,7 +74,7 @@ class MemoryManager:
+             )
+             conn.commit()
+ 
+-    def get_recent_messages(self, limit: int = 20) -> List[Dict]:
++    def get_recent_messages(self, limit: int = 20) -> list[dict]:
+         with sqlite3.connect(self.db_path) as conn:
+             cursor = conn.execute(
+                 "SELECT role, content FROM conversations ORDER BY id DESC LIMIT ?",
+@@ -97,7 +96,7 @@ class MemoryManager:
+             """, (fact, category, importance, now, now))
+             conn.commit()
+ 
+-    def search_facts(self, query: str, limit: int = 5) -> List[str]:
++    def search_facts(self, query: str, limit: int = 5) -> list[str]:
+         with sqlite3.connect(self.db_path) as conn:
+             cursor = conn.execute(
+                 "SELECT fact FROM long_term_memory WHERE fact LIKE ? ORDER BY importance DESC, updated_at DESC LIMIT ?",
+@@ -105,7 +104,7 @@ class MemoryManager:
+             )
+             return [row[0] for row in cursor.fetchall()]
+ 
+-    def get_all_facts(self, limit: int = 10) -> List[str]:
++    def get_all_facts(self, limit: int = 10) -> list[str]:
+         with sqlite3.connect(self.db_path) as conn:
+             cursor = conn.execute(
+                 "SELECT fact FROM long_term_memory ORDER BY importance DESC, updated_at DESC LIMIT ?",
+@@ -134,7 +133,7 @@ class Ultron:
+         SYSTEM_PROMPT_FILE.write_text(new_prompt, encoding="utf-8")
+         self.system_prompt = new_prompt
+ 
+-    def _define_tools(self) -> List[Dict]:
++    def _define_tools(self) -> list[dict]:
+         return [
+             {
+                 "type": "function",
+@@ -225,7 +224,7 @@ class Ultron:
+             }
+         ]
+ 
+-    def _execute_tool(self, name: str, arguments: Dict) -> str:
++    def _execute_tool(self, name: str, arguments: dict) -> str:
+         try:
+             if name == "web_search":
+                 return self._web_search(arguments.get("query", ""))
+@@ -257,7 +256,7 @@ class Ultron:
+             else:
+                 return f"Ferramenta desconhecida: {name}"
+         except Exception as e:
+-            return f"Erro ao executar ferramenta {name}: {str(e)}"
++            return f"Erro ao executar ferramenta {name}: {e!s}"
+ 
+     def _web_search(self, query: str) -> str:
+         try:
+@@ -281,7 +280,7 @@ class Ultron:
+                     return "Resultados relacionados:\n" + "\n".join(f"- {r}" for r in results)
+             return "Nenhum resultado claro encontrado. Tente reformular a busca."
+         except Exception as e:
+-            return f"Erro na busca web: {str(e)}. Considere instalar duckduckgo-search para buscas melhores."
++            return f"Erro na busca web: {e!s}. Considere instalar duckduckgo-search para buscas melhores."
+ 
+     def _generate_prompt_for_other_ai(self, objective: str, context: str) -> str:
+         prompt = f"""Você é um especialista em prompt engineering.
