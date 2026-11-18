@@ -39,8 +39,9 @@ def evaluate(checkpoint_path: str, dataset_path: str, max_new_tokens: int = 120,
     def score_model(candidate_model):
         results = []
         for case in cases:
-            prompt = tokenizer.encode("Usuário: " + case["prompt"] + "\nULTRON: ")
-            inputs = torch.tensor([prompt[-candidate_model.config.context_length:]], dtype=torch.long)
+            prompt = tokenizer.encode("Usuário: " + case["prompt"] + "\nULTRON: ", add_special_tokens=False)
+            prompt = prompt[-(candidate_model.config.context_length - 1):]
+            inputs = torch.tensor([[256, *prompt]], dtype=torch.long)
             with torch.inference_mode():
                 output = candidate_model.generate(inputs, max_new_tokens=max_new_tokens, eos_token_id=257)
             generated = tokenizer.decode(output[0, inputs.shape[1]:].tolist()).strip()
@@ -60,6 +61,8 @@ def evaluate(checkpoint_path: str, dataset_path: str, max_new_tokens: int = 120,
 
     baseline_results = score_model(baseline_model)
     trained_results = score_model(model)
+    if not any(item["candidate"] for item in trained_results):
+        raise RuntimeError("O especialista treinado não gerou nenhum token de resposta; avaliação reprovada.")
     baseline_pass_rate = sum(1 for item in baseline_results if item["passed"]) / len(baseline_results)
     trained_pass_rate = sum(1 for item in trained_results if item["passed"]) / len(trained_results)
     baseline_coverage = sum(item["score"] for item in baseline_results) / len(baseline_results)
