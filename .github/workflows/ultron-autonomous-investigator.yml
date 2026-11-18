@@ -1,0 +1,161 @@
+name: ULTRON autonomous investigator and repair experiment
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "feat/ultron-autonomous-investigator-main"]
+    paths:
+      - "scripts/ultron_autonomous_agent.py"
+      - "scripts/ultron_repair_engine.py"
+      - "tests/**"
+      - ".github/workflows/ultron-autonomous-investigator.yml"
+  issues:
+    types: [opened, reopened, labeled]
+  schedule:
+    # Six-hour heartbeat; GitHub schedule is best-effort.
+    - cron: "17 */2 * * *"
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: ultron-autonomous-investigator
+  cancel-in-progress: true
+
+jobs:
+  investigate-and-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      ULTRON_CYCLE_BUDGET_MINUTES: "30"
+      ULTRON_CYCLE_BUDGET_SECONDS: "1800"
+      ULTRON_MAX_REPAIR_FILES: "30"
+      ULTRON_MAX_REPAIR_LINES: "1000"
+      ULTRON_RESEARCH_RESULT_LIMIT: "16"
+      ULTRON_TEST_TIMEOUT_SECONDS: "600"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install static repair tool
+        run: python -m pip install --disable-pip-version-check -r requirements.txt ruff ddgs pytest
+      - name: Test investigator and repair policy
+        run: python -m unittest tests.test_autonomous_agent_report tests.test_autonomous_repair_engine -v
+      - name: Run investigation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python scripts/ultron_autonomous_agent.py
+      - name: Run isolated repair experiment
+        id: repair
+        run: |
+          python scripts/ultron_repair_engine.py
+          if python -c "import json; d=json.load(open('reports/autonomy/repair-evidence/repair.json')); raise SystemExit(0 if d['candidate_ready'] else 1)"; then
+            echo "candidate_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "candidate_ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Validate investigation evidence
+        run: |
+          python -m json.tool reports/autonomy/latest.json > /dev/null
+          python -m json.tool reports/autonomy/repair-evidence/repair.json > /dev/null
+          test -s reports/autonomy/latest.md
+          test -s reports/autonomy/repair-evidence/repair.md
+      - name: Publish isolated repair branch
+        if: steps.repair.outputs.candidate_ready == 'true'
+        id: publish_repair
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="ultron/repair-${GITHUB_SHA::12}-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add -f reports/autonomy/repair-evidence scripts
+          git add -u
+          git commit -m "fix(autonomy): apply tested safe Python fixes"
+          git push origin "$BRANCH"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+      - name: Open pull request for tested repair
+        if: steps.repair.outputs.candidate_ready == 'true'
+        id: create_repair_pr
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPAIR_BRANCH: ${{ steps.publish_repair.outputs.branch }}
+        run: |
+          gh pr create --base main --head "$REPAIR_BRANCH" \
+            --title "ULTRON: tested autonomous repair" \
+            --body "## Evidências\n- Candidate branch: $REPAIR_BRANCH\n- Baseline and post-patch unit-test logs are attached in the workflow artifact.\n- Only Ruff safe fixes were allowed.\n- Configurable expanded budget: 30 files / 1,000 changed lines / 30-minute cycle.\n- No production deploy is performed by this workflow."
+      - name: Publish investigation report branch
+        id: publish_report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add reports/autonomy/latest.json reports/autonomy/latest.md reports/autonomy/repair-evidence
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(autonomy): publish verified investigation evidence"
+          REPORT_COMMIT="$(git rev-parse HEAD)"
+          REPORT_BRANCH="ultron/autonomy-findings-${GITHUB_RUN_ID}"
+          git fetch origin main
+          git checkout -b "$REPORT_BRANCH" origin/main
+          git cherry-pick "$REPORT_COMMIT"
+          git push origin "$REPORT_BRANCH"
+          echo "branch=$REPORT_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Create or update investigation issue
+        if: steps.publish_report.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: reports/autonomy/latest.md
+          REPAIR_PR_RESULT: ${{ steps.create_repair_pr.outcome }}
+          REPAIR_BRANCH: ${{ steps.publish_repair.outputs.branch }}
+          REPORT_BRANCH: ${{ steps.publish_report.outputs.branch }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
+            const title = '[ULTRON] Relatório autônomo de investigação';
+            const { owner, repo } = context.repo;
+            const listed = await github.rest.issues.listForRepo({ owner, repo, state: 'open', per_page: 100 });
+            const existing = listed.data.find(item => !item.pull_request && item.title === title);
+            const reportBranch = process.env.REPORT_BRANCH;
+            const compare = reportBranch
+              ? `https://github.com/${owner}/${repo}/compare/main...${reportBranch}?expand=1`
+              : `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
+            const repair = process.env.REPAIR_BRANCH
+              ? `\n\nRepair branch: https://github.com/${owner}/${repo}/tree/${process.env.REPAIR_BRANCH}\nPR attempt: ${process.env.REPAIR_PR_RESULT}`
+              : '\n\nNo repair candidate passed the regression gate in this cycle.';
+            const body = report + '\n\n---\n' +
+              'Evidence branch: ' + compare + repair +
+              '\n\nThis cycle never deploys production. Test logs and patch are attached to the Actions run.';
+            if (existing) {
+              await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
+              core.info(`Updated investigation issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({ owner, repo, title, body });
+              core.info(`Created investigation issue #${created.data.number}`);
+            }
+      - name: Upload complete experiment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultron-autonomy-evidence-${{ github.run_id }}
+          path: reports/autonomy/
+          if-no-files-found: warn
+          retention-days: 30
