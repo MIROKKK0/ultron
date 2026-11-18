@@ -526,8 +526,8 @@ def _extract_research_query(message: str) -> str | None:
     """Recognize ordinary Portuguese research requests without slash commands."""
     text = message.strip()
     video_patterns = (
-        r"^(?:me mostre|mostre|encontre|procure|busque|quero ver)\s+(?:para mim\s+)?(?:um\s+|uns?\s+)?(?:v[ií]deos?|clipes?|gameplays?)\s+(?:do|da|de|sobre|no|na)?\s*(.+)$",
-        r"^(?:pesquise|procure|busque|encontre)\s+(?:um\s+|uns?\s+)?(?:v[ií]deos?|clipes?|gameplays?)\s+(?:do|da|de|sobre|no|na)?\s*(.+)$",
+        r"^(?:me mostre|mostre|encontre|procure|busque|quero ver)\s+(?:para mim\s+)?(?:um\s+|uns?\s+)?(?:v[ií]deos?|clipes?|gameplays?)\s+(?:(?:do|no)\s+YouTube\s+)?(?:sobre|do|da|de|no|na)?\s*(.+)$",
+        r"^(?:pesquise|procure|busque|encontre)\s+(?:um\s+|uns?\s+)?(?:v[ií]deos?|clipes?|gameplays?)\s+(?:(?:do|no)\s+YouTube\s+)?(?:sobre|do|da|de|no|na)?\s*(.+)$",
     )
     for pattern in video_patterns:
         match = re.match(pattern, text, flags=re.IGNORECASE)
