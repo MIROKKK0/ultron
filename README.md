@@ -35,15 +35,19 @@ Com Bearer token, o backend oferece:
 - `GET /brain/status`: estado da orquestração, classificador próprio e limites do decodificador.
 - `GET /skills`: catálogo de habilidades nativas.
 - `POST /skills/run` (autenticado): executa uma habilidade instalada.
-- `POST /brain/research`: retorna 503 até existir uma implementação de pesquisa local sem serviços externos.
+- `GET /telemetry/summary`: agregados de latência, falhas, tokens, custo estimado e qualidade.
 - `POST /brain/run` com `{"goal":"..."}`: ciclo cognitivo com planejador, solucionador, crítico e síntese.
 - `POST /brain/multitask` com `{"tasks":["...","..."]}`: até cinco tarefas independentes em paralelo.
 - `POST /feedback` com avaliação de 1 a 5 e comentário opcional.
 - `GET /feedback/summary`: média de avaliações armazenadas.
 
-O chat público não lê nem grava memória/conversas compartilhadas até existir uma identidade segura por instalação. O app envia até oito mensagens recentes do histórico local como contexto temporário. O classificador próprio identifica intenções comuns e chama skills locais em milissegundos; para conversas gerais, o backend usa o modelo generativo configurado e mantém o fallback local quando nenhuma chave estiver configurada. Rotas administrativas protegidas mantêm a memória persistente. No chat do iPhone, use `/self`, `/plan seu objetivo`, `/research sua pergunta` e `/calc 12*(3+4)`. O endpoint `/brain/run` executa planner, solver e critic locais e gera uma síntese determinística. Use `/research sua pergunta` para pesquisar na internet. A recuperação retorna trechos e URLs originais; quando há fontes, o Gemini sintetiza as evidências sem inventar links. Se o provedor falhar, o ULTRON identifica explicitamente que está exibindo resultados brutos. A busca pode falhar se o mecanismo externo bloquear o servidor. `/brain/multitask` aceita até cinco tarefas. Feedback explícito do usuário calibra apenas a prioridade de planner/solver/critic, com ajuste limitado a ±15% e limite de 10 avaliações por hora/IP. Isso não treina pesos do modelo de linguagem. O módulo experimental de associação usa codificador esparso, recompensa e decaimento; seu estado é salvo no banco.
+O app iOS cria automaticamente uma identidade aleatória por instalação e guarda o token no Keychain. O backend armazena apenas o hash desse token; memória não é compartilhada entre instalações. No chat, use `/remember texto` para guardar uma memória privada por 30 dias, `/memory` para listar e `/forget ID` para excluir. A recuperação contextual usa embeddings Gemini (`gemini-embedding-2`) com similaridade de cosseno quando configurados, e fallback lexical quando não estiverem disponíveis. A identidade é enviada pelo app nos headers `X-ULTRON-Installation-ID` e `X-ULTRON-Installation-Token`. O chat sem credenciais continua sem acesso à memória privada.
 
-Para PostgreSQL, defina `DATABASE_URL`. Para ativar geração de texto, configure no Render `GEMINI_API_KEY` como secret, `ULTRON_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai` e `ULTRON_LLM_MODEL=gemini-3.8-flash`. A chave pode ser criada no Google AI Studio. Sem a chave, o chat continua no modo local limitado e o status informa que a geração não está configurada. O chat e a pesquisa públicos têm limites por IP; memória e rotas administrativas continuam exigindo `ULTRON_API_TOKEN`.
+O endpoint autenticado `/telemetry/summary` apresenta agregados de sete dias: latência p50/p95, taxa de falha, tokens informados pelo provedor, custo estimado quando tarifas estão configuradas e amostras de qualidade. A telemetria não guarda prompts, respostas, snippets, IPs, IDs de instalação ou segredos. Configure `ULTRON_INPUT_USD_PER_MILLION` e `ULTRON_OUTPUT_USD_PER_MILLION` para habilitar estimativa de custo; sem preços ou contagem do provedor, o custo permanece desconhecido.
+
+No chat do iPhone, use `/self`, `/plan seu objetivo`, `/research sua pergunta` e `/calc 12*(3+4)`. Use `/research` para pesquisa web; a recuperação usa BM25, canonicalização HTTPS e deduplicação, e o Gemini sintetiza somente as fontes recuperadas. Datas de busca são tratadas como pistas não verificadas; a auditoria confere se URLs citadas pertencem ao conjunto recuperado. Snippets são dados não confiáveis e instruções neles são ignoradas. O backend valida URLs e citações, mas não faz fact-check independente de cada página. `/brain/multitask` aceita até cinco tarefas. Feedback explícito calibra apenas a prioridade das estratégias; não treina automaticamente os pesos do modelo.
+
+Para PostgreSQL, defina `DATABASE_URL`. Para ativar geração de texto, configure no Render `GEMINI_API_KEY` como secret, `ULTRON_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai` e `ULTRON_LLM_MODEL=gemini-3.8-flash`. A chave pode ser criada no Google AI Studio. Sem a chave, o chat continua no modo local limitado e o status informa que a geração não está configurada. O chat e a pesquisa públicos têm limites por IP. Memória exige credencial privada por instalação; telemetria e rotas administrativas exigem `ULTRON_API_TOKEN`.
 
 Nunca coloque chaves de provedor ou tokens em commits, no app ou em arquivos públicos. Cadastre-os como variáveis secretas no serviço de hospedagem.
 
@@ -111,3 +115,6 @@ zero, com tokenizador byte-level e corpus autoral pequeno. Ele é separado do
 classificador de intenções de produção e ainda não está integrado ao chat.
 Consulte `training/generative/README.md`; o checkpoint resultante é experimental
 e não equivale a um modelo de linguagem grande.
+
+
+Consulte [docs/INFRASTRUCTURE_TELEMETRY_MEMORY_RESEARCH.md](docs/INFRASTRUCTURE_TELEMETRY_MEMORY_RESEARCH.md) para a arquitetura de telemetria, memória por instalação, pesquisa e avaliação do Transformer especialista.
