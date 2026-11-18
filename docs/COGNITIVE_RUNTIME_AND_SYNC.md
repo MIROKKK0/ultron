@@ -11,7 +11,7 @@ python -m training.generative.train_semantic_encoder \
   --output artifacts/ultron-semantic-encoder.pt
 ```
 
-It records Recall@1, Recall@5, MRR, the train/evaluation file hashes and a candidate checkpoint. The current held-out set is intentionally small and is only an initial smoke benchmark. Do not set `ULTRON_MEMORY_ENCODER=neural` until a larger frozen benchmark, hard-negative evaluation and human review pass.
+The current dataset contains 32 training pairs and 61 frozen held-out PT-BR pairs, with exact-text leakage checks. Evaluation reports Recall@1/5/10, MRR, median rank, P90 rank and per-case ranks. Candidate acceptance requires higher MRR than the untrained baseline and zero per-case ranking regressions. This is a stronger diagnostic set, not proof of broad semantic understanding; add independently authored hard-negative suites and human review before enabling `ULTRON_MEMORY_ENCODER=neural` in production.
 
 ## Transformer during reasoning
 
@@ -43,4 +43,4 @@ This mode uses the retrieved memory and bounded conversation context in its prom
 
 ## Promotion policy
 
-CI success validates code paths, not model quality. Checkpoint promotion remains blocked until the semantic benchmark is materially expanded and passes without per-case regressions. No merge, deployment or production checkpoint replacement is performed by these workflows.
+CI success validates code paths, not model quality. Checkpoint promotion remains blocked until the expanded frozen benchmark passes its MRR and zero-per-case-regression gate, independent hard-negative tests and human review. No merge, deployment or production checkpoint replacement is performed by these workflows.
