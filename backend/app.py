@@ -884,7 +884,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
                 tool_name="web_search",
                 decision="failed_" + type(exc).__name__,
             )
-            response = "A pesquisa web falhou temporariamente em todos os mecanismos disponíveis. Os recursos locais continuam funcionando; tente novamente em instantes."
+            response = "Não consegui acessar a pesquisa na internet agora; todos os mecanismos disponíveis falharam temporariamente. Os recursos locais continuam funcionando; tente novamente em instantes."
     elif message.casefold() == "/brain" or message.casefold().startswith("/brain "):
         goal = message[6:].strip()
         if not goal:
