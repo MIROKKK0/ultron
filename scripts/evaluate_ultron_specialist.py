@@ -39,7 +39,7 @@ def evaluate(checkpoint_path: str, dataset_path: str, max_new_tokens: int = 120,
     def score_model(candidate_model):
         results = []
         for case in cases:
-            prompt = tokenizer.encode("Usuário: " + case["prompt"] + "\\nULTRON: ")
+            prompt = tokenizer.encode("Usuário: " + case["prompt"] + "\nULTRON: ")
             inputs = torch.tensor([prompt[-candidate_model.config.context_length:]], dtype=torch.long)
             with torch.inference_mode():
                 output = candidate_model.generate(inputs, max_new_tokens=max_new_tokens, eos_token_id=257)
