@@ -1080,12 +1080,21 @@ def telemetry_summary() -> dict[str, Any]:
         if not values:
             return None
         return round(values[min(len(values) - 1, int((len(values) - 1) * p))], 2)
-    failures = sum(1 for row in request_rows if int(row["status_code"] or 0) >= 500)
+    failures = sum(1 for row in request_rows if int(row["status_code"] or 0) >= 400)
+    server_failures = sum(1 for row in request_rows if int(row["status_code"] or 0) >= 500)
+    model_rows = [row for row in rows if row["event_type"] == "model_inference"]
+    model_latencies = sorted(float(row["latency_ms"] or 0) for row in model_rows)
+    model_failures = sum(1 for row in model_rows if str(row["decision"] or "").startswith("error_"))
+    tool_rows = [row for row in rows if row["event_type"] == "tool_decision"]
+    tool_failures = sum(1 for row in tool_rows if str(row["decision"] or "").startswith("failed_"))
     return {
         "window_days": 7, "request_count": len(request_rows),
-        "failure_count": failures,
+        "failure_count": failures, "server_error_count": server_failures,
         "failure_rate": round(failures / len(request_rows), 4) if request_rows else None,
         "latency_ms": {"p50": percentile(latencies, 0.50), "p95": percentile(latencies, 0.95)},
+        "model_inference_count": len(model_rows), "model_failure_count": model_failures,
+        "model_latency_ms": {"p50": percentile(model_latencies, 0.50), "p95": percentile(model_latencies, 0.95)},
+        "tool_call_count": len(tool_rows), "tool_failure_count": tool_failures,
         "input_tokens": sum(int(row["input_tokens"] or 0) for row in rows),
         "output_tokens": sum(int(row["output_tokens"] or 0) for row in rows),
         "estimated_cost_usd": round(sum(float(row["estimated_cost_usd"] or 0) for row in rows), 6),
