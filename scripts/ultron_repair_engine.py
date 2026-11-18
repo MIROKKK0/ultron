@@ -93,12 +93,14 @@ def main() -> int:
         (evidence / "candidate.patch").write_text(patch["stdout"], encoding="utf-8")
         final = command([sys.executable, "-m", "unittest", "discover", "-v"])
         report["final_tests"] = final
-        if final["returncode"] == 0:
+        final_lint = command(["ruff", "check", ".", "--output-format", "json"], timeout=120)
+        report["final_lint"] = final_lint
+        if final["returncode"] == 0 and final_lint["returncode"] == 0:
             report["candidate_ready"] = True
-            report["decision"] = "Safe Ruff patch retained: repository unit tests passed after the patch."
+            report["decision"] = "Safe Ruff patch retained: repository unit tests and final lint gate passed."
         else:
             command(["git", "restore", "--worktree", "--", *files], timeout=30)
-            report["decision"] = "Patch failed the regression suite and was discarded."
+            report["decision"] = "Patch failed the regression or lint gate and was discarded."
             report["changed_files"] = []
 
     write_json(evidence / "repair.json", report)
