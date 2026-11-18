@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_multitask
-from backend.generative import generate_reply, model_config
+from backend.generative import generate_reply, generate_reply_with_usage, model_config
 from backend.experimental_transformer import generate_experimental_candidate, transformer_status
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
@@ -217,6 +217,29 @@ def record_telemetry(event_type: str, *, route: str = "", method: str = "",
         return
 
 
+def generate_and_record(message: str, history: list[dict[str, str]] | None = None,
+                        memories: list[str] | None = None) -> str:
+    started = time.perf_counter()
+    try:
+        answer, usage = generate_reply_with_usage(message, history, memories)
+        input_tokens, output_tokens = usage.get("input_tokens"), usage.get("output_tokens")
+        input_rate = os.getenv("ULTRON_INPUT_USD_PER_MILLION")
+        output_rate = os.getenv("ULTRON_OUTPUT_USD_PER_MILLION")
+        estimated_cost = None
+        if input_tokens is not None and output_tokens is not None and input_rate and output_rate:
+            estimated_cost = (input_tokens * float(input_rate) + output_tokens * float(output_rate)) / 1_000_000
+        record_telemetry("model_inference", latency_ms=(time.perf_counter() - started) * 1000,
+                         model=str(model_config().get("model") or ""), input_tokens=input_tokens,
+                         output_tokens=output_tokens, estimated_cost_usd=estimated_cost,
+                         decision="success")
+        return answer
+    except Exception as exc:
+        record_telemetry("model_inference", latency_ms=(time.perf_counter() - started) * 1000,
+                         model=str(model_config().get("model") or ""),
+                         decision="error_" + type(exc).__name__)
+        raise
+
+
 def installation_scope(installation_id: str | None) -> str:
     """Validate the client installation namespace; caller must also authenticate."""
     try:
@@ -376,7 +399,7 @@ def synthesize_research_with_status(query: str, research: dict[str, Any]) -> tup
     synthesis_status = "provider_unavailable"
     if model_config()["configured"]:
         try:
-            synthesis = generate_reply(prompt, history=[], memories=[])[:10000]
+            synthesis = generate_and_record(prompt, history=[], memories=[])[:10000]
             synthesis_status = "gemini"
         except Exception:
             synthesis = ""
@@ -715,8 +738,10 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     if research_query:
         try:
             research = search_web(research_query)
+            record_telemetry("tool_decision", tool_name="web_search", decision="success_" + str(research.get("count", 0)))
             response = synthesize_research(research_query, research)
-        except Exception:
+        except Exception as exc:
+            record_telemetry("tool_decision", tool_name="web_search", decision="failed_" + type(exc).__name__)
             response = "Não consegui acessar a pesquisa na internet agora. Tente novamente em instantes; os recursos locais restantes continuam disponíveis."
     elif message.casefold() == "/brain" or message.casefold().startswith("/brain "):
         goal = message[6:].strip()
@@ -754,7 +779,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
                 if separator and role.strip() in ("user", "assistant") and content.strip():
                     parsed_history.append({"role": role.strip(), "content": content.strip()[:1000]})
             try:
-                response = generate_reply(message, parsed_history)
+                response = generate_and_record(message, parsed_history)
             except Exception:
                 response = "O modelo generativo está configurado, mas falhou ao responder agora. Tente novamente; não vou substituir a resposta por uma resposta local fingindo ser IA generativa."
         else:
