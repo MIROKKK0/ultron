@@ -326,7 +326,13 @@ def synthesize_research_with_status(query: str, research: dict[str, Any]) -> tup
 
 def synthesize_research(query: str, research: dict[str, Any]) -> str:
     """Backward-compatible text-only wrapper for chat responses."""
-    text, status = synthesize_research_with_status(query, research)\n    if status != "gemini" and research.get("count", 0):\n        text = "Aviso: não consegui gerar a síntese pelo Gemini (" + status + "). Estes são os resultados brutos recuperados; confira as fontes.\\n\\n" + text\n    return text
+    text, status = synthesize_research_with_status(query, research)
+    if status != "gemini" and research.get("count", 0):
+        text = (
+            "Aviso: não consegui gerar a síntese pelo Gemini (" + status +
+            "). Estes são os resultados brutos recuperados; confira as fontes.\n\n" + text
+        )
+    return text
 
 
 def learned_strategy_scores() -> dict[str, float]:
