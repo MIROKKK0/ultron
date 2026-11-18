@@ -226,6 +226,10 @@ class InstallationRequest(BaseModel):
     installation_id: str = Field(min_length=16, max_length=128)
 
 
+class InstallationSelfRegistrationRequest(BaseModel):
+    installation_id: str = Field(min_length=16, max_length=128)
+    installation_token: str = Field(min_length=32, max_length=256)
+
 
 class ReviewRequest(BaseModel):
     task: str = Field(min_length=1, max_length=8000)
@@ -249,6 +253,7 @@ class FeedbackRequest(BaseModel):
 
 class BrainRequest(BaseModel):
     goal: str = Field(min_length=1, max_length=4000)
+    history: list[str] = Field(default_factory=list, max_length=8)
 
 
 class MultiTaskRequest(BaseModel):
@@ -548,8 +553,12 @@ def brain_status(request: Request) -> dict[str, Any]:
 def installation_brain_run(payload: BrainRequest, installation_id: str = Depends(require_installation)) -> dict[str, Any]:
     """Run the cognitive cycle using only this installation's typed memories."""
     try:
-        result = execute_brain_cycle(payload.goal.strip(), include_private_memories=True,
-                                     installation_id=installation_id)
+        result = execute_brain_cycle(
+            payload.goal.strip(),
+            history=[str(item)[:1000] for item in payload.history[-8:]],
+            include_private_memories=True,
+            installation_id=installation_id,
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     evaluation = result.get("cycle_evaluation", {})
@@ -815,6 +824,33 @@ def runtime_status(request: Request) -> dict[str, Any]:
         "generative_provider": model_config()["provider"],
         "external_ai_providers": model_config()["configured"],
     }
+
+
+@app.post("/v2/installations/register")
+def register_installation_self(payload: InstallationSelfRegistrationRequest, request: Request) -> dict[str, Any]:
+    """Register a client-generated installation secret without embedding an admin key in the app."""
+    enforce_public_limit(request, "installation-register", limit=10, window_seconds=3600)
+    installation_id = payload.installation_id.strip().lower()
+    token_hash = hashlib.sha256(payload.installation_token.encode("utf-8")).hexdigest()
+    now = datetime.now(timezone.utc).isoformat()
+    with connect_db() as db:
+        existing = execute(
+            db,
+            "SELECT token_hash, revoked_at FROM installations WHERE installation_id=?",
+            (installation_id,),
+        ).fetchone()
+        if existing:
+            if existing["revoked_at"] is not None:
+                raise HTTPException(status_code=409, detail="Esta instalação foi revogada.")
+            if not hmac.compare_digest(str(existing["token_hash"]), token_hash):
+                raise HTTPException(status_code=409, detail="Esta instalação já possui outra credencial.")
+        else:
+            execute(
+                db,
+                "INSERT INTO installations(installation_id,token_hash,created_at,revoked_at) VALUES(?,?,?,NULL)",
+                (installation_id, token_hash, now),
+            )
+    return {"registered": True, "installation_id": installation_id}
 
 
 @app.post("/installations/register", dependencies=[Depends(require_api_token)])

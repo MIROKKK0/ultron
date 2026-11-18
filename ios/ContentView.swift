@@ -4,7 +4,7 @@ struct ContentView: View {
     @AppStorage("ultronServerURL") private var serverURL = "https://ultron-api-c5ae.onrender.com"
     @AppStorage("ultronChatHistoryData") private var storedChatHistory: Data = Data()
     @State private var messages: [ChatMessage] = [
-        ChatMessage(role: .assistant, text: "Olá. Sou o ULTRON. Meu classificador próprio e minhas habilidades locais estão disponíveis. Use /plan, /research, /calc, /self ou /skills. A geração livre ainda está em desenvolvimento.")
+        ChatMessage(role: .assistant, text: "Olá. Sou o ULTRON. Núcleo neural ativo. Use /plan, /research, /calc, /self, /skills, /remember texto, /memories ou /forget ID. Sua memória fica isolada nesta instalação.")
     ]
     @State private var draft = ""
     @State private var isSending = false
@@ -142,6 +142,35 @@ struct ContentView: View {
         serverStatusChecked = true
     }
 
+    private func handleMemoryCommand(_ text: String) async throws -> String? {
+        let command = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowered = command.lowercased()
+
+        if lowered.hasPrefix("/remember ") {
+            let payload = String(command.dropFirst("/remember ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !payload.isEmpty else { return "Use /remember texto para salvar uma memória semântica." }
+            let parts = payload.split(separator: " ", maxSplits: 1).map(String.init)
+            let allowedKinds = ["episodic", "semantic", "procedural"]
+            let kind = parts.count == 2 && allowedKinds.contains(parts[0].lowercased()) ? parts[0].lowercased() : "semantic"
+            let content = parts.count == 2 && allowedKinds.contains(parts[0].lowercased()) ? parts[1] : payload
+            let id = try await client.remember(content, kind: kind, serverURL: serverURL)
+            return "Memória privada salva (\(kind)). ID: \(id)"
+        }
+
+        if lowered == "/memories" {
+            let items = try await client.listMemories(serverURL: serverURL)
+            return items.isEmpty ? "Ainda não há memórias privadas salvas." : "Memórias desta instalação:\n" + items.joined(separator: "\n")
+        }
+
+        if lowered.hasPrefix("/forget ") {
+            let rawID = String(command.dropFirst("/forget ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let id = Int(rawID) else { return "Informe um ID válido: /forget 123." }
+            try await client.forgetMemory(id, serverURL: serverURL)
+            return "Memória \(id) apagada."
+        }
+        return nil
+    }
+
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isSending else { return }
@@ -154,13 +183,20 @@ struct ContentView: View {
 
         Task {
             do {
-                let result = try await client.send(text, serverURL: serverURL, history: recentHistory) { phase in
-                    brainPhase = phase
+                if let memoryReply = try await handleMemoryCommand(text) {
+                    serverOnline = true
+                    serverStatusChecked = true
+                    brainPhase = .responding
+                    messages.append(ChatMessage(role: .assistant, text: memoryReply))
+                } else {
+                    let result = try await client.send(text, serverURL: serverURL, history: recentHistory) { phase in
+                        brainPhase = phase
+                    }
+                    serverOnline = true
+                    serverStatusChecked = true
+                    brainPhase = .responding
+                    messages.append(ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy))
                 }
-                serverOnline = true
-                serverStatusChecked = true
-                brainPhase = .responding
-                messages.append(ChatMessage(role: .assistant, text: result.reply, strategy: result.strategy))
             } catch {
                 serverOnline = false
                 serverStatusChecked = true
