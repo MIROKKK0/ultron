@@ -1,5 +1,6 @@
 import os
 import tempfile
+import uuid
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -133,8 +134,8 @@ class UltronTests(unittest.TestCase):
 
     def test_installation_memory_is_isolated_and_requires_installation_token(self):
         headers = {**AUTH}
-        first_id = "install-test-alpha-0001"
-        second_id = "install-test-beta-0002"
+        first_id = "install-test-alpha-" + uuid.uuid4().hex
+        second_id = "install-test-beta-" + uuid.uuid4().hex
         first = client.post("/installations/register", json={"installation_id": first_id}, headers=headers)
         second = client.post("/installations/register", json={"installation_id": second_id}, headers=headers)
         self.assertEqual(first.status_code, 200)
@@ -149,7 +150,7 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(denied.status_code, 401)
 
     def test_installation_brain_cycle_persists_metrics_without_prompt_or_answer(self):
-        installation_id = "install-test-eval-0003"
+        installation_id = "install-test-eval-" + uuid.uuid4().hex
         registered = client.post("/installations/register", json={"installation_id": installation_id}, headers=AUTH)
         auth = {"X-Installation-ID": installation_id, "X-Installation-Token": registered.json()["installation_token"]}
         fixture = {"brain_version": "test", "cycle_evaluation": {"score": .9, "passed": True,
@@ -166,7 +167,7 @@ class UltronTests(unittest.TestCase):
         self.assertNotIn("PRIVATE ANSWER", serialized)
 
     def test_installation_credentials_can_be_revoked(self):
-        installation_id = "install-test-revoke-0004"
+        installation_id = "install-test-revoke-" + uuid.uuid4().hex
         registered = client.post("/installations/register", json={"installation_id": installation_id}, headers=AUTH)
         auth = {"X-Installation-ID": installation_id, "X-Installation-Token": registered.json()["installation_token"]}
         revoked = client.delete(f"/installations/{installation_id}", headers=AUTH)
