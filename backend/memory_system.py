@@ -59,7 +59,8 @@ class MemoryStore:
         cursor = self._execute(
             "INSERT INTO cognitive_memories(owner_id,kind,content,source,confidence,created_at,last_accessed_at,access_count) VALUES(?,?,?,?,?,?,?,0) RETURNING id",
             (owner_id, kind, content, str(source)[:300], float(confidence), now, now))
-        return int(cursor.fetchone()[0])
+        inserted = cursor.fetchone()
+        return int(inserted["id"] if isinstance(inserted, dict) else inserted[0])
 
     def retrieve(self, owner_id: str, query: str, kind: str | None = None, limit: int = 8) -> list[dict]:
         if kind is not None and kind not in KINDS:
