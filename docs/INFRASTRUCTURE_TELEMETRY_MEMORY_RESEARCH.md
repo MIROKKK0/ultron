@@ -50,7 +50,7 @@ Important limitation: the current backend validates URL structure and citation m
 ## Task-specific Transformer
 training/generative/ultron_specialist_v1.jsonl is an original, curated dataset for narrow ULTRON behaviors: source handling, citation discipline, prompt-injection resistance, privacy-safe telemetry, tenant memory, and evaluation policy. The eval split is held out from SFT.
 
-GitHub Actions trains a separate checkpoint and runs scripts/evaluate_ultron_specialist.py. The evaluator reports exact lexical criterion coverage on held-out cases. This is a reproducible task rubric, not a human-quality judge or proof of factuality. Keep the model experimental; Gemini remains the production generator.
+GitHub Actions trains a separate checkpoint and runs scripts/evaluate_ultron_specialist.py. The evaluator compares the trained checkpoint with the same-seed untrained initialization on the identical held-out cases and reports pass-rate and lexical-criterion-coverage deltas. This is a reproducible task rubric, not a human-quality judge or proof of factuality. Require human A/B review before promotion; Gemini remains the production generator.
 
 ## Operational checks
 After merge/deploy:
