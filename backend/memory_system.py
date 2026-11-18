@@ -120,6 +120,12 @@ class MemoryStore:
             )
 
     def forget(self, owner_id: str, memory_id: int) -> bool:
+        exists = self._execute(
+            "SELECT id FROM cognitive_memories WHERE id=? AND owner_id=?",
+            (int(memory_id), owner_id),
+        ).fetchone()
+        if not exists:
+            return False
         self._execute("DELETE FROM cognitive_memory_links WHERE owner_id=? AND (memory_id=? OR source_memory_id=?)",
                       (owner_id, int(memory_id), int(memory_id)))
         cursor = self._execute("DELETE FROM cognitive_memories WHERE id=? AND owner_id=?", (int(memory_id), owner_id))
