@@ -286,10 +286,11 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(deleted.status_code, 200)
 
     def test_chat_uses_only_authenticated_installation_memory(self):
-        client.post("/installations/register", json={
-            "installation_id": INSTALL_A["X-ULTRON-Installation-ID"],
-            "installation_token": INSTALL_A["X-ULTRON-Installation-Token"],
-        })
+        for credentials in (INSTALL_A, INSTALL_B):
+            client.post("/installations/register", json={
+                "installation_id": credentials["X-ULTRON-Installation-ID"],
+                "installation_token": credentials["X-ULTRON-Installation-Token"],
+            })
         client.post("/memory", json={"content": "O projeto pessoal usa PostgreSQL e Python"},
                     headers=INSTALL_A)
         with patch("backend.app.model_config", return_value={"configured": True}), \
