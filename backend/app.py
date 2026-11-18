@@ -423,17 +423,29 @@ def execute_brain_cycle(
             vector_index = LocalVectorIndex(db)
             vector_index.initialize()
             vector_index.index_missing(installation_id)
-            typed = vector_index.search(installation_id, normalized_goal, limit=8)
-            if not typed:
-                typed = store.retrieve(installation_id, normalized_goal, limit=8)
+            retrieved = run_specialist("memory_retriever", {
+                "index": vector_index, "owner_id": installation_id, "query": normalized_goal,
+            })["result"]["items"]
+            typed = retrieved or store.retrieve(installation_id, normalized_goal, limit=8)
         memories = [str(item["content"]) for item in typed]
+        memory_retriever_stage = {
+            "status": "completed" if typed else "no_results",
+            "result": {"count": len(typed), "memory_ids": [int(item["id"]) for item in typed if item.get("id") is not None],
+                       "retrieval": "installation_scoped_local_index"},
+        }
     elif include_private_memories:
         with connect_db() as db:
             rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
         memories = rank_memories(normalized_goal, rows, limit=8)
+        memory_retriever_stage = {"status": "completed" if memories else "no_results",
+                                  "result": {"count": len(memories), "retrieval": "legacy_private_memory"}}
+        typed = []
     else:
         # Public chat must never read memories belonging to another installation.
         memories = []
+        typed = []
+        memory_retriever_stage = {"status": "no_results",
+                                  "result": {"count": 0, "retrieval": "public_scope_has_no_private_memory"}}
     scores = learned_strategy_scores()
 
     # Each specialist now performs its actual local function instead of returning
@@ -464,10 +476,18 @@ def execute_brain_cycle(
         "critique", json.dumps(critique, ensure_ascii=False),
         source="critic", confidence=0.5, priority=0.8,
     )
+    source_ids = [int(item["id"]) for item in typed if item.get("id") is not None]
+    curator_result = run_specialist("memory_curator", {
+        "candidate": answer, "source_ids": source_ids,
+    })["result"] if source_ids else {"status": "no_results", "approved": False,
+                                     "reason": "no_source_memories_available"}
+    curator_status = "completed" if curator_result.get("status") == "proposal_only" else "no_results"
     outputs: dict[str, dict[str, Any]] = {
         "planner": {"status": "completed", "result": plan},
         "solver": {"status": "completed", "result": {"reply": answer}},
         "critic": {"status": "completed", "result": critique},
+        "memory_retriever": memory_retriever_stage,
+        "memory_curator": {"status": curator_status, "result": curator_result},
     }
 
     research_query = (
@@ -533,8 +553,14 @@ def execute_brain_cycle(
         synthesis += "\\n\\nA pesquisa não retornou fontes verificáveis."
     cycle_payload = {"agents": agents, "research": research, "review": critique}
     cycle_evaluation = run_specialist("evaluator", {"cycle": cycle_payload})["result"]
+    agents.append({
+        "role": "evaluator",
+        "priority": float(scores.get("evaluator", 0.0)),
+        "status": "completed",
+        "result": cycle_evaluation,
+    })
     return {
-        "brain_version": "4.0.0-local-tools",
+        "brain_version": "5.0.0-six-specialist-cycle",
         "strategy_priorities": scores,
         "goal": normalized_goal,
         "plan": plan,
@@ -546,8 +572,9 @@ def execute_brain_cycle(
         "synthesis": synthesis,
         "synthesis_status": "completed",
         "execution_policy": (
-            "Planner, solver e critic executam funções locais; pesquisa usa fontes web; "
-            "decodificador linguístico local sem APIs ou tokens externos."
+            "Seis especialistas locais: planner, solver, critic, memory_retriever, "
+            "memory_curator e evaluator. Curadoria só propõe; não grava sem aprovação. "
+            "Pesquisa web é opcional e a memória privada permanece isolada por instalação."
         ),
     }
 
