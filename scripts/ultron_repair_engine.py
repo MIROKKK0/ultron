@@ -85,9 +85,17 @@ def write_json(path: Path, payload: dict) -> None:
 
 
 def restore_checkpoint(files: list[str]) -> dict:
+    """Recovery has its own short timeout and is not blocked by an exhausted work budget."""
     if not files:
         return {"returncode": 0, "stdout": "", "stderr": ""}
-    return command(["git", "restore", "--source=HEAD", "--staged", "--worktree", "--", *files], timeout=30)
+    try:
+        result = subprocess.run(
+            ["git", "restore", "--source=HEAD", "--staged", "--worktree", "--", *files],
+            text=True, capture_output=True, timeout=30,
+        )
+        return {"returncode": result.returncode, "stdout": result.stdout[-20000:], "stderr": result.stderr[-20000:]}
+    except subprocess.TimeoutExpired:
+        return {"returncode": 124, "stdout": "", "stderr": "checkpoint restore timed out after 30s"}
 
 
 def main() -> int:
