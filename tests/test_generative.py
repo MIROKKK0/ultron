@@ -48,6 +48,21 @@ class GenerativeModelTests(unittest.TestCase):
 
     @patch.dict("os.environ", {"GEMINI_API_KEY": "test-secret"}, clear=True)
     @patch("backend.generative.httpx.post")
+    def test_generate_reply_with_usage_returns_provider_token_counts(self, post):
+        from backend.generative import generate_reply_with_usage
+        response = Mock()
+        response.json.return_value = {
+            "choices": [{"message": {"content": "Resposta"}}],
+            "usage": {"prompt_tokens": 123, "completion_tokens": 45},
+        }
+        response.raise_for_status.return_value = None
+        post.return_value = response
+        answer, usage = generate_reply_with_usage("Pergunta")
+        self.assertEqual(answer, "Resposta")
+        self.assertEqual(usage, {"input_tokens": 123, "output_tokens": 45})
+
+    @patch.dict("os.environ", {"GEMINI_API_KEY": "test-secret"}, clear=True)
+    @patch("backend.generative.httpx.post")
     def test_empty_provider_response_is_rejected(self, post):
         response = Mock()
         response.json.return_value = {"choices": []}
