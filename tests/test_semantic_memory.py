@@ -15,7 +15,7 @@ class SemanticMemoryTests(unittest.TestCase):
     def test_semantic_ranker_orders_by_similarity(self):
         rows = [
             {"id": 1, "content": "less similar", "created_at": "2026-01-01",
-             "expires_at": None, "embedding_json": json.dumps([0.0, 1.0])},
+             "expires_at": None, "embedding_json": json.dumps([0.1, 0.9])},
             {"id": 2, "content": "best match", "created_at": "2026-01-02",
              "expires_at": None, "embedding_json": json.dumps([1.0, 0.0])},
         ]
