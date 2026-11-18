@@ -140,7 +140,21 @@ def main():
     result = apply_candidate(root, proposal["patch"], proposal["summary"])
     result["provider"] = os.getenv("ULTRON_PROVIDER", "gemini")
     result["proposal_saved"] = True
-    (evidence / "gemini-result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    serialized = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
+    (evidence / "gemini-result.json").write_text(serialized, encoding="utf-8")
+    # The workflow consumes one normalized evidence contract for Gemini and Ruff.
+    (evidence / "repair.json").write_text(serialized, encoding="utf-8")
+    repair_lines = [
+        "# ULTRON Gemini repair proposal", "",
+        f"- Candidate ready: {str(bool(result.get('candidate_ready'))).lower()}",
+        f"- Provider: {result.get('provider', 'gemini')}",
+        f"- Decision: {result.get('decision', 'No decision recorded.')}",
+        f"- Changed files: {len(result.get('changed_files', []))}",
+        "", "## Changed files",
+        *[f"- {name}" for name in result.get("changed_files", [])],
+        "", "The candidate remains isolated; PR review and required checks are still mandatory.",
+    ]
+    (evidence / "repair.md").write_text("\n".join(repair_lines) + "\n", encoding="utf-8")
     print(json.dumps({k: result.get(k) for k in ("candidate_ready", "decision", "changed_files", "provider")}))
     return 0
 
