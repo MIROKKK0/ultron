@@ -374,7 +374,7 @@ def answer_with_provider(message: str, memories: list[str] | None = None,
     """Use the configured generative model with bounded conversation context."""
     if grounded_search:
         raise HTTPException(status_code=503, detail="A pesquisa deve ser executada pela ferramenta web.")
-    return generate_reply(message, history=history or [], memories=memories or [])
+    return generate_and_record(message, history=history or [], memories=memories or [])
 
 def synthesize_research_with_status(query: str, research: dict[str, Any]) -> tuple[str, str]:
     """Synthesize only retrieved evidence and retain direct source/video links."""
@@ -406,6 +406,14 @@ def synthesize_research_with_status(query: str, research: dict[str, Any]) -> tup
             synthesis_status = "provider_error"
     if not synthesis:
         synthesis = str(research.get("summary") or "Encontrei fontes, mas não consegui sintetizá-las agora.")
+    if synthesis_status == "gemini":
+        normalized_synthesis = synthesis.casefold()
+        expected_urls = [str(item.get("url", "")) for item in results if item.get("url")]
+        cited = sum(1 for url in expected_urls if url.casefold() in normalized_synthesis)
+        coverage = cited / max(1, len(expected_urls))
+        record_telemetry("citation_audit", tool_name="web_research",
+                         decision="gemini_citation_coverage",
+                         quality_score=round(coverage, 3))
     # Never rely on the model to reproduce URLs accurately. Attach canonical
     # links from the retrieval layer after synthesis, including video URLs.
     source_lines = []
@@ -1003,6 +1011,8 @@ def add_feedback(payload: FeedbackRequest, request: Request) -> dict[str, Any]:
                 (payload.strategy, reward, created_at),
             )
 
+    record_telemetry("user_feedback", quality_score=round((payload.rating - 1) / 4, 3),
+                     decision="explicit_rating")
     return {
         "id": feedback_id,
         "stored": True,
