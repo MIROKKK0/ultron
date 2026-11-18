@@ -141,7 +141,36 @@ def collect_github_signals() -> dict:
     except Exception as exc:
         errors.append(f"research: {type(exc).__name__}: {exc}")
 
+    web_research = []
+    try:
+        from ddgs import DDGS
+        queries = []
+        if failures:
+            latest = failures[0]
+            failed_step = next(
+                (step for job in latest.get("failed_jobs", []) for step in job.get("failed_steps", [])),
+                "GitHub Actions workflow failure",
+            )
+            queries.append(f"{latest.get('name', 'GitHub Actions')} {failed_step} troubleshooting regression test")
+        queries.append("Python automated repair CI regression testing safe fixes software engineering")
+        with DDGS(timeout=8) as search:
+            for query in queries[:2]:
+                results = search.text(
+                    query, region="br-pt", safesearch="moderate",
+                    max_results=4, backend="auto",
+                )
+                for item in results:
+                    web_research.append({
+                        "query": query,
+                        "title": (item.get("title") or "")[:180],
+                        "url": item.get("href") or "",
+                        "snippet": (item.get("body") or "")[:300],
+                    })
+    except Exception as exc:
+        errors.append(f"web_research: {type(exc).__name__}: {exc}")
+
     return {"recent_failures": failures, "open_issues": issues, "research_leads": research,
+            "web_research": web_research[:int(os.environ.get("ULTRON_RESEARCH_RESULT_LIMIT", "8"))],
             "reproduction_attempts": reproduction_attempts, "collection_errors": errors}
 
 
@@ -184,7 +213,8 @@ def render_markdown(report: dict) -> str:
         f"- Marcadores encontrados: {len(local['maintenance_markers'])}",
         f"- Falhas recentes de Actions: {len(report['recent_failures'])}",
         f"- Issues abertas: {len(report['open_issues'])}",
-        f"- Referências públicas: {len(report['research_leads'])}",
+        f"- Referências públicas GitHub: {len(report['research_leads'])}",
+        f"- Resultados de pesquisa web: {len(report.get('web_research', []))}",
         "",
         "## Prioridades verificáveis",
         *[f"- {item}" for item in report["priorities"]],
@@ -198,7 +228,9 @@ def render_markdown(report: dict) -> str:
     lines += [f"- `{item['file']}:{item['line']}` — {item['marker']}: {item['text']}" for item in local["maintenance_markers"]] or ["- Nenhum marcador encontrado."]
     lines += ["", "## Issues abertas"]
     lines += [f"- [#{item['number']} {item['title']}]({item['url']})" for item in report["open_issues"]] or ["- Nenhuma issue aberta."]
-    lines += ["", "## Pesquisa pública — pistas, não recomendações"]
+    lines += ["", "## Pesquisa web pública — pistas, não recomendações"]
+    lines += [f"- [{item['title']}]({item['url']}) — {item['snippet']} (consulta: {item['query']})" for item in report.get("web_research", [])] or ["- Nenhum resultado web verificável."]
+    lines += ["", "## Pesquisa pública no GitHub — pistas, não recomendações"]
     lines += [f"- [{item['name']}]({item['url']}) — {item['description']} (atualizado: {item['updated_at']}; licença: {item['license'] or 'não informada'})" for item in report["research_leads"]] or ["- Nenhum resultado verificável."]
     if report["collection_errors"]:
         lines += ["", "## Falhas de coleta", *[f"- {error}" for error in report["collection_errors"]]]
