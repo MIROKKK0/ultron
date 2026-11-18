@@ -12,6 +12,8 @@ from backend.app import app, calculate, save_conversation
 
 client = TestClient(app)
 AUTH = {"Authorization": "Bearer test-ultron-token"}
+INSTALL_A = {"X-ULTRON-Installation-ID": "11111111-1111-4111-8111-111111111111"}
+INSTALL_B = {"X-ULTRON-Installation-ID": "22222222-2222-4222-8222-222222222222"}
 
 
 class UltronTests(unittest.TestCase):
@@ -261,18 +263,35 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["completed"], 2)
 
-    def test_memory_crud(self):
-        created = client.post(
-            "/memory",
-            json={"content": "Lembrar de testar o ULTRON"},
-            headers=AUTH,
-        )
+    def test_memory_crud_is_installation_scoped_and_expires(self):
+        headers = {**AUTH, **INSTALL_A}
+        created = client.post("/memory", json={"content": "Lembrar de testar o ULTRON"}, headers=headers)
         self.assertEqual(created.status_code, 200)
         memory_id = created.json()["id"]
-        listed = client.get("/memory", headers=AUTH)
+        listed = client.get("/memory", headers=headers)
         self.assertTrue(any(item["id"] == memory_id for item in listed.json()["items"]))
-        deleted = client.delete(f"/memory/{memory_id}", headers=AUTH)
+        isolated = client.get("/memory", headers={**AUTH, **INSTALL_B})
+        self.assertFalse(any(item["id"] == memory_id for item in isolated.json()["items"]))
+        recall = client.get("/memory/search", params={"q": "testar ULTRON"}, headers=headers)
+        self.assertTrue(any(item["id"] == memory_id for item in recall.json()["items"]))
+        denied_delete = client.delete(f"/memory/{memory_id}", headers={**AUTH, **INSTALL_B})
+        self.assertEqual(denied_delete.status_code, 404)
+        deleted = client.delete(f"/memory/{memory_id}", headers=headers)
         self.assertEqual(deleted.status_code, 200)
+
+    def test_memory_requires_installation_scope(self):
+        response = client.get("/memory", headers=AUTH)
+        self.assertEqual(response.status_code, 400)
+
+    def test_telemetry_summary_contains_aggregates_not_private_content(self):
+        response = client.get("/telemetry/summary", headers=AUTH)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("latency_ms", payload)
+        self.assertIn("failure_rate", payload)
+        self.assertIn("input_tokens", payload)
+        self.assertIn("estimated_cost_usd", payload)
+        self.assertNotIn("content", payload)
 
     def test_public_remember_command_never_writes_shared_memory(self):
         before = client.get("/memory", headers=AUTH).json()["items"]
