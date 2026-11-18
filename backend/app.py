@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.brain import run_multitask
+from backend.generative import generate_reply, model_config
 from backend.local_decoder import decode_local
 from backend.neural_learning import ASSOCIATIVE_MEMORY, LEXICAL_ENCODER
 from backend.public_access import enforce_public_limit
@@ -272,10 +273,10 @@ def answer_without_provider(message: str, memories: list[str] | None = None,
 
 def answer_with_provider(message: str, memories: list[str] | None = None,
     history: list[str] | None = None, grounded_search: bool = False) -> str:
-    """Legacy compatibility shim; intentionally has no provider integration."""
+    """Use the configured generative model; never silently fake a provider response."""
     if grounded_search:
-        raise HTTPException(status_code=503, detail="Pesquisa web indisponível no modo local sem tokens.")
-    return answer_without_provider(message, memories, history)
+        raise HTTPException(status_code=503, detail="A pesquisa deve ser executada pela ferramenta web.")
+    return generate_reply(message)
 
 
 def learned_strategy_scores() -> dict[str, float]:
@@ -514,9 +515,11 @@ def health() -> dict[str, Any]:
         "database": "postgres" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
         "ai_configured": False,
         "intent_model": model_status(),
-        "generative_language_model_configured": False,
+        "generative_language_model_configured": model_config()["configured"],
+        "generative_model": model_config()["model"],
+        "generative_provider": model_config()["provider"],
         "neural_core_configured": False,
-        "external_ai_tokens_required": False,
+        "external_ai_tokens_required": True,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
         "health_check": "process_liveness_only",
     }
@@ -595,7 +598,16 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     elif message.casefold().startswith("/remember ") or re.match(r"^(lembre|lembra|guarde|anote)\s+(?:que\s+)?", message, re.I):
         response = "A memória pessoal exige autenticação por instalação. O chat público não grava dados compartilhados."
     else:
-        response = run_intent_skill(message) or answer_without_provider(message, [], [])
+        local_skill = run_intent_skill(message)
+        if local_skill:
+            response = local_skill
+        elif model_config()["configured"]:
+            try:
+                response = answer_with_provider(message)
+            except Exception:
+                response = "O modelo generativo está configurado, mas falhou ao responder agora. Tente novamente; não vou substituir a resposta por uma resposta local fingindo ser IA generativa."
+        else:
+            response = answer_without_provider(message, [], [])
     feedback_strategies = {role: float(score) for role, score in learned_strategy_scores().items() if role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
     return {"reply": response, "strategy": selected_strategy}
@@ -647,8 +659,10 @@ def runtime_status(request: Request) -> dict[str, Any]:
         "name": APP_NAME,
         "memory": memory_snapshot(budget_mb),
         "intent_model": model_status(),
-        "generative_model_configured": False,
-        "external_ai_providers": False,
+        "generative_model_configured": model_config()["configured"],
+        "generative_model": model_config()["model"],
+        "generative_provider": model_config()["provider"],
+        "external_ai_providers": model_config()["configured"],
     }
 
 
