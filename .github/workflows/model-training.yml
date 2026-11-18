@@ -52,6 +52,8 @@ jobs:
       - name: Train task-specific ULTRON specialist
         run: python -m training.generative.sft --dataset training/generative/ultron_specialist_v1.jsonl --epochs 15 --threads 2 --output artifacts/ultron-specialist-v1.pt
       - name: Evaluate task-specific specialist on held-out cases
+        env:
+          PYTHONPATH: .
         run: python scripts/evaluate_ultron_specialist.py --checkpoint artifacts/ultron-specialist-v1.pt --output ultron-specialist-eval.json
       - name: Upload task-specific model and evaluation report
         uses: actions/upload-artifact@v4
