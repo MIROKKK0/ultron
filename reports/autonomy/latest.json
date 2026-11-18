@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-18T04:24:23.394373+00:00",
+  "repository": "MIROKKK0/ultron",
+  "commit": "31bc4c01d2d749bd75ff4821dab14472b2b37ba6",
+  "scope": "public research plus bounded deterministic repair experiment; no external code execution, merge or production deployment",
+  "local": {
+    "files_scanned": 18,
+    "maintenance_markers": []
+  },
+  "recent_failures": [],
+  "open_issues": [
+    {
+      "number": 55,
+      "title": "[ULTRON] Relatório autônomo de investigação",
+      "url": "https://github.com/MIROKKK0/ultron/issues/55"
+    }
+  ],
+  "research_leads": [
+    {
+      "name": "Fpeazy/news-image-20261117",
+      "description": "THE WORLD — one image summing up Tuesday 17 November 2026: 30 stories, 5 continents, one page. Built by an AI agent for make.fun's “Sum up 17 November's world news in one image” bounty, $250 in USDC.",
+      "url": "https://github.com/Fpeazy/news-image-20261117",
+      "updated_at": "2026-11-18T00:39:39Z",
+      "license": "NOASSERTION"
+    },
+    {
+      "name": "AN0099/toothpaste-kit",
+      "description": "This is a set of documentation both for the user and the agent; an information corpus, a skill library, and agent relay protocol for working with multiple agents.",
+      "url": "https://github.com/AN0099/toothpaste-kit",
+      "updated_at": "2026-11-12T08:08:05Z",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "haiyangchenbj/source-doc-slimming",
+      "description": "First public release: keep/move test, verbatim relocation, shape guard and line-by-line lossless replay.",
+      "url": "https://github.com/haiyangchenbj/source-doc-slimming",
+      "updated_at": "2026-11-18T04:24:13Z",
+      "license": null
+    },
+    {
+      "name": "agledger-ai/sdk-python",
+      "description": "AGLedger Python SDK: change control for AI agents. Self-hosted, signed, hash-chained. Patent pending.",
+      "url": "https://github.com/agledger-ai/sdk-python",
+      "updated_at": "2026-11-05T16:38:28Z",
+      "license": "NOASSERTION"
+    },
+    {
+      "name": "wangxb96/Awesome-EdgeAI",
+      "description": "Resources of our survey paper \"Optimizing Edge AI: A Comprehensive Survey on Data, Model, and System Strategies\" and \"Cognitive Edge Computing: A Comprehensive Survey on Optimizing Large Models and AI Agents for Pervasiv",
+      "url": "https://github.com/wangxb96/Awesome-EdgeAI",
+      "updated_at": "2026-11-16T14:06:32Z",
+      "license": "NOASSERTION"
+    },
+    {
+      "name": "superdesigndev/treg",
+      "description": "OpenRouter for agent tools. Join community here: https://discord.gg/6mQYYfFMAn",
+      "url": "https://github.com/superdesigndev/treg",
+      "updated_at": "2026-11-18T04:23:52Z",
+      "license": "NOASSERTION"
+    },
+    {
+      "name": "UrBaneee/MAEDA",
+      "description": "Multi-agent enterprise data analyst on LangGraph — NL question → analysis → charts → insight report, with guardrails, LLM-as-judge eval on every run, full decision tracing, and MCP integration to data-cleaning & RAG sub-",
+      "url": "https://github.com/UrBaneee/MAEDA",
+      "updated_at": "2026-11-12T04:52:36Z",
+      "license": "MIT"
+    },
+    {
+      "name": "kingcritket/news-image-20261117-bot",
+      "description": "One image summing up the world news of Tuesday 17 November 2026. Built by an AI agent for make.fun’s “Sum up 17 November’s world news in one image” bounty, $250 in USDC.",
+      "url": "https://github.com/kingcritket/news-image-20261117-bot",
+      "updated_at": "2026-11-18T04:23:41Z",
+      "license": "NOASSERTION"
+    }
+  ],
+  "web_research": [
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "Welcome to Python.org",
+      "url": "https://www.python.org/",
+      "snippet": "Docs Documentation for Python's standard library, along with tutorials and guides, are available online. docs.python.org"
+    },
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "PyCharm: The Python IDE for you and your agents - JetBrains",
+      "url": "https://www.jetbrains.com/pycharm/",
+      "snippet": "PyCharm is the professional Python IDE for you and your agents – ship web, data, and ML code you can trust."
+    },
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "Download Python | Python.org",
+      "url": "https://www.python.org/downloads/",
+      "snippet": "Looking for Python with a different OS? Python for Windows, Linux/Unix, macOS, Android, iOS, other Want to help test development versions of Python 3.16? Pre-releases, Docker images"
+    },
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "Online Python - IDE, Editor, Compiler, Interpreter",
+      "url": "https://www.online-python.com/",
+      "snippet": "Build and Run your Python code instantly. Online-Python is a quick and easy tool that helps you to build, compile, test your python programs."
+    }
+  ],
+  "reproduction_attempts": [],
+  "collection_errors": [],
+  "priorities": [
+    "Agrupar issues abertas por componente e evitar criar tarefas duplicadas.",
+    "Revisar manualmente relevância, licença, segurança e data das referências públicas antes de adotar qualquer técnica.",
+    "Expandir receitas de reparo somente quando houver falha reproduzível, teste de regressão e evidência de não regressão."
+  ]
+}

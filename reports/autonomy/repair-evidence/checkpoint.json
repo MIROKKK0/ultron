@@ -1,0 +1,12 @@
+{
+  "checkpoint_id": "2e80e3b6-2efd-4208-8bcc-4c39dd39eea0",
+  "created_at": "2026-11-18T04:24:23.453058+00:00",
+  "base_commit": "31bc4c01d2d749bd75ff4821dab14472b2b37ba6",
+  "working_tree_before_repair": [
+    "?? reports/",
+    "?? scripts/__pycache__/",
+    "?? tests/__pycache__/",
+    "?? ultron_core/__pycache__/"
+  ],
+  "restore_strategy": "git restore --source=HEAD --staged --worktree -- changed tracked files"
+}
