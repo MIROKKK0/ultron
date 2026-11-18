@@ -1,0 +1,8 @@
+{
+  "candidate_ready": false,
+  "decision": "Gemini proposal failed: InternalServerError",
+  "provider": "gemini",
+  "http_status": 503,
+  "error_code": null,
+  "changed_files": []
+}

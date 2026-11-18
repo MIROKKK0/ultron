@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-18T04:46:10.136433+00:00",
+  "repository": "MIROKKK0/ultron",
+  "commit": "e1d1e6f947faa85a46108d83da643708ecee8028",
+  "scope": "public research plus bounded deterministic repair experiment; no external code execution, merge or production deployment",
+  "local": {
+    "files_scanned": 18,
+    "maintenance_markers": []
+  },
+  "recent_failures": [
+    {
+      "name": "ULTRON iOS IPA",
+      "branch": "feat/ios-ipa-bootstrap",
+      "sha": "34842e6cb5e9",
+      "created_at": "2026-11-18T04:40:29Z",
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44238948876",
+      "run_id": 44238948876,
+      "run_attempt": 1,
+      "workflow_name": "ULTRON iOS IPA",
+      "failed_jobs": []
+    },
+    {
+      "name": "ULTRON iOS IPA",
+      "branch": "feat/ios-ipa-bootstrap",
+      "sha": "34842e6cb5e9",
+      "created_at": "2026-11-18T04:40:25Z",
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44238940102",
+      "run_id": 44238940102,
+      "run_attempt": 1,
+      "workflow_name": "ULTRON iOS IPA",
+      "failed_jobs": [
+        {
+          "job": "Build and validate unsigned iOS IPA",
+          "failed_steps": [
+            "Build for physical iOS devices"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ULTRON iOS IPA",
+      "branch": "feat/ios-ipa-bootstrap",
+      "sha": "0a801774b16b",
+      "created_at": "2026-11-18T04:40:12Z",
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44238914906",
+      "run_id": 44238914906,
+      "run_attempt": 1,
+      "workflow_name": "ULTRON iOS IPA",
+      "failed_jobs": [
+        {
+          "job": "Build and validate unsigned iOS IPA",
+          "failed_steps": [
+            "Build for physical iOS devices"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ULTRON CI",
+      "branch": "feat/ultron-gemini-investigator-bridge",
+      "sha": "d9b214692073",
+      "created_at": "2026-11-18T04:35:46Z",
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44238417023",
+      "run_id": 44238417023,
+      "run_attempt": 2,
+      "workflow_name": "ULTRON CI",
+      "failed_jobs": [
+        {
+          "job": "Python validation",
+          "failed_steps": [
+            "Run ULTRON unit tests"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ULTRON autonomous investigator and repair experiment",
+      "branch": "feat/ultron-gemini-investigator-bridge",
+      "sha": "4fa073840fc3",
+      "created_at": "2026-11-18T04:32:36Z",
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44238042684",
+      "run_id": 44238042684,
+      "run_attempt": 1,
+      "workflow_name": "ULTRON autonomous investigator and repair experiment",
+      "failed_jobs": [
+        {
+          "job": "investigate-and-repair",
+          "failed_steps": [
+            "Validate investigation evidence"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ULTRON autonomous investigator and repair experiment",
+      "branch": "feat/ultron-gemini-investigator-bridge",
+      "sha": "31bc4c01d2d7",
+      "created_at": "2026-11-18T04:23:56Z",
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44237040943",
+      "run_id": 44237040943,
+      "run_attempt": 2,
+      "workflow_name": "ULTRON autonomous investigator and repair experiment",
+      "failed_jobs": [
+        {
+          "job": "investigate-and-repair",
+          "failed_steps": [
+            "Run isolated repair experiment"
+          ]
+        }
+      ]
+    }
+  ],
+  "open_issues": [
+    {
+      "number": 55,
+      "title": "[ULTRON] Relatório autônomo de investigação",
+      "url": "https://github.com/MIROKKK0/ultron/issues/55"
+    }
+  ],
+  "research_leads": [
+    {
+      "name": "ventura8/Tutti",
+      "description": "Orchestrate AI coding agents across your machines: Claude Code as conductor, Cursor, Google Antigravity and local models as workers, remote test boxes, quota pacing.",
+      "url": "https://github.com/ventura8/Tutti",
+      "updated_at": "2026-11-14T11:58:05Z",
+      "license": "MIT"
+    },
+    {
+      "name": "imatixofficel/Scanner-matix",
+      "description": "🔍 Clean Cloudflare IPs, tested every 10 minutes. Real speed. Real results. No duplicates. No fake data. Just fast IPs for your VLESS configs.",
+      "url": "https://github.com/imatixofficel/Scanner-matix",
+      "updated_at": "2026-11-14T14:17:36Z",
+      "license": null
+    },
+    {
+      "name": "irlm/model-router",
+      "description": "Which model and effort each kind of Claude Code agent work should use, measured: benchmark, decision rules, and a status-line widget that routes Agent calls",
+      "url": "https://github.com/irlm/model-router",
+      "updated_at": "2026-11-10T16:37:38Z",
+      "license": "MIT"
+    },
+    {
+      "name": "Twil3akine/gwitg",
+      "description": "A Codex Agent Skill for delegating independent work to parallel subagents without turning the parent into a progress monitor.",
+      "url": "https://github.com/Twil3akine/gwitg",
+      "updated_at": "2026-10-17T03:47:48Z",
+      "license": "MIT"
+    },
+    {
+      "name": "surfingalien/HERMES-AGENT-MASTERY-MAP",
+      "description": "HERMES AGENT MASTERY MAP",
+      "url": "https://github.com/surfingalien/HERMES-AGENT-MASTERY-MAP",
+      "updated_at": "2026-11-17T19:40:10Z",
+      "license": "MIT"
+    },
+    {
+      "name": "ridhofatahillah2004-byte/gta6-twitch-ccu-forecast-01",
+      "description": "Two-regime log-ratio forecaster for GTA VI's launch-day Twitch viewers, hour by hour. Built by an AI agent for make.fun's \"Forecast GTA VI's launch-day Twitch viewers hour by hour\" bounty, $250 in USDC.",
+      "url": "https://github.com/ridhofatahillah2004-byte/gta6-twitch-ccu-forecast-01",
+      "updated_at": "2026-11-17T15:18:13Z",
+      "license": "NOASSERTION"
+    },
+    {
+      "name": "thomas3577-star/gh-pr-metrics",
+      "description": "GitHub Copilot agent that reports how a team's pull requests move through review: time to merge, where time goes, skipped reviews, reverts, PR size and unfinished work. Per-repo HTML reports by sprint or month, using gh ",
+      "url": "https://github.com/thomas3577-star/gh-pr-metrics",
+      "updated_at": "2026-11-16T10:15:42Z",
+      "license": null
+    },
+    {
+      "name": "2093779728dulan-afk/makefun-news-18",
+      "description": "The world of 18 November 2026 in one front-page image. Built by an AI agent for make.fun",
+      "url": "https://github.com/2093779728dulan-afk/makefun-news-18",
+      "updated_at": "2026-11-18T04:45:37Z",
+      "license": "NOASSERTION"
+    }
+  ],
+  "web_research": [
+    {
+      "query": "ULTRON iOS IPA GitHub Actions workflow failure troubleshooting regression test",
+      "title": "Troubleshooting workflows - GitHub Docs",
+      "url": "https://docs.github.com/actions/monitoring-and-troubleshooting-workflows/troubleshooting-workflows/about-troubleshooting-workflows",
+      "snippet": "Setting an Actions budget may help immediately unblock workflows failing due to billing or storage errors. It will allow further minutes and storage usage to be billed up to the set budget amount."
+    },
+    {
+      "query": "ULTRON iOS IPA GitHub Actions workflow failure troubleshooting regression test",
+      "title": "GitHub - Apple-Actions/Example-iOS: An example of how to use ...",
+      "url": "https://github.com/Apple-Actions/Example-iOS",
+      "snippet": "An example of how to use Apple development GitHub Actions to build, sign, and upload an iOS app to TestFlight. The workflow lives at .github/workflows/build-ios-app.yml."
+    },
+    {
+      "query": "ULTRON iOS IPA GitHub Actions workflow failure troubleshooting regression test",
+      "title": "GitHub Actions Mobile CI: Reliable Android & iOS E2E Tests",
+      "url": "https://flytrap.dev/blog/github-actions-mobile-tests-step-by-step-workflow-setup",
+      "snippet": "Jul 20, 2026 · This guide shows a concrete GitHub Actions workflow that builds signed Android and iOS artifacts, runs deterministic end-to-end tests on real devices in parallel, and returns evidence your team can act on."
+    },
+    {
+      "query": "ULTRON iOS IPA GitHub Actions workflow failure troubleshooting regression test",
+      "title": "How Do You Troubleshoot Bugs and Unexpected Failures ... - GitHub",
+      "url": "https://github.com/orgs/community/discussions/213079",
+      "snippet": "4 days ago · Hi everyone! I'm learning more about GitHub Actions and how to use workflows to automate projects. I'm interested in understanding how developers find and fix bugs when workflows don't behave as expected. For example, sometimes a workflow might fail unexpectedly, a job might get stuck, "
+    },
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "Regression testing: Automate it with CI/CD - CircleCI",
+      "url": "https://circleci.com/blog/regression-testing-and-how-to-automate-it-with-ci/",
+      "snippet": "Mar 5, 2026 · Learn what regression testing is, how it differs from retesting, and how to automate it in a CI/CD pipeline to catch bugs early and ship safely."
+    },
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "Regression Testing in CI/CD Pipelines - Complete Guide",
+      "url": "https://www.virtuosoqa.com/post/ci-cd-regression-testing",
+      "snippet": "Apr 8, 2026 · Embed regression testing into CI/CD pipelines with practical patterns for quality gates, parallel execution, self-healing tests, and AI automation."
+    },
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "Autonomous Code Repair Agent - GitHub",
+      "url": "https://github.com/Debargha08/Autonomous-code-repair-agent",
+      "snippet": "An autonomous AI-powered software repair system that detects failing tests, localizes failures, infers expected behavior, generates structured code repairs, applies them safely, and validates the result through targeted and regression testing."
+    },
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "Automated Regression Testing: The Complete 2026 Guide",
+      "url": "https://roadmap.sh/ai-engineer/automated-regression-testing",
+      "snippet": "Automated regression testing uses a testing framework to execute those same test cases programmatically after every commit, during a pull request, before deployment, or at other stages of a CI/CD pipeline without human intervention. Before those tests can run, you need something to run them against."
+    }
+  ],
+  "reproduction_attempts": [
+    {
+      "run_id": 44238948876,
+      "url": "https://github.com/MIROKKK0/ultron/actions/runs/44238948876",
+      "attempt": {
+        "status": 201,
+        "result": "rerun_requested"
+      }
+    }
+  ],
+  "collection_errors": [],
+  "priorities": [
+    "Reproduzir a falha mais recente em runner limpo; identificar job/step e registrar o teste que falha antes de editar.",
+    "Agrupar issues abertas por componente e evitar criar tarefas duplicadas.",
+    "Revisar manualmente relevância, licença, segurança e data das referências públicas antes de adotar qualquer técnica.",
+    "Expandir receitas de reparo somente quando houver falha reproduzível, teste de regressão e evidência de não regressão."
+  ]
+}
