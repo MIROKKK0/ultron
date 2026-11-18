@@ -7,6 +7,8 @@ import operator
 import os
 import re
 import sqlite3
+import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -108,6 +110,17 @@ def init_db() -> None:
                 state_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )""")
+            execute(db, "ALTER TABLE memories ADD COLUMN IF NOT EXISTS installation_id TEXT")
+            execute(db, "ALTER TABLE memories ADD COLUMN IF NOT EXISTS expires_at TEXT")
+            execute(db, "CREATE INDEX IF NOT EXISTS memories_installation_idx ON memories(installation_id, id DESC)")
+            execute(db, """CREATE TABLE IF NOT EXISTS telemetry_events (
+                id BIGSERIAL PRIMARY KEY, event_type TEXT NOT NULL, route TEXT NOT NULL DEFAULT '',
+                method TEXT NOT NULL DEFAULT '', status_code INTEGER, latency_ms DOUBLE PRECISION NOT NULL DEFAULT 0,
+                model TEXT NOT NULL DEFAULT '', input_tokens INTEGER, output_tokens INTEGER,
+                estimated_cost_usd DOUBLE PRECISION, tool_name TEXT NOT NULL DEFAULT '',
+                decision TEXT NOT NULL DEFAULT '', quality_score DOUBLE PRECISION,
+                created_at TEXT NOT NULL
+            )""")
         else:
             execute(db, """
                 CREATE TABLE IF NOT EXISTS memories (
@@ -136,6 +149,22 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 state_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL
+            )""")
+            for statement in (
+                "ALTER TABLE memories ADD COLUMN installation_id TEXT",
+                "ALTER TABLE memories ADD COLUMN expires_at TEXT",
+            ):
+                try:
+                    execute(db, statement)
+                except sqlite3.OperationalError:
+                    pass
+            execute(db, "CREATE INDEX IF NOT EXISTS memories_installation_idx ON memories(installation_id, id DESC)")
+            execute(db, """CREATE TABLE IF NOT EXISTS telemetry_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, route TEXT NOT NULL DEFAULT '',
+                method TEXT NOT NULL DEFAULT '', status_code INTEGER, latency_ms REAL NOT NULL DEFAULT 0,
+                model TEXT NOT NULL DEFAULT '', input_tokens INTEGER, output_tokens INTEGER,
+                estimated_cost_usd REAL, tool_name TEXT NOT NULL DEFAULT '',
+                decision TEXT NOT NULL DEFAULT '', quality_score REAL, created_at TEXT NOT NULL
             )""")
 
 
@@ -166,6 +195,50 @@ def persist_associative_memory() -> None:
 
 init_db()
 load_associative_memory()
+
+def record_telemetry(event_type: str, *, route: str = "", method: str = "",
+                     status_code: int | None = None, latency_ms: float = 0.0,
+                     model: str = "", input_tokens: int | None = None,
+                     output_tokens: int | None = None, estimated_cost_usd: float | None = None,
+                     tool_name: str = "", decision: str = "",
+                     quality_score: float | None = None) -> None:
+    """Persist metadata only: never prompts, outputs, IPs, installation IDs or secrets."""
+    try:
+        with connect_db() as db:
+            execute(db, """INSERT INTO telemetry_events
+                (event_type, route, method, status_code, latency_ms, model, input_tokens,
+                 output_tokens, estimated_cost_usd, tool_name, decision, quality_score, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (event_type[:60], route[:160], method[:12], status_code,
+                 max(0.0, float(latency_ms)), model[:100], input_tokens, output_tokens,
+                 estimated_cost_usd, tool_name[:80], decision[:120], quality_score,
+                 datetime.now(timezone.utc).isoformat()))
+    except Exception:
+        return
+
+
+def installation_scope(installation_id: str | None) -> str:
+    """Validate the client installation namespace; caller must also authenticate."""
+    try:
+        return str(uuid.UUID(installation_id or ""))
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail="Envie um X-ULTRON-Installation-ID UUID válido.") from exc
+
+
+@app.middleware("http")
+async def request_telemetry(request: Request, call_next):
+    started = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        record_telemetry("http_request", route=request.url.path, method=request.method,
+                         status_code=status, latency_ms=(time.perf_counter() - started) * 1000)
+
+
+
 
 
 class ChatRequest(BaseModel):
