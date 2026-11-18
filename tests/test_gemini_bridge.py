@@ -40,5 +40,51 @@ class GeminiBridgeTests(unittest.TestCase):
         self.assertIn("path_outside_workspace", decision.reasons)
 
 
+    def test_request_proposal_uses_structured_json_and_configured_model(self):
+        from unittest.mock import MagicMock
+        from scripts.ultron_gemini_proposer import request_proposal
+
+        message = MagicMock()
+        message.content = '{"summary":"Fix bounded parser","patch":"diff --git a/src/parser.py b/src/parser.py\\n"}'
+        client = MagicMock()
+        client.chat.completions.create.return_value.choices = [
+            MagicMock(message=message)
+        ]
+        with patch("scripts.ultron_gemini_proposer.build_provider", return_value=(client, "gemini-3.8-flash")):
+            result = request_proposal("source context", "test failure")
+        self.assertEqual(result["summary"], "Fix bounded parser")
+        self.assertIn("diff --git", result["patch"])
+        client.chat.completions.create.assert_called_once()
+        kwargs = client.chat.completions.create.call_args.kwargs
+        self.assertEqual(kwargs["model"], "gemini-3.8-flash")
+        self.assertEqual(kwargs["temperature"], 0)
+        self.assertEqual(kwargs["response_format"], {"type": "json_object"})
+
+    def test_request_proposal_rejects_invalid_json_and_missing_fields(self):
+        from unittest.mock import MagicMock
+        from scripts.ultron_gemini_proposer import request_proposal
+
+        for content in ("not-json", '{"summary":"missing patch"}', '{"patch":""}'):
+            with self.subTest(content=content):
+                message = MagicMock()
+                message.content = content
+                client = MagicMock()
+                client.chat.completions.create.return_value.choices = [
+                    MagicMock(message=message)
+                ]
+                with patch("scripts.ultron_gemini_proposer.build_provider", return_value=(client, "gemini-3.8-flash")):
+                    with self.assertRaises((ValueError, __import__("json").JSONDecodeError)):
+                        request_proposal("source context", "test failure")
+
+    def test_request_proposal_propagates_transport_failure_for_failure_evidence(self):
+        from scripts.ultron_gemini_proposer import request_proposal
+
+        client = __import__("unittest").mock.MagicMock()
+        client.chat.completions.create.side_effect = TimeoutError("simulated timeout")
+        with patch("scripts.ultron_gemini_proposer.build_provider", return_value=(client, "gemini-3.8-flash")):
+            with self.assertRaises(TimeoutError):
+                request_proposal("source context", "test failure")
+
+
 if __name__ == "__main__":
     unittest.main()
