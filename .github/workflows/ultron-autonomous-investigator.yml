@@ -14,9 +14,8 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
+  issues: write
   actions: read
-  issues: read
 
 concurrency:
   group: ultron-autonomous-investigator
@@ -43,20 +42,47 @@ jobs:
         run: |
           python -m json.tool reports/autonomy/latest.json > /dev/null
           test -s reports/autonomy/latest.md
-      - name: Publish findings as a reviewable PR
-        uses: peter-evans/create-pull-request@v7
+      - name: Publish report branch
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/autonomy/latest.json reports/autonomy/latest.md
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "chore(autonomy): publish verified investigation report"
+          REPORT_COMMIT="$(git rev-parse HEAD)"
+          git fetch origin feat/ultron-core-assistant
+          git checkout -B ultron/autonomy-findings origin/feat/ultron-core-assistant
+          git cherry-pick "$REPORT_COMMIT"
+          git push --force origin ultron/autonomy-findings
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Create or update investigation issue
+        if: steps.publish.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: reports/autonomy/latest.md
         with:
-          token: ${{ github.token }}
-          branch: ultron/autonomy-findings
-          delete-branch: false
-          base: ${{ github.event_name == 'schedule' && github.event.repository.default_branch || 'feat/ultron-core-assistant' }}
-          title: "ULTRON autonomous investigation findings"
-          commit-message: "chore(autonomy): publish verified investigation report"
-          body: |
-            Relatório produzido pelo investigador agendado do ULTRON.
-            Inclui falhas de Actions, issues, marcadores de manutenção e pistas públicas.
-            Este PR contém evidências e prioridades; não altera código de produto.
-            Nenhuma fonte externa foi executada. Revisão humana necessária antes de qualquer reparo.
-          add-paths: |
-            reports/autonomy/latest.json
-            reports/autonomy/latest.md
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
+            const title = '[ULTRON] Relatório autônomo de investigação';
+            const { owner, repo } = context.repo;
+            const listed = await github.rest.issues.listForRepo({ owner, repo, state: 'open', per_page: 100 });
+            const existing = listed.data.find(item => !item.pull_request && item.title === title);
+            const compare = `https://github.com/${owner}/${repo}/compare/feat/ultron-core-assistant...ultron/autonomy-findings?expand=1`;
+            const body = report + '\n\n---\n' +
+              'Branch com os artefatos: ' + compare + '\n\n' +
+              'Este ciclo não altera código de produto nem faz merge. Revisão humana necessária.';
+            if (existing) {
+              await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
+              core.info(`Updated investigation issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({ owner, repo, title, body });
+              core.info(`Created investigation issue #${created.data.number}`);
+            }
