@@ -98,8 +98,8 @@ class LocalVectorIndex:
         rows = self._execute("""SELECT m.id,m.content FROM cognitive_memories m
             LEFT JOIN cognitive_memory_vectors v
               ON v.owner_id=m.owner_id AND v.memory_id=m.id
-            WHERE m.owner_id=? AND v.memory_id IS NULL
-            ORDER BY m.id LIMIT ?""", (owner_id, int(limit))).fetchall()
+            WHERE m.owner_id=? AND (v.memory_id IS NULL OR v.encoder_version<>?)
+            ORDER BY m.id LIMIT ?""", (owner_id, self.vectorizer.VERSION, int(limit))).fetchall()
         indexed = 0
         for row in rows:
             item = dict(row) if not isinstance(row, dict) else row
@@ -120,8 +120,8 @@ class LocalVectorIndex:
                 m.confidence,m.created_at,m.last_accessed_at,m.access_count
             FROM cognitive_memory_vectors v
             JOIN cognitive_memories m ON m.id=v.memory_id AND m.owner_id=v.owner_id
-            WHERE v.owner_id=? AND (? IS NULL OR m.kind=?)""",
-            (owner_id, kind, kind)).fetchall()
+            WHERE v.owner_id=? AND v.encoder_version=? AND (? IS NULL OR m.kind=?)""",
+            (owner_id, self.vectorizer.VERSION, kind, kind)).fetchall()
         ranked = []
         for row in rows:
             item = dict(row) if not isinstance(row, dict) else row
