@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-18T04:08:50.040755+00:00",
+  "repository": "MIROKKK0/ultron",
+  "commit": "89d34a504829b87e89929033a74186aaa533ae23",
+  "scope": "public research plus bounded deterministic repair experiment; no external code execution, merge or production deployment",
+  "local": {
+    "files_scanned": 12,
+    "maintenance_markers": []
+  },
+  "recent_failures": [],
+  "open_issues": [
+    {
+      "number": 55,
+      "title": "[ULTRON] Relatório autônomo de investigação",
+      "url": "https://github.com/MIROKKK0/ultron/issues/55"
+    }
+  ],
+  "research_leads": [
+    {
+      "name": "anulum/synapse-channel",
+      "description": "Neutral control plane for coding-agent fleets: claims, roles, mailbox reliability, receipts, audit, federation, dead-letter visibility, sandbox receipts, and cross-agent coordination. This is still pre-1.0.0 - Software w",
+      "url": "https://github.com/anulum/synapse-channel",
+      "updated_at": "2026-11-11T06:44:33Z",
+      "license": "AGPL-3.0"
+    },
+    {
+      "name": "sumeetamin/retail-demand-intelligence",
+      "description": "Retail demand forecasting with temporal backtests and inventory planning. Across three held-out windows, boosting cut mean MAE 18.3% vs seasonal but raised simulated inventory cost 9.2%; seasonal stayed preferred under t",
+      "url": "https://github.com/sumeetamin/retail-demand-intelligence",
+      "updated_at": "2026-11-17T15:40:39Z",
+      "license": "MIT"
+    },
+    {
+      "name": "virajPatel005/TicketPilot",
+      "description": "LLM-powered support ticket triage with RAG, human approval gating, audit trail, and evaluated accuracy on a holdout set.",
+      "url": "https://github.com/virajPatel005/TicketPilot",
+      "updated_at": "2026-11-18T04:08:36Z",
+      "license": "MIT"
+    },
+    {
+      "name": "drnhsproject/smart-package",
+      "description": "AI Agent Skill For Plan Before Write The Code",
+      "url": "https://github.com/drnhsproject/smart-package",
+      "updated_at": "2026-11-18T03:39:35Z",
+      "license": "MIT"
+    }
+  ],
+  "web_research": [
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "Regression testing: Automate it with CI/CD - CircleCI",
+      "url": "https://circleci.com/blog/regression-testing-and-how-to-automate-it-with-ci/",
+      "snippet": "Mar 5, 2026 · Learn what regression testing is, how it differs from retesting, and how to automate it in a CI/CD pipeline to catch bugs early and ship safely."
+    },
+    {
+      "query": "Python automated repair CI regression testing safe fixes software engineering",
+      "title": "Autonomous Code Repair Agent - GitHub",
+      "url": "https://github.com/Debargha08/Autonomous-code-repair-agent",
+      "snippet": "An autonomous AI-powered software repair system that detects failing tests, localizes failures, infers expected behavior, generates structured code repairs, applies them safely, and validates the result through targeted and regression testing."
+    }
+  ],
+  "reproduction_attempts": [],
+  "collection_errors": [],
+  "priorities": [
+    "Agrupar issues abertas por componente e evitar criar tarefas duplicadas.",
+    "Revisar manualmente relevância, licença, segurança e data das referências públicas antes de adotar qualquer técnica.",
+    "Expandir receitas de reparo somente quando houver falha reproduzível, teste de regressão e evidência de não regressão."
+  ]
+}
