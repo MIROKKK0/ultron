@@ -378,6 +378,14 @@ def save_conversation(role: str, content: str) -> None:
         )
 
 
+def load_installation_memories(tenant: str, query: str) -> list[str]:
+    now = datetime.now(timezone.utc).isoformat()
+    with connect_db() as db:
+        execute(db, "DELETE FROM memories WHERE installation_id = ? AND expires_at IS NOT NULL AND expires_at <= ?", (tenant, now))
+        rows = execute(db, "SELECT content, created_at FROM memories WHERE installation_id = ? ORDER BY id DESC LIMIT 100", (tenant,)).fetchall()
+    return rank_memories(query, rows, limit=8)
+
+
 def answer_without_provider(message: str, memories: list[str] | None = None,
     history: list[str] | None = None) -> str:
     """Token-free local answer path; no hosted model is called."""
@@ -513,6 +521,7 @@ def execute_brain_cycle(
     history: list[str] | None = None,
     *,
     include_private_memories: bool = True,
+    installation_id: str | None = None,
 ) -> dict[str, Any]:
     """Run real local planner/solver/critic tools; research intents use web search.
 
@@ -522,12 +531,10 @@ def execute_brain_cycle(
     if not normalized_goal:
         raise ValueError("Informe o objetivo.")
 
-    if include_private_memories:
-        with connect_db() as db:
-            rows = execute(db, "SELECT content FROM memories ORDER BY id DESC LIMIT 100").fetchall()
-        memories = rank_memories(normalized_goal, rows, limit=8)
+    if include_private_memories and installation_id:
+        memories = load_installation_memories(installation_scope(installation_id), normalized_goal)
     else:
-        # Public chat must never read memories belonging to another installation.
+        # Never fall back to the legacy global memory rows.
         memories = []
     scores = learned_strategy_scores()
 
@@ -774,7 +781,13 @@ def _extract_research_query(message: str) -> str | None:
 def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
     enforce_public_limit(request, "chat", limit=20)
     message = payload.message.strip()
-    # Public chat must not read or write shared private memories/conversations.
+    installation_id = request.headers.get("X-ULTRON-Installation-ID")
+    installation_token = request.headers.get("X-ULTRON-Installation-Token")
+    installation_memories: list[str] = []
+    if installation_id or installation_token:
+        tenant = verify_installation(installation_id, installation_token)
+        installation_memories = load_installation_memories(tenant, message)
+    # Chat without installation credentials remains stateless and private-memory-free.
     research_query = message[10:].strip() if message.casefold().startswith("/research ") else _extract_research_query(message)
     calculation = re.match(r"^(?:quanto é|quanto dá|calcule|calcular|resultado de)\s+(.+?)\s*[?.!]*$", message, re.I)
     # Accept a plain expression such as "1+9", without requiring a command.
@@ -797,7 +810,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
             try:
                 brain_result = execute_brain_cycle(
                     goal,
-                    include_private_memories=False,
+                    include_private_memories=True,
+                    installation_id=installation_id,
                 )
                 response = brain_result["synthesis"]
             except RuntimeError:
@@ -825,11 +839,11 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, str]:
                 if separator and role.strip() in ("user", "assistant") and content.strip():
                     parsed_history.append({"role": role.strip(), "content": content.strip()[:1000]})
             try:
-                response = generate_and_record(message, parsed_history)
+                response = generate_and_record(message, parsed_history, installation_memories)
             except Exception:
                 response = "O modelo generativo está configurado, mas falhou ao responder agora. Tente novamente; não vou substituir a resposta por uma resposta local fingindo ser IA generativa."
         else:
-            response = answer_without_provider(message, [], [])
+            response = answer_without_provider(message, installation_memories, [])
     feedback_strategies = {role: float(score) for role, score in learned_strategy_scores().items() if role in ("planner", "solver", "critic")}
     selected_strategy = max(feedback_strategies, key=feedback_strategies.get)
     return {"reply": response, "strategy": selected_strategy}
