@@ -85,15 +85,12 @@ def apply_candidate(root: Path, patch: str, summary: str):
     runner = EvolutionOrchestrator(root, timeout_seconds=TEST_TIMEOUT)
     if not paths or not runner.validate_patch_paths(paths):
         return {"candidate_ready": False, "decision": "Patch paths escaped workspace.", "changed_files": []}
-    decision = runner.decide(paths, runner.__class__(root, timeout_seconds=TEST_TIMEOUT).run_tests(),
-                             diff_valid=False, within_budget=True)
     # Sensitive paths are deliberately never model-editable in unattended mode.
     from ultron_core.governance import evaluate_evolution
     gate = evaluate_evolution(paths, tests_passed=True, diff_valid=True)
     if not gate.accepted and "human_review_required" in gate.reasons:
         return {"candidate_ready": False, "decision": "Sensitive path requires human review.", "changed_files": []}
-    check = _run(["git", "apply", "--check", "--", "-"], root)
-    # Feed patch through stdin in a separate subprocess; never execute model output.
+    # Feed patch through stdin; model output is never executed as a command.
     check = subprocess.run(["git", "apply", "--check"], cwd=root, input=patch,
                            capture_output=True, text=True, timeout=30, check=False)
     if check.returncode:
