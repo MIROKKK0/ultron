@@ -1,0 +1,56 @@
+name: ULTRON autonomous investigator
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub schedules are best-effort and only run from the default branch.
+    - cron: "17 * * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  issues: read
+
+concurrency:
+  group: ultron-autonomous-investigator
+  cancel-in-progress: true
+
+jobs:
+  investigate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run bounded investigation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python scripts/ultron_autonomous_agent.py
+      - name: Validate generated report
+        run: |
+          python -m json.tool reports/autonomy/latest.json > /dev/null
+          test -s reports/autonomy/latest.md
+      - name: Publish findings as a reviewable PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ github.token }}
+          branch: ultron/autonomy-findings
+          delete-branch: false
+          base: ${{ github.event_name == 'schedule' && github.event.repository.default_branch || 'feat/ultron-core-assistant' }}
+          title: "ULTRON autonomous investigation findings"
+          commit-message: "chore(autonomy): publish verified investigation report"
+          body: |
+            Relatório produzido pelo investigador agendado do ULTRON.
+            Inclui falhas de Actions, issues, marcadores de manutenção e pistas públicas.
+            Este PR contém evidências e prioridades; não altera código de produto.
+            Nenhuma fonte externa foi executada. Revisão humana necessária antes de qualquer reparo.
+          add-paths: |
+            reports/autonomy/latest.json
+            reports/autonomy/latest.md
