@@ -55,8 +55,8 @@ def generate_experimental_candidate(prompt: str, *, history: list[Any] | None = 
             raise ValueError("Tokenizer incompatível.")
         parts = [f"Memória: {str(x)[:500]}" for x in (memories or [])[:4]]
         parts.extend(_history_text(history))
-        parts.append(f"Usuário: {prompt[:1000]}\\nULTRON:")
-        encoded = tokenizer.encode("\\n".join(parts))
+        parts.append(f"Usuário: {prompt[:1000]}\nULTRON:")
+        encoded = tokenizer.encode("\n".join(parts))
         # Keep the most recent user turn intact within the model's context.
         ids = torch.tensor([encoded[-model.config.context_length:]], dtype=torch.long)
         limit = max(1, min(int(os.getenv("ULTRON_TINY_MAX_TOKENS", "48")), 96))
