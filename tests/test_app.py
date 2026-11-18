@@ -285,6 +285,25 @@ class UltronTests(unittest.TestCase):
         deleted = client.delete(f"/memory/{memory_id}", headers=headers)
         self.assertEqual(deleted.status_code, 200)
 
+    def test_chat_uses_only_authenticated_installation_memory(self):
+        client.post("/installations/register", json={
+            "installation_id": INSTALL_A["X-ULTRON-Installation-ID"],
+            "installation_token": INSTALL_A["X-ULTRON-Installation-Token"],
+        })
+        client.post("/memory", json={"content": "O projeto pessoal usa PostgreSQL e Python"},
+                    headers=INSTALL_A)
+        with patch("backend.app.model_config", return_value={"configured": True}), \
+             patch("backend.app.generate_and_record", return_value="Resposta contextual") as generated:
+            response = client.post("/chat", json={"message": "Explique um conceito avançado de física"},
+                                   headers=INSTALL_A)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("PostgreSQL e Python", generated.call_args.args[2])
+        with patch("backend.app.model_config", return_value={"configured": True}), \
+             patch("backend.app.generate_and_record", return_value="Resposta sem memória") as generated_other:
+            client.post("/chat", json={"message": "Explique um conceito avançado de física"},
+                        headers=INSTALL_B)
+        self.assertEqual(generated_other.call_args.args[2], [])
+
     def test_memory_requires_installation_scope(self):
         response = client.get("/memory", headers={})
         self.assertEqual(response.status_code, 400)
