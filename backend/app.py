@@ -1160,6 +1160,83 @@ def get_memory_graph(limit: int = 300,
             "regions": region_layout, "truncated": truncated}
 
 
+@app.get("/v2/memory/insights")
+def get_memory_insights(installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    """Return bounded, read-only diagnostics and an advisory six-specialist cycle."""
+    from backend.memory_insights import analyze_memories
+
+    with connect_db() as db:
+        rows = execute(db, """SELECT id,kind,content,source,confidence,created_at,
+                last_accessed_at,access_count
+            FROM cognitive_memories WHERE owner_id=? ORDER BY id DESC LIMIT 500""",
+            (installation_id,)).fetchall()
+        memories = [dict(row) for row in rows]
+        ids = [int(item["id"]) for item in memories]
+        degrees = {memory_id: 0 for memory_id in ids}
+        if ids:
+            placeholders = ",".join("?" for _ in ids)
+            links = execute(db, f"""SELECT memory_id,source_memory_id
+                FROM cognitive_memory_links WHERE owner_id=?
+                AND (memory_id IN ({placeholders}) OR source_memory_id IN ({placeholders}))""",
+                tuple([installation_id] + ids + ids)).fetchall()
+            for row in links:
+                link = dict(row)
+                for memory_id in (int(link["memory_id"]), int(link["source_memory_id"])):
+                    if memory_id in degrees:
+                        degrees[memory_id] += 1
+
+    diagnostics = analyze_memories(memories, degrees)
+    summary = (
+        f"Analisadas {len(memories)} memórias. "
+        f"{len(diagnostics['duplicate_candidates'])} candidatos a repetição, "
+        f"{len(diagnostics['knowledge_gaps'])} sinais de lacuna e "
+        f"{len(diagnostics['low_confidence_memories'])} registros com baixa confiança."
+    )
+    specialist_cycle = [
+        {"role": "planner", "status": "completed",
+         "task": "Definir escopo e critérios da análise", "result": run_specialist(
+             "planner", {"goal": "Analisar repetições, proveniência e lacunas sem alterar memórias."})["result"]},
+        {"role": "memory_retriever", "status": "completed",
+         "task": "Selecionar registros do escopo autenticado",
+         "result": {"memory_ids": ids[:8], "count": min(len(ids), 8),
+                    "read_only": True, "source": "authenticated_memory_graph"}},
+        {"role": "solver", "status": "completed",
+         "task": "Produzir síntese dos sinais encontrados",
+         "result": run_specialist("solver", {"answer": summary})["result"]},
+        {"role": "critic", "status": "completed",
+         "task": "Revisar limites e evidências da síntese",
+         "result": run_specialist("critic", {
+             "goal": "Verificar se a síntese não transforma sinais em fatos.",
+             "answer": summary + " " + " ".join(diagnostics["analysis_limits"]),
+         })["result"]},
+        {"role": "memory_curator", "status": "proposal_only",
+         "task": "Propor revisão de candidatos sem consolidar",
+         "result": run_specialist("memory_curator", {
+             "candidate": "Revisar possíveis repetições antes de qualquer consolidação.",
+             "source_ids": diagnostics["duplicate_candidates"][0]["memory_ids"]
+                 if diagnostics["duplicate_candidates"] else [],
+         })["result"]},
+        {"role": "evaluator", "status": "completed",
+         "task": "Avaliar cobertura e rastreabilidade",
+         "result": run_specialist("evaluator", {"cycle": {
+             "success": True, "evidence_count": len(memories),
+             "duplicate_candidates": len(diagnostics["duplicate_candidates"]),
+             "knowledge_gaps": len(diagnostics["knowledge_gaps"]),
+             "writes_performed": 0,
+         }})["result"]},
+    ]
+    return {
+        "owner_scope": "authenticated_installation",
+        "read_only": True,
+        "analyzed_memories": len(memories),
+        "truncated": len(memories) == 500,
+        "summary": summary,
+        **diagnostics,
+        "specialist_cycle": specialist_cycle,
+        "writes_performed": 0,
+    }
+
+
 @app.delete("/v2/memory/{memory_id}")
 def delete_typed_memory(memory_id: int, installation_id: str = Depends(require_installation)) -> dict[str, bool]:
     with connect_db() as db:
