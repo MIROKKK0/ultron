@@ -76,6 +76,28 @@ class MemoryKnowledgeGraphApiTests(unittest.TestCase):
         response = client.get("/v2/memory/graph?limit=501", headers=self.auth)
         self.assertEqual(response.status_code, 422)
 
+    def test_graph_initializes_typed_memory_tables_on_fresh_database(self):
+        # Simulate a newly provisioned PostgreSQL database without typed-memory tables.
+        with connect_db() as db:
+            execute(db, "DROP TABLE IF EXISTS cognitive_memory_links")
+            execute(db, "DROP TABLE IF EXISTS cognitive_memories")
+        response = client.get("/v2/memory/graph", headers=self.auth)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["nodes"], [])
+        with connect_db() as db:
+            tables = execute(db, "SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        names = {row["name"] for row in tables}
+        self.assertIn("cognitive_memories", names)
+        self.assertIn("cognitive_memory_links", names)
+
+    def test_insights_initializes_typed_memory_tables_on_fresh_database(self):
+        with connect_db() as db:
+            execute(db, "DROP TABLE IF EXISTS cognitive_memory_links")
+            execute(db, "DROP TABLE IF EXISTS cognitive_memories")
+        response = client.get("/v2/memory/insights", headers=self.auth)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["analyzed_memories"], 0)
+
     def test_graph_requires_installation_credentials(self):
         response = client.get("/v2/memory/graph")
         self.assertEqual(response.status_code, 401)
