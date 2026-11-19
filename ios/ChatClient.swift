@@ -5,6 +5,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     let role: Role
     let text: String
     let strategy: String?
+    let createdAt: Date?
 
     enum Role: String, Codable { case user, assistant }
 
@@ -13,6 +14,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.role = role
         self.text = text
         self.strategy = strategy
+        self.createdAt = Date()
     }
 }
 
@@ -65,6 +67,34 @@ private struct MemoryItem: Decodable {
     let created_at: String?
 }
 private struct MemoryList: Decodable { let items: [MemoryItem] }
+
+struct HistoryExportRecord: Encodable {
+    let role: String
+    let content: String
+    let timestamp: String
+}
+
+private struct HistoryImportRequest: Encodable {
+    let source_export: String
+    let records: [HistoryExportRecord]
+}
+
+struct HistoryImportResult: Decodable {
+    let imported: Int
+    let duplicates: Int
+    let scope: String
+    let source: String
+}
+
+struct MemorySyncReport {
+    let uploaded: Int
+    let remaining: Int
+}
+
+enum MemoryWriteOutcome {
+    case synced(serverID: Int)
+    case queued(localID: UUID)
+}
 
 private struct FeedbackRequest: Encodable {
     let rating: Int
@@ -146,7 +176,7 @@ struct ChatClient {
         return credentials
     }
 
-    private func authenticatedData(
+    func authenticatedData(
         path: String,
         method: String,
         serverURL: String,
@@ -238,6 +268,8 @@ struct ChatClient {
         onPhase: @MainActor @escaping (BrainPhase) -> Void = { _ in }
     ) async throws -> ChatResult {
         await onPhase(.connecting)
+        // Opportunistically flush previously queued writes; failures leave them encrypted locally.
+        _ = try? await syncQueuedMemories(serverURL: serverURL)
         do {
             let body = try JSONEncoder().encode(BrainRunRequest(goal: message, history: history))
             await onPhase(.processing)
@@ -272,6 +304,57 @@ struct ChatClient {
 
     func forgetMemory(_ id: Int, serverURL: String) async throws {
         _ = try await authenticatedData(path: "/v2/memory/\(id)", method: "DELETE", serverURL: serverURL)
+    }
+
+    /// Save immediately when online; queue only transient network/server failures.
+    func rememberWithOfflineQueue(_ content: String, kind: String = "semantic",
+                                  serverURL: String) async throws -> MemoryWriteOutcome {
+        do {
+            let serverID = try await remember(content, kind: kind, serverURL: serverURL)
+            return .synced(serverID: serverID)
+        } catch let error as ChatClientError {
+            if case .serverError(let code) = error, code >= 500 {
+                let id = try await OfflineMemoryQueue.shared.enqueue(
+                    kind: kind, content: content, source: "offline_user_explicit", confidence: 1.0
+                )
+                return .queued(localID: id)
+            }
+            throw error
+        } catch let error as URLError {
+            let id = try await OfflineMemoryQueue.shared.enqueue(
+                kind: kind, content: content, source: "offline_user_explicit", confidence: 1.0
+            )
+            return .queued(localID: id)
+        }
+    }
+
+    /// Flush acknowledged items only; unacknowledged entries remain encrypted locally.
+    func syncQueuedMemories(serverURL: String) async throws -> MemorySyncReport {
+        let queue = OfflineMemoryQueue.shared
+        let entries = try await queue.pending()
+        var acknowledged = Set<UUID>()
+        for entry in entries {
+            let body = try JSONEncoder().encode(
+                TypedMemoryRequest(kind: entry.kind, content: entry.content,
+                                   source: entry.source, confidence: entry.confidence)
+            )
+            _ = try await authenticatedData(path: "/v2/memory", method: "POST",
+                                            serverURL: serverURL, body: body)
+            acknowledged.insert(entry.id)
+        }
+        try await queue.remove(acknowledged)
+        return MemorySyncReport(uploaded: acknowledged.count, remaining: try await queue.count())
+    }
+
+    /// Import an explicit export while preserving the original role and timestamp.
+    func importHistory(sourceExport: String, records: [HistoryExportRecord],
+                       serverURL: String) async throws -> HistoryImportResult {
+        let body = try JSONEncoder().encode(
+            HistoryImportRequest(source_export: sourceExport, records: records)
+        )
+        let data = try await authenticatedData(path: "/v2/memory/import", method: "POST",
+                                               serverURL: serverURL, body: body)
+        return try JSONDecoder().decode(HistoryImportResult.self, from: data)
     }
 
     func sendFeedback(_ rating: Int, strategy: String, serverURL: String) async throws {

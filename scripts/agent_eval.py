@@ -51,6 +51,38 @@ def run() -> dict:
         checks["promotion_gate"] = good["promotion"] == "eligible_for_pr" and bad["promotion"] == "rejected"
     except Exception:
         checks["promotion_gate"] = False
+    # New frozen capability checks for the private neural-memory explorer.
+    # Older baselines without these capabilities score false; candidate code
+    # must prove the behavior rather than receive credit from a changed threshold.
+    try:
+        from backend.memory_insights import analyze_memories
+        memories = [
+            {"id": 1, "kind": "semantic", "content": "ULTRON mantém memória local independente", "confidence": .9},
+            {"id": 2, "kind": "semantic", "content": "ULTRON mantém memória local independente", "confidence": .8},
+        ]
+        diagnostics = analyze_memories(memories, {1: 0, 2: 0})
+        checks["memory_duplicates_are_review_only"] = (
+            bool(diagnostics["duplicate_candidates"])
+            and diagnostics["duplicate_candidates"][0]["status"] == "candidate_review_only"
+        )
+        checks["memory_gaps_are_evidence_bounded"] = any(
+            "não prova" in limit.lower() for limit in diagnostics["analysis_limits"]
+        )
+    except Exception:
+        checks["memory_duplicates_are_review_only"] = False
+        checks["memory_gaps_are_evidence_bounded"] = False
+    try:
+        from backend.specialist_agents import run_specialist
+        retrieved = run_specialist("memory_retriever", {"readonly_items": [
+            {"id": 17, "kind": "semantic", "source": "benchmark", "confidence": .9}
+        ]})["result"]
+        checks["memory_retriever_has_read_only_mode"] = (
+            retrieved.get("read_only") is True
+            and len(retrieved.get("items", [])) == 1
+            and retrieved["items"][0].get("id") == 17
+        )
+    except Exception:
+        checks["memory_retriever_has_read_only_mode"] = False
     passed = sum(bool(value) for value in checks.values())
     return {"benchmark": "ultron-agent-ptbr-v1", "score": round(passed / len(checks), 4),
             "passed": passed == len(checks), "checks": checks,

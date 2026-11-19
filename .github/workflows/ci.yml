@@ -2,9 +2,9 @@ name: ULTRON CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "ultron/**"]
   pull_request:
-    branches: ["main", "feat/ultron-core-assistant"]
+    branches: ["main", "feat/ultron-core-assistant", "integration/ultron-unified-core-2026-11-18"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

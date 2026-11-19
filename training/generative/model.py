@@ -131,6 +131,24 @@ class UltronTinyGPT(nn.Module):
         finally:
             self.train(was_training)
 
+    def encode_hidden(self, input_ids: torch.Tensor) -> torch.Tensor:
+        """Return final normalized token states for ULTRON-owned local embeddings."""
+        if input_ids.ndim != 2 or input_ids.shape[0] < 1 or input_ids.shape[1] < 1:
+            raise ValueError("Input IDs must be a non-empty [batch, sequence] tensor")
+        _, length = input_ids.shape
+        if length > self.config.context_length:
+            raise ValueError("Input exceeds configured context")
+        was_training = self.training
+        try:
+            self.eval()
+            positions = torch.arange(length, device=input_ids.device)
+            hidden = self.token_embedding(input_ids) + self.position_embedding(positions)[None, :, :]
+            for block in self.blocks:
+                hidden = block(hidden)
+            return self.final_norm(hidden)
+        finally:
+            self.train(was_training)
+
     def parameter_count(self) -> int:
         return sum(parameter.numel() for parameter in self.parameters())
 

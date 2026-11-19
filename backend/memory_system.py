@@ -45,9 +45,17 @@ class MemoryStore:
             access_count INTEGER NOT NULL DEFAULT 0
         )""")
         self._execute("CREATE INDEX IF NOT EXISTS idx_cognitive_memory_owner_kind ON cognitive_memories(owner_id, kind, id)")
+        self._execute("""CREATE TABLE IF NOT EXISTS cognitive_memory_links (
+            owner_id TEXT NOT NULL,
+            memory_id BIGINT NOT NULL,
+            source_memory_id BIGINT NOT NULL,
+            relation TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(owner_id, memory_id, source_memory_id, relation)
+        )""")
 
     def add(self, owner_id: str, kind: str, content: str, source: str,
-            confidence: float = 0.7) -> int:
+            confidence: float = 0.7, created_at: str | None = None) -> int:
         if not owner_id or len(owner_id) > 160 or kind not in KINDS:
             raise ValueError("Escopo ou tipo de memória inválido.")
         content = str(content).strip()
@@ -56,9 +64,18 @@ class MemoryStore:
         if not 0 <= float(confidence) <= 1:
             raise ValueError("Confiança deve estar entre 0 e 1.")
         now = datetime.now(timezone.utc).isoformat()
+        stored_created_at = now
+        if created_at:
+            try:
+                parsed = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise ValueError("Timestamp de origem inválido.") from exc
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            stored_created_at = parsed.astimezone(timezone.utc).isoformat()
         cursor = self._execute(
             "INSERT INTO cognitive_memories(owner_id,kind,content,source,confidence,created_at,last_accessed_at,access_count) VALUES(?,?,?,?,?,?,?,0) RETURNING id",
-            (owner_id, kind, content, str(source)[:300], float(confidence), now, now))
+            (owner_id, kind, content, str(source)[:300], float(confidence), stored_created_at, now))
         inserted = cursor.fetchone()
         return int(inserted["id"] if isinstance(inserted, dict) else inserted[0])
 
@@ -85,6 +102,40 @@ class MemoryStore:
                             (now, item["id"], owner_id))
         return selected
 
+    def link_sources(self, owner_id: str, memory_id: int, source_ids: list[int],
+                     relation: str = "derived_from") -> None:
+        if not source_ids or len(source_ids) > 20 or not relation.strip():
+            raise ValueError("Referências de origem inválidas.")
+        target = self._execute(
+            "SELECT id FROM cognitive_memories WHERE id=? AND owner_id=?",
+            (int(memory_id), owner_id),
+        ).fetchone()
+        if not target:
+            raise ValueError("Memória de destino não pertence à instalação.")
+        unique_ids = list(dict.fromkeys(int(value) for value in source_ids))
+        for source_id in unique_ids:
+            source = self._execute(
+                "SELECT id FROM cognitive_memories WHERE id=? AND owner_id=?",
+                (source_id, owner_id),
+            ).fetchone()
+            if not source or source_id == int(memory_id):
+                raise ValueError("Memória de origem inválida.")
+            self._execute(
+                """INSERT INTO cognitive_memory_links
+                   (owner_id,memory_id,source_memory_id,relation,created_at)
+                   VALUES(?,?,?,?,?)""",
+                (owner_id, int(memory_id), source_id, relation.strip()[:80],
+                 datetime.now(timezone.utc).isoformat()),
+            )
+
     def forget(self, owner_id: str, memory_id: int) -> bool:
+        exists = self._execute(
+            "SELECT id FROM cognitive_memories WHERE id=? AND owner_id=?",
+            (int(memory_id), owner_id),
+        ).fetchone()
+        if not exists:
+            return False
+        self._execute("DELETE FROM cognitive_memory_links WHERE owner_id=? AND (memory_id=? OR source_memory_id=?)",
+                      (owner_id, int(memory_id), int(memory_id)))
         cursor = self._execute("DELETE FROM cognitive_memories WHERE id=? AND owner_id=?", (int(memory_id), owner_id))
         return cursor.rowcount > 0

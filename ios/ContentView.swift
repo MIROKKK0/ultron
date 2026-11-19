@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var isSending = false
     @State private var brainPhase: BrainPhase = .idle
     @State private var showSettings = false
+    @State private var showMemoryExplorer = false
     @State private var errorMessage: String?
     @State private var serverOnline = false
     @State private var serverStatusChecked = false
@@ -30,6 +31,10 @@ struct ContentView: View {
                         .fill(serverOnline ? .green : (serverStatusChecked ? .red : .orange))
                         .frame(width: 8, height: 8)
                         .accessibilityLabel(serverOnline ? "API online" : (serverStatusChecked ? "API offline" : "Verificando API"))
+                    Button { showMemoryExplorer = true } label: {
+                        Image(systemName: "circle.hexagongrid").font(.title3).padding(10)
+                    }
+                    .accessibilityLabel("Explorar memória neural")
                     Button { showSettings = true } label: {
                         Image(systemName: "slider.horizontal.3").font(.title3).padding(10)
                     }
@@ -101,6 +106,12 @@ struct ContentView: View {
                 SettingsView(serverURL: $serverURL, onClearHistory: clearLocalHistory)
                     .presentationDetents([.medium, .large])
             }
+            .sheet(isPresented: $showMemoryExplorer) {
+                NavigationStack {
+                    MemoryExplorerView(serverURL: serverURL)
+                }
+                .preferredColorScheme(.dark)
+            }
         }
         .preferredColorScheme(.dark)
         .task {
@@ -153,8 +164,36 @@ struct ContentView: View {
             let allowedKinds = ["episodic", "semantic", "procedural"]
             let kind = parts.count == 2 && allowedKinds.contains(parts[0].lowercased()) ? parts[0].lowercased() : "semantic"
             let content = parts.count == 2 && allowedKinds.contains(parts[0].lowercased()) ? parts[1] : payload
-            let id = try await client.remember(content, kind: kind, serverURL: serverURL)
-            return "Memória privada salva (\(kind)). ID: \(id)"
+            let outcome = try await client.rememberWithOfflineQueue(content, kind: kind, serverURL: serverURL)
+            switch outcome {
+            case .synced(let id):
+                return "Memória privada salva (\(kind)). ID: \(id)"
+            case .queued(let localID):
+                return "Sem conexão com o servidor. Memória criptografada na fila offline. ID local: \(localID.uuidString)"
+            }
+        }
+
+        if lowered == "/sync" {
+            let report = try await client.syncQueuedMemories(serverURL: serverURL)
+            return "Sincronização concluída. Enviadas: \(report.uploaded). Pendentes: \(report.remaining)."
+        }
+
+        if lowered == "/import-history" {
+            let formatter = ISO8601DateFormatter()
+            let records = messages.suffix(500).map { item in
+                HistoryExportRecord(
+                    role: item.role.rawValue,
+                    content: item.text,
+                    timestamp: formatter.string(from: item.createdAt ?? Date())
+                )
+            }
+            guard !records.isEmpty else { return "Não há mensagens para importar." }
+            let result = try await client.importHistory(
+                sourceExport: "ios-local-chat-history-v1",
+                records: records,
+                serverURL: serverURL
+            )
+            return "Histórico importado. Novas memórias: \(result.imported). Duplicadas ignoradas: \(result.duplicates)."
         }
 
         if lowered == "/memories" {

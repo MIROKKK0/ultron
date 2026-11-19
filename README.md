@@ -1,6 +1,6 @@
 # ULTRON
 
-Assistente pessoal em português com app nativo para iPhone, API HTTPS, memória protegida, ferramentas e modelo generativo configurável por API compatível com OpenAI. O classificador local continua disponível como fallback; o modelo generativo não é treinado do zero pelo projeto.
+Assistente pessoal em português com app nativo para iPhone, API HTTPS, memória protegida, ferramentas e núcleo local independente de provedores, com adaptador generativo externo opcional. O classificador local continua disponível como fallback; o modelo generativo não é treinado do zero pelo projeto.
 
 ## Componentes
 
@@ -43,7 +43,7 @@ Com Bearer token, o backend oferece:
 
 O chat público não lê nem grava memória/conversas compartilhadas até existir uma identidade segura por instalação. O app envia até oito mensagens recentes do histórico local como contexto temporário. O classificador próprio identifica intenções comuns e chama skills locais em milissegundos; para conversas gerais, o backend usa o modelo generativo configurado e mantém o fallback local quando nenhuma chave estiver configurada. Rotas administrativas protegidas mantêm a memória persistente. No chat do iPhone, use `/self`, `/plan seu objetivo`, `/research sua pergunta` e `/calc 12*(3+4)`. O endpoint `/brain/run` executa planner, solver e critic locais e gera uma síntese determinística. Use `/research sua pergunta` para pesquisar na internet; o ULTRON retorna trechos e links de fontes. A busca não usa LLM para sintetizar e pode falhar se o mecanismo de pesquisa bloquear o servidor. `/brain/multitask` aceita até cinco tarefas. Feedback explícito do usuário calibra apenas a prioridade de planner/solver/critic, com ajuste limitado a ±15% e limite de 10 avaliações por hora/IP. Isso não treina pesos do modelo de linguagem. O módulo experimental de associação usa codificador esparso, recompensa e decaimento; seu estado é salvo no banco.
 
-Para PostgreSQL, defina `DATABASE_URL`. Para ativar geração de texto, configure no Render `GEMINI_API_KEY` como secret, `ULTRON_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai` e `ULTRON_LLM_MODEL=gemini-3.8-flash`. A chave pode ser criada no Google AI Studio. Sem a chave, o chat continua no modo local limitado e o status informa que a geração não está configurada. O chat e a pesquisa públicos têm limites por IP; memória e rotas administrativas continuam exigindo `ULTRON_API_TOKEN`.
+Para PostgreSQL, defina `DATABASE_URL`. O núcleo funciona sem chaves externas. Um endpoint OpenAI-compatible é opcional e só é ativado quando `ULTRON_LLM_API_KEY`, `ULTRON_LLM_BASE_URL` e `ULTRON_LLM_MODEL` são configurados juntos. Remover essas variáveis mantém ULTRON em modo local, sem perda de memória ou identidade. O chat e a pesquisa públicos têm limites por IP; memória e rotas administrativas continuam exigindo `ULTRON_API_TOKEN`.
 
 Nunca coloque chaves de provedor ou tokens em commits, no app ou em arquivos públicos. Cadastre-os como variáveis secretas no serviço de hospedagem.
 
@@ -111,3 +111,18 @@ zero, com tokenizador byte-level e corpus autoral pequeno. Ele é separado do
 classificador de intenções de produção e ainda não está integrado ao chat.
 Consulte `training/generative/README.md`; o checkpoint resultante é experimental
 e não equivale a um modelo de linguagem grande.
+
+
+## Memória cognitiva local e agentes
+
+- `POST /v2/memory`: grava memória episódica, semântica ou procedural isolada por instalação.
+- `GET /v2/memory?query=...`: recupera registros com índice vetorial local e fallback lexical.
+- `POST /v2/memory/import`: importa até 500 mensagens user/assistant de uma exportação explícita do cliente; repetição é deduplicada por hash. A rota não lê o histórico global legado.
+- `POST /v2/memory/curate`: prepara uma proposta semântica ligada às memórias de origem.
+- `POST /v2/memory/curate/commit`: grava uma consolidação semântica solicitada, mantendo relações explícitas com as fontes.
+- `DELETE /v2/memory/{id}`: remove a memória e seus vetores/links.
+- `POST /brain/learn/evaluate`: compara candidato e baseline nos mesmos casos congelados e bloqueia regressões.
+
+O índice vetorial desta versão usa hashing esparso de palavras e n-gramas, sem serviço externo ou download de modelo. Ele melhora similaridade lexical e morfológica; não é um embedding neural nem compreensão semântica profunda. A interface permite substituir o encoder por um modelo local validado. O núcleo, a identidade, a memória e a avaliação continuam operando sem chaves de IA externas.
+
+Detalhes: [docs/MEMORY_AGENTS_LEARNING_V2.md](docs/MEMORY_AGENTS_LEARNING_V2.md).
