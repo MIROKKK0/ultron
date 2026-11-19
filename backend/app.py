@@ -1219,7 +1219,14 @@ def get_memory_insights(installation_id: str = Depends(require_installation)) ->
         {"role": "evaluator", "status": "completed",
          "task": "Avaliar cobertura e rastreabilidade",
          "result": run_specialist("evaluator", {"cycle": {
-             "success": True, "evidence_count": len(memories),
+             "agents": [
+                 {"role": "planner", "status": "completed"},
+                 {"role": "solver", "status": "completed"},
+                 {"role": "critic", "status": "completed"},
+             ],
+             "research": {"count": 0, "results": []},
+             "review": {"evidence_review": {"evidence_count": len(memories)}},
+             "evidence_count": len(memories),
              "duplicate_candidates": len(diagnostics["duplicate_candidates"]),
              "knowledge_gaps": len(diagnostics["knowledge_gaps"]),
              "writes_performed": 0,
