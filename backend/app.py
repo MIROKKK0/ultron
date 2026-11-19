@@ -1084,6 +1084,80 @@ def get_typed_memories(kind: Literal["episodic", "semantic", "procedural"] | Non
     return {"items": items, "scope": "authenticated_installation"}
 
 
+@app.get("/v2/memory/graph")
+def get_memory_graph(limit: int = 300,
+                    installation_id: str = Depends(require_installation)) -> dict[str, Any]:
+    """Return a read-only, installation-scoped graph for the memory visualizer.
+
+    Nodes are existing memories; edges are only explicit provenance links.
+    No semantic relationship is guessed and no memory is changed by this route.
+    """
+    if not 1 <= limit <= 500:
+        raise HTTPException(status_code=422, detail="limit deve ficar entre 1 e 500.")
+    region_layout = {
+        "episodic": {"center": [-4.0, 0.0, 0.0], "spread": [1.6, 1.6, 1.6], "density": 500},
+        "semantic": {"center": [0.0, 0.0, 0.0], "spread": [1.6, 1.6, 1.6], "density": 500},
+        "procedural": {"center": [4.0, 0.0, 0.0], "spread": [1.6, 1.6, 1.6], "density": 500},
+    }
+    with connect_db() as db:
+        rows = execute(db, """SELECT id,kind,content,source,confidence,created_at,
+                last_accessed_at,access_count
+            FROM cognitive_memories WHERE owner_id=? ORDER BY id DESC LIMIT ?""",
+            (installation_id, limit)).fetchall()
+        memories = [dict(row) for row in rows]
+        if not memories:
+            return {"owner_scope": "authenticated_installation", "read_only": True,
+                    "nodes": [], "edges": [], "edge_details": [], "regions": region_layout}
+        ids = [int(item["id"]) for item in memories]
+        placeholders = ",".join("?" for _ in ids)
+        links = execute(db, f"""SELECT memory_id,source_memory_id,relation
+            FROM cognitive_memory_links
+            WHERE owner_id=? AND memory_id IN ({placeholders})
+            ORDER BY memory_id,source_memory_id,relation""",
+            tuple([installation_id] + ids)).fetchall()
+    memories.sort(key=lambda item: int(item["id"]))
+    index_by_id = {int(item["id"]): index for index, item in enumerate(memories)}
+    edge_details = []
+    edges = []
+    degree = [0] * len(memories)
+    for row in links:
+        link = dict(row)
+        target_id = int(link["memory_id"])
+        source_id = int(link["source_memory_id"])
+        if target_id not in index_by_id or source_id not in index_by_id:
+            continue
+        source_index, target_index = index_by_id[source_id], index_by_id[target_id]
+        edges.append([source_index, target_index])
+        degree[source_index] += 1
+        degree[target_index] += 1
+        edge_details.append({"source_id": source_id, "target_id": target_id,
+                             "relation": str(link["relation"])})
+    nodes = []
+    for index, item in enumerate(memories):
+        memory_id = int(item["id"])
+        kind = str(item["kind"])
+        digest = hashlib.sha256(f"{installation_id}:{memory_id}".encode("utf-8")).digest()
+        center = region_layout[kind]["center"]
+        offset = [(digest[i] / 255.0 - 0.5) * 2.0 for i in range(3)]
+        position = [round(center[i] + offset[i] * region_layout[kind]["spread"][i], 5)
+                    for i in range(3)]
+        content = str(item["content"])
+        nodes.append({
+            "id": memory_id, "title": content.splitlines()[0][:120],
+            "category": kind, "region": kind, "path": f"memory:{memory_id}",
+            "url": f"#memory-{memory_id}", "status": "stored",
+            "updated": str(item["created_at"])[:10], "modified": str(item["created_at"]),
+            "content": content, "source": str(item["source"]),
+            "confidence": float(item["confidence"]),
+            "last_accessed_at": str(item["last_accessed_at"]),
+            "access_count": int(item["access_count"]),
+            "position": position, "degree": degree[index],
+        })
+    return {"owner_scope": "authenticated_installation", "read_only": True,
+            "nodes": nodes, "edges": edges, "edge_details": edge_details,
+            "regions": region_layout, "truncated": len(memories) == limit}
+
+
 @app.delete("/v2/memory/{memory_id}")
 def delete_typed_memory(memory_id: int, installation_id: str = Depends(require_installation)) -> dict[str, bool]:
     with connect_db() as db:
