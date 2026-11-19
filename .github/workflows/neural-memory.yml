@@ -1,0 +1,32 @@
+name: ULTRON Neural Memory Tests
+
+on:
+  push:
+    branches: ["ultron/**"]
+  pull_request:
+    branches: ["ultron/**", "integration/ultron-unified-core-2026-11-18"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neural-memory-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  neural-memory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install backend and ULTRON Tiny training dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install -r training/generative/requirements.txt
+      - name: Run Transformer and neural-memory tests
+        run: |
+          python -m unittest             tests.test_generative_model             tests.test_generative_training             tests.test_local_neural_encoder             tests.test_local_vector_index_migration             tests.test_local_transformer_runtime tests.test_semantic_encoder -v

@@ -1,0 +1,56 @@
+name: ULTRON live API smoke test
+
+on:
+  push:
+    branches: ["feat/ultron-core-assistant"]
+    paths:
+      - "backend/**"
+      - "requirements.txt"
+      - ".github/workflows/live-api-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      ULTRON_BASE_URL: https://ultron-api-c5ae.onrender.com
+    steps:
+      - name: Wait for the deployed runtime diagnostics endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 36); do
+            if curl --fail --silent --show-error "$ULTRON_BASE_URL/runtime/status" -o /tmp/ultron-runtime.json; then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("/tmp/ultron-runtime.json").read_text())
+          assert "memory" in data, "runtime status is missing memory telemetry"
+          assert "intent_model" in data, "runtime status is missing the intent model status"
+          assert data.get("generative_model_configured") is False
+          print("Runtime status is live:", data["memory"])
+          PY
+              ready=1
+              break
+            fi
+            echo "Runtime not updated yet (attempt $attempt/36); waiting 10 seconds"
+            sleep 10
+          done
+          test "$ready" -eq 1
+      - name: Verify server-sent chat lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --no-buffer --max-time 120 \
+            -H "Content-Type: application/json" \
+            -H "Accept: text/event-stream" \
+            --data '{"message":"oi"}' \
+            "$ULTRON_BASE_URL/chat/stream" | tee /tmp/ultron-stream.log
+          grep -q '"stage":"processing"' /tmp/ultron-stream.log
+          grep -q '"stage":"responding"' /tmp/ultron-stream.log
+          grep -q '"type":"final"' /tmp/ultron-stream.log

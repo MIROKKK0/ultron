@@ -1,0 +1,46 @@
+name: ULTRON PT-BR Semantic Encoder Training
+
+on:
+  push:
+    branches: ["ultron/**"]
+    paths:
+      - "training/generative/train_semantic_encoder.py"
+      - "training/semantic/**"
+      - "backend/local_neural_encoder.py"
+      - ".github/workflows/semantic-encoder.yml"
+  pull_request:
+    branches: ["ultron/**", "integration/ultron-unified-core-2026-11-18"]
+    paths:
+      - "training/generative/train_semantic_encoder.py"
+      - "training/semantic/**"
+      - "backend/local_neural_encoder.py"
+      - ".github/workflows/semantic-encoder.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contrastive-training:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install ULTRON training dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install -r training/generative/requirements.txt
+      - name: Train and evaluate local PT-BR encoder
+        run: |
+          python -m training.generative.train_semantic_encoder --steps 300 --batch-size 16 --min-eval-pairs 50 --output artifacts/ultron-semantic-encoder.pt
+      - name: Preserve experimental checkpoint and metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultron-ptbr-semantic-encoder-${{ github.sha }}
+          path: artifacts/ultron-semantic-encoder.pt
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,32 @@
+{"query":"Como faço para redefinir minha senha?","positive":"Quero trocar a senha da minha conta."}
+{"query":"Onde vejo minhas faturas?","positive":"Como consultar as cobranças anteriores?"}
+{"query":"O aplicativo fecha sozinho.","positive":"O app está travando e encerrando inesperadamente."}
+{"query":"Preciso cancelar minha assinatura.","positive":"Quero interromper a renovação do plano."}
+{"query":"Como atualizar o endereço cadastrado?","positive":"Quero alterar o endereço da minha conta."}
+{"query":"A entrega está atrasada.","positive":"Meu pedido ainda não chegou no prazo."}
+{"query":"Não consigo entrar na minha conta.","positive":"Estou com dificuldade para fazer login."}
+{"query":"Como exportar meus dados?","positive":"Quero baixar uma cópia das minhas informações."}
+{"query":"O pagamento foi recusado.","positive":"Meu cartão não foi aceito na cobrança."}
+{"query":"Como falar com o suporte?","positive":"Preciso entrar em contato com o atendimento."}
+{"query":"Quero apagar uma memória salva.","positive":"Como excluir uma informação que o sistema guardou?"}
+{"query":"O sistema esqueceu o contexto.","positive":"A conversa não está recuperando as informações anteriores."}
+{"query":"Como sincronizar o celular?","positive":"Quero enviar os dados do iPhone para o servidor."}
+{"query":"Estou sem conexão com a internet.","positive":"O aparelho está offline e não consegue acessar a rede."}
+{"query":"Como recuperar uma conversa antiga?","positive":"Quero importar meu histórico anterior."}
+{"query":"A busca não encontrou o documento.","positive":"Não apareceu nenhum resultado para esse arquivo."}
+{"query":"O que significa esse erro?","positive":"Pode explicar a mensagem de falha que apareceu?"}
+{"query":"Quero melhorar o desempenho.","positive":"Como deixar o aplicativo mais rápido?"}
+{"query":"Como faço backup?","positive":"Quero criar uma cópia de segurança dos meus dados."}
+{"query":"A atualização não instalou.","positive":"O processo de instalar a nova versão falhou."}
+{"query":"Preciso mudar o idioma.","positive":"Quero configurar o aplicativo em outra língua."}
+{"query":"O arquivo não abre.","positive":"Não consigo visualizar o documento."}
+{"query":"Como faço uma nova conta?","positive":"Quero me cadastrar no serviço."}
+{"query":"A notificação não chegou.","positive":"Não recebi o aviso no meu celular."}
+{"query":"Quero revisar uma resposta.","positive":"Preciso conferir se a resposta está correta."}
+{"query":"Como organizar minhas tarefas?","positive":"Quero dividir meu objetivo em etapas."}
+{"query":"O servidor está indisponível.","positive":"A API não está respondendo às solicitações."}
+{"query":"Como remover um dispositivo?","positive":"Quero revogar o acesso de um aparelho."}
+{"query":"Quero guardar uma decisão do projeto.","positive":"Salve esta decisão como uma memória importante."}
+{"query":"Como vejo o estado da sincronização?","positive":"Quero saber se os dados locais já foram enviados."}
+{"query":"O treinamento piorou o modelo.","positive":"O novo checkpoint teve regressão na avaliação."}
+{"query":"Como recuperar uma operação interrompida?","positive":"Quero continuar uma tarefa que falhou no meio."}
