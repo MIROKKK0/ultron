@@ -2,7 +2,9 @@ name: ULTRON PostgreSQL memory integration
 
 on:
   pull_request:
-    branches: ["feat/ultron-core-assistant"]
+    branches:
+      - "fix/postgres-memory-retrieval-null-parameter-2026-11-19"
+      - "feat/ultron-core-assistant"
     paths:
       - "backend/memory_system.py"
       - "backend/local_vector_index.py"
@@ -10,7 +12,8 @@ on:
       - ".github/workflows/postgres-memory-integration.yml"
       - "requirements.txt"
   push:
-    branches: ["test/postgres-memory-integration-ci-2026-11-19"]
+    branches:
+      - "test/postgres-memory-integration-ci-2026-11-19"
   workflow_dispatch:
 
 permissions:
