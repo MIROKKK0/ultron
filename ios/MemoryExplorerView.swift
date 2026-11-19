@@ -1,6 +1,5 @@
 import SwiftUI
 import SceneKit
-import GLKit
 import UIKit
 
 struct MemoryExplorerView: View {
@@ -455,11 +454,11 @@ private struct MemorySceneView: UIViewRepresentable {
     }
 
     private func connection(from start: SCNVector3, to end: SCNVector3) -> SCNNode {
-        let a = SCNVector3ToGLKVector3(start)
-        let b = SCNVector3ToGLKVector3(end)
-        let direction = GLKVector3Subtract(b, a)
-        let length = CGFloat(GLKVector3Length(direction))
-        let cylinder = SCNCylinder(radius: 0.012, height: max(length, 0.001))
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let dz = end.z - start.z
+        let length = sqrt(dx * dx + dy * dy + dz * dz)
+        let cylinder = SCNCylinder(radius: 0.012, height: CGFloat(max(length, 0.001)))
         cylinder.radialSegmentCount = 5
         let material = SCNMaterial()
         material.diffuse.contents = UIColor.cyan.withAlphaComponent(0.45)
@@ -467,11 +466,18 @@ private struct MemorySceneView: UIViewRepresentable {
         cylinder.materials = [material]
         let node = SCNNode(geometry: cylinder)
         node.position = SCNVector3((start.x + end.x) / 2, (start.y + end.y) / 2, (start.z + end.z) / 2)
-        node.eulerAngles = SCNVector3(
-            Float.pi / 2,
-            0,
-            -atan2(direction.x, direction.y)
-        )
+
+        // SCNCylinder's long axis is +Y. Rotate that axis onto the full 3D
+        // source-to-target vector, including its Z component.
+        let axisX = dz
+        let axisZ = -dx
+        let axisLength = sqrt(axisX * axisX + axisZ * axisZ)
+        let angle = acos(max(-1, min(1, dy / max(length, 0.0001))))
+        if axisLength < 0.0001 {
+            node.rotation = SCNVector4(1, 0, 0, dy < 0 ? Float.pi : 0)
+        } else {
+            node.rotation = SCNVector4(axisX / axisLength, 0, axisZ / axisLength, angle)
+        }
         return node
     }
 
