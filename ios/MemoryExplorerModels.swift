@@ -1,5 +1,18 @@
 import Foundation
 
+extension ChatClient {
+    func fetchMemoryGraph(serverURL: String, limit: Int = 300) async throws -> MemoryGraphResponse {
+        let bounded = min(max(limit, 1), 500)
+        let data = try await authenticatedData(path: "/v2/memory/graph?limit=\(bounded)", method: "GET", serverURL: serverURL)
+        return try JSONDecoder().decode(MemoryGraphResponse.self, from: data)
+    }
+
+    func fetchMemoryInsights(serverURL: String) async throws -> MemoryInsightsResponse {
+        let data = try await authenticatedData(path: "/v2/memory/insights", method: "GET", serverURL: serverURL)
+        return try JSONDecoder().decode(MemoryInsightsResponse.self, from: data)
+    }
+}
+
 struct MemoryGraphResponse: Decodable {
     let nodes: [MemoryGraphNode]
     let edges: [[Int]]
