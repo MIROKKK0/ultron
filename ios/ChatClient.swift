@@ -176,7 +176,7 @@ struct ChatClient {
         return credentials
     }
 
-    private func authenticatedData(
+    func authenticatedData(
         path: String,
         method: String,
         serverURL: String,
