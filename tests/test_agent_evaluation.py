@@ -1,5 +1,7 @@
 import unittest
 from backend.agent_evaluation import FROZEN_PT_BR_CASES, evaluate_agent_cycle, evaluate_search_result
+from backend.memory_insights import analyze_memories
+from backend.specialist_agents import run_specialist
 
 class AgentEvaluationTests(unittest.TestCase):
     def test_frozen_portuguese_cases_are_stable_and_unique(self):
@@ -17,6 +19,21 @@ class AgentEvaluationTests(unittest.TestCase):
         self.assertEqual(result["accepted_count"], 1)
         self.assertEqual(result["rejected_count"], 1)
         self.assertEqual(result["rejected"][0]["reason"], "topic_mismatch")
+
+    def test_memory_insights_marks_duplicates_for_review_without_merging(self):
+        result = analyze_memories([
+            {"id": 1, "kind": "semantic", "content": "memória local do ULTRON", "confidence": .9},
+            {"id": 2, "kind": "semantic", "content": "memória local do ULTRON", "confidence": .8},
+        ], {1: 0, 2: 0})
+        self.assertEqual(result["duplicate_candidates"][0]["status"], "candidate_review_only")
+        self.assertTrue(any("não prova" in item.lower() for item in result["analysis_limits"]))
+
+    def test_memory_retriever_has_read_only_mode(self):
+        result = run_specialist("memory_retriever", {"readonly_items": [
+            {"id": 17, "kind": "semantic", "source": "benchmark", "confidence": .9}
+        ]})["result"]
+        self.assertTrue(result["read_only"])
+        self.assertEqual(result["items"][0]["id"], 17)
 
     def test_cycle_evaluation_requires_planner_solver_critic_and_evidence(self):
         cycle = {
