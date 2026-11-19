@@ -1,6 +1,7 @@
 import unittest
 
 from backend.memory_insights import analyze_memories
+from backend.specialist_agents import run_specialist
 
 
 class MemoryInsightsTests(unittest.TestCase):
@@ -20,6 +21,14 @@ class MemoryInsightsTests(unittest.TestCase):
         self.assertEqual(result["duplicate_candidates"], [])
         self.assertEqual(result["counts_by_kind"], {"episodic": 0, "semantic": 0, "procedural": 0})
         self.assertEqual(len(result["knowledge_gaps"]), 3)
+
+    def test_memory_retriever_supports_read_only_scoped_items(self):
+        result = run_specialist("memory_retriever", {"readonly_items": [
+            {"id": 41, "kind": "semantic", "source": "user_explicit", "confidence": 0.95},
+        ]})["result"]
+        self.assertTrue(result["read_only"])
+        self.assertEqual(result["items"][0]["id"], 41)
+        self.assertEqual(result["items"][0]["source"], "user_explicit")
 
     def test_low_confidence_is_reported_not_promoted(self):
         result = analyze_memories([
