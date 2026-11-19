@@ -33,6 +33,22 @@ def _critic(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _memory_retriever(payload: dict[str, Any]) -> dict[str, Any]:
+    # Read-only callers may provide already-scoped records. This path never
+    # touches the vector index or access counters.
+    readonly_items = payload.get("readonly_items")
+    if isinstance(readonly_items, list):
+        items = []
+        for item in readonly_items[:8]:
+            if not isinstance(item, dict) or "id" not in item:
+                continue
+            items.append({
+                "id": int(item["id"]),
+                "kind": str(item.get("kind", "")),
+                "source": str(item.get("source", "")),
+                "confidence": float(item.get("confidence", 0.0)),
+            })
+        return {"status": "completed", "items": items, "read_only": True}
+
     index = payload.get("index")
     owner_id = str(payload.get("owner_id", ""))
     query = str(payload.get("query", ""))
