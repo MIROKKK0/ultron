@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var isSending = false
     @State private var brainPhase: BrainPhase = .idle
     @State private var showSettings = false
+    @State private var showMemoryExplorer = false
     @State private var errorMessage: String?
     @State private var serverOnline = false
     @State private var serverStatusChecked = false
@@ -30,6 +31,10 @@ struct ContentView: View {
                         .fill(serverOnline ? .green : (serverStatusChecked ? .red : .orange))
                         .frame(width: 8, height: 8)
                         .accessibilityLabel(serverOnline ? "API online" : (serverStatusChecked ? "API offline" : "Verificando API"))
+                    Button { showMemoryExplorer = true } label: {
+                        Image(systemName: "circle.hexagongrid").font(.title3).padding(10)
+                    }
+                    .accessibilityLabel("Explorar memória neural")
                     Button { showSettings = true } label: {
                         Image(systemName: "slider.horizontal.3").font(.title3).padding(10)
                     }
@@ -100,6 +105,12 @@ struct ContentView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView(serverURL: $serverURL, onClearHistory: clearLocalHistory)
                     .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showMemoryExplorer) {
+                NavigationStack {
+                    MemoryExplorerView(serverURL: serverURL)
+                }
+                .preferredColorScheme(.dark)
             }
         }
         .preferredColorScheme(.dark)
