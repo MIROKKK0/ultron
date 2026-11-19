@@ -1100,6 +1100,9 @@ def get_memory_graph(limit: int = 300,
         "procedural": {"center": [4.0, 0.0, 0.0], "spread": [1.6, 1.6, 1.6], "density": 500},
     }
     with connect_db() as db:
+        # The graph can be the first typed-memory endpoint used after deployment.
+        # Ensure its tables exist before querying a fresh PostgreSQL database.
+        MemoryStore(db).initialize()
         rows = execute(db, """SELECT id,kind,content,source,confidence,created_at,
                 last_accessed_at,access_count
             FROM cognitive_memories WHERE owner_id=? ORDER BY id DESC LIMIT ?""",
@@ -1166,6 +1169,8 @@ def get_memory_insights(installation_id: str = Depends(require_installation)) ->
     from backend.memory_insights import analyze_memories
 
     with connect_db() as db:
+        # Diagnostics must also work on a fresh database, independently of /v2/memory.
+        MemoryStore(db).initialize()
         rows = execute(db, """SELECT id,kind,content,source,confidence,created_at,
                 last_accessed_at,access_count
             FROM cognitive_memories WHERE owner_id=? ORDER BY id DESC LIMIT 500""",
