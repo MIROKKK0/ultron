@@ -1,5 +1,6 @@
 import SwiftUI
 import SceneKit
+import GLKit
 import UIKit
 
 struct MemoryExplorerView: View {
