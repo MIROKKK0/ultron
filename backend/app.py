@@ -1103,8 +1103,10 @@ def get_memory_graph(limit: int = 300,
         rows = execute(db, """SELECT id,kind,content,source,confidence,created_at,
                 last_accessed_at,access_count
             FROM cognitive_memories WHERE owner_id=? ORDER BY id DESC LIMIT ?""",
-            (installation_id, limit)).fetchall()
+            (installation_id, limit + 1)).fetchall()
         memories = [dict(row) for row in rows]
+        truncated = len(memories) > limit
+        memories = memories[:limit]
         if not memories:
             return {"owner_scope": "authenticated_installation", "read_only": True,
                     "nodes": [], "edges": [], "edge_details": [], "regions": region_layout}
@@ -1155,7 +1157,7 @@ def get_memory_graph(limit: int = 300,
         })
     return {"owner_scope": "authenticated_installation", "read_only": True,
             "nodes": nodes, "edges": edges, "edge_details": edge_details,
-            "regions": region_layout, "truncated": len(memories) == limit}
+            "regions": region_layout, "truncated": truncated}
 
 
 @app.delete("/v2/memory/{memory_id}")
