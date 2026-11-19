@@ -1198,8 +1198,11 @@ def get_memory_insights(installation_id: str = Depends(require_installation)) ->
              "planner", {"goal": "Analisar repetições, proveniência e lacunas sem alterar memórias."})["result"]},
         {"role": "memory_retriever", "status": "completed",
          "task": "Selecionar registros do escopo autenticado",
-         "result": {"memory_ids": ids[:8], "count": min(len(ids), 8),
-                    "read_only": True, "source": "authenticated_memory_graph"}},
+         "result": run_specialist("memory_retriever", {"readonly_items": [
+             {"id": item["id"], "kind": item["kind"], "source": item["source"],
+              "confidence": item["confidence"]}
+             for item in memories[:8]
+         ]})["result"]},
         {"role": "solver", "status": "completed",
          "task": "Produzir síntese dos sinais encontrados",
          "result": run_specialist("solver", {"answer": summary})["result"]},
