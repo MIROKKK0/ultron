@@ -96,7 +96,7 @@ class UltronAPIHandler(BaseHTTPRequestHandler):
                     self._send_sse({"type": "stage", "stage": "responding"})
                     self._send_sse({"type": "final", "reply": reply, "strategy": "ultron-core"})
                     return
-                reply = self._get_chat_agent().chat(message)
+                reply = self._run_chat(message)
                 self._send(200, {"reply": reply, "strategy": "ultron-core"})
                 return
             if self.path == "/feedback":
