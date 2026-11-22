@@ -82,4 +82,4 @@ for app in apps:
     if len(libraries) >= 4: break
 manifest = {"apps": records, "main": main, "libraries": libraries}
 Path(destination / "ipa-manifest.json").write_text(json.dumps(manifest, indent=2))
-print(json.dumps(manifest))
+print('IPA validated; app executable and bundled Mach-O libraries identified.')
