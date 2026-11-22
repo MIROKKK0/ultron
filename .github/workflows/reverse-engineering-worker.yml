@@ -149,7 +149,10 @@ jobs:
           }
           C
           clang -target arm64-apple-macos11 -O0 -fno-inline -c "$RUNNER_TEMP/fixture.c" -o "$RUNNER_TEMP/fixture.o"
-          file "$RUNNER_TEMP/fixture.o"
+          ld64.lld -arch arm64 -platform_version macos 11.0 11.0 -e _main -o "$RUNNER_TEMP/fixture.macho" "$RUNNER_TEMP/fixture.o"
+          chmod +x "$RUNNER_TEMP/fixture.macho"
+          file "$RUNNER_TEMP/fixture.macho" | tee "$RUNNER_TEMP/fixture-type.txt"
+          grep -E "Mach-O 64-bit arm64 executable" "$RUNNER_TEMP/fixture-type.txt"
       - name: Verify Ghidra and persistent REA function analysis
         env:
           REA_GHIDRA_SMOKE: "1"
@@ -161,7 +164,7 @@ jobs:
           set -e
           cat reports/ghidra-doctor.json
           if [ "$doctor_status" -ne 0 ]; then exit "$doctor_status"; fi
-          timeout 3600 node scripts/rea-ghidra-session.mjs "$RUNNER_TEMP/fixture.o"
+          timeout 3600 node scripts/rea-ghidra-session.mjs "$RUNNER_TEMP/fixture.macho"
           python - <<'PY'
           import json
           report=json.load(open("reports/ghidra-session-summary.json"))
