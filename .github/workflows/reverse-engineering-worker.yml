@@ -30,7 +30,7 @@ permissions:
 
 concurrency:
   group: ultron-rea-analysis-${{ github.event.inputs.job_id || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   validate:
@@ -60,12 +60,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24.22.1"
-      - name: Install REA and Playwright
+      - name: Install REA and Playwright client
         run: |
           npm install --global rea-agents@6.10.1
           npm install --no-save --no-package-lock playwright@1.64.1
-          npx playwright install --with-deps chromium
+      - name: Start disposable Chromium container
+        run: |
+          docker run --detach --rm --name ultron-cdp-smoke \
+            --publish 127.0.0.1:9222:9222 \
+            --shm-size=1g --memory=2g --cpus=2 --pids-limit=512 \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            mcr.microsoft.com/playwright:v1.64.1-noble \
+            bash -lc 'CHROME="$(find /ms-playwright -type f -name chrome -perm -111 | head -n 1)"; test -x "$CHROME"; exec "$CHROME" --headless=new --no-sandbox --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --remote-allow-origins=http://127.0.0.1:9222,http://localhost:9222 --user-data-dir=/tmp/ultron-rea-cdp --no-first-run --no-default-browser-check --disable-background-networking --disable-extensions --disable-sync --disable-dev-shm-usage about:blank'
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:9222/json/version >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs ultron-cdp-smoke
+          exit 1
       - name: Exercise real CDP + REA website capture
+        env:
+          REA_CDP_ENDPOINT: http://127.0.0.1:9222
         run: |
           mkdir -p reports
           printf '{"target_type":"site","target_url":"https://example.com"}' > job.json
@@ -81,6 +96,9 @@ jobs:
           assert report["pagesVisited"][0]["url"].startswith("https://example.com")
           print("CDP/REA site smoke passed.")
           PY
+      - name: Stop disposable Chromium container
+        if: always()
+        run: docker stop ultron-cdp-smoke >/dev/null 2>&1 || true
 
   native-worker-smoke:
     if: github.event_name != 'workflow_dispatch'
@@ -105,7 +123,6 @@ jobs:
             "https://sourceforge.net/projects/ghidra.mirror/files/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip/download" \
             -o "$RUNNER_TEMP/ghidra.zip"
           echo "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
-          unzip -t "$RUNNER_TEMP/ghidra.zip" >/dev/null
           mkdir -p "$RUNNER_TEMP/ghidra"
           unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
           echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC" >> "$GITHUB_ENV"
@@ -114,7 +131,7 @@ jobs:
       - name: Install REA and MCP SDK
         run: |
           npm install --global rea-agents@6.10.1
-          npm install --no-save --no-package-lock @modelcontextprotocol/client@2.3.1
+          npm install --no-save --no-package-lock @modelcontextprotocol/sdk@1.29.0
       - name: Build a tiny arm64 Mach-O test target
         run: |
           cat > "$RUNNER_TEMP/fixture.c" <<'C'
@@ -133,7 +150,12 @@ jobs:
       - name: Verify Ghidra and persistent REA function analysis
         run: |
           mkdir -p reports
+          set +e
           rea doctor --provider ghidra --json > reports/ghidra-doctor.json
+          doctor_status=$?
+          set -e
+          cat reports/ghidra-doctor.json
+          if [ "$doctor_status" -ne 0 ]; then exit "$doctor_status"; fi
           timeout 3600 node scripts/rea-ghidra-session.mjs "$RUNNER_TEMP/fixture.o"
           python - <<'PY'
           import json
@@ -197,17 +219,36 @@ jobs:
       - name: Install REA CLI
         run: npm install --global rea-agents@6.10.1
 
-      - name: Install isolated Chromium
+      - name: Install Playwright client for isolated Chromium
+        if: ${{ steps.job_type.outputs.target_type == 'site' }}
+        run: npm install --no-save --no-package-lock playwright@1.64.1
+
+      - name: Start disposable Chromium container
         if: ${{ steps.job_type.outputs.target_type == 'site' }}
         run: |
-          npm install --no-save --no-package-lock playwright@1.64.1
-          npx playwright install --with-deps chromium
+          docker run --detach --rm --name ultron-cdp-worker \
+            --publish 127.0.0.1:9222:9222 \
+            --shm-size=1g --memory=2g --cpus=2 --pids-limit=512 \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            mcr.microsoft.com/playwright:v1.64.1-noble \
+            bash -lc 'CHROME="$(find /ms-playwright -type f -name chrome -perm -111 | head -n 1)"; test -x "$CHROME"; exec "$CHROME" --headless=new --no-sandbox --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --remote-allow-origins=http://127.0.0.1:9222,http://localhost:9222 --user-data-dir=/tmp/ultron-rea-cdp --no-first-run --no-default-browser-check --disable-background-networking --disable-extensions --disable-sync --disable-dev-shm-usage about:blank'
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:9222/json/version >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs ultron-cdp-worker
+          exit 1
 
       - name: Run isolated browser + REA CDP analysis
         if: ${{ steps.job_type.outputs.target_type == 'site' }}
         env:
           JOB_FILE: job.json
+          REA_CDP_ENDPOINT: http://127.0.0.1:9222
         run: node scripts/rea-site-session.mjs
+
+      - name: Stop disposable Chromium container
+        if: always() && steps.job_type.outputs.target_type == 'site'
+        run: docker stop ultron-cdp-worker >/dev/null 2>&1 || true
 
       - name: Install Java and Ghidra
         if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
@@ -219,8 +260,8 @@ jobs:
       - name: Download and verify official Ghidra 12.2
         if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
         run: |
-          curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 1200 \
-            "https://sourceforge.net/projects/ghidra.mirror/files/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip/download" \
+          curl --fail --location --retry 3 -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/assets/665189215" \
             -o "$RUNNER_TEMP/ghidra.zip"
           echo "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
           mkdir -p "$RUNNER_TEMP/ghidra"
@@ -257,7 +298,7 @@ jobs:
 
       - name: Install MCP SDK for persistent REA session
         if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
-        run: npm install --no-save --no-package-lock @modelcontextprotocol/client@2.3.1
+        run: npm install --no-save --no-package-lock @modelcontextprotocol/sdk@1.29.0
 
       - name: Verify REA Ghidra provider
         if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
@@ -294,7 +335,7 @@ jobs:
           payload = {
               "status": os.environ["WORKER_STATUS"],
               "result_summary": summary,
-              "artifact_name": "",
+              "artifact_name": "private-ultron-database-report",
               "run_url": os.environ["RUN_URL"],
               "error": "" if os.environ["WORKER_STATUS"] == "succeeded" else "Worker terminou com falha; consulte o status e os logs técnicos."
           }
