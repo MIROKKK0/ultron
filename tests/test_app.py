@@ -47,7 +47,11 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(report["project"], "ULTRON")
         self.assertIn("backend", report["inventory"]["counts"])
         self.assertIn("recent_commits", report["git"])
-        self.assertFalse(report["self_evolution"]["autonomous_code_candidate_generation"])
+        self.assertTrue(report["self_evolution"]["autonomous_code_candidate_generation"])
+        self.assertTrue(report["self_evolution"]["web_research_for_evolution"])
+        self.assertTrue(report["self_evolution"]["critic_review_for_candidates"])
+        self.assertTrue(report["self_evolution"]["automatic_merge_to_development"])
+        self.assertFalse(report["self_evolution"]["automatic_merge_to_production"])
         self.assertFalse(report["self_evolution"]["automatic_deployment"])
 
     def test_root_post_is_a_normal_chat_alias(self):
