@@ -5,7 +5,7 @@ import hmac
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Thread
+from threading import Lock, Thread
 from urllib.parse import parse_qs, urlparse
 
 from ultron_core import UltronCore, SPECIALISTS
@@ -14,13 +14,14 @@ from ultron_core import UltronCore, SPECIALISTS
 class UltronAPIHandler(BaseHTTPRequestHandler):
     core = UltronCore()
 
-    def _get_chat_agent(self):
-        agent = getattr(self.server, "_ultron_chat_agent", None)
-        if agent is None:
-            from ultron import Ultron
-            agent = Ultron()
-            self.server._ultron_chat_agent = agent
-        return agent
+    def _run_chat(self, message: str) -> str:
+        with self.server._ultron_chat_lock:
+            agent = getattr(self.server, "_ultron_chat_agent", None)
+            if agent is None:
+                from ultron import Ultron
+                agent = Ultron()
+                self.server._ultron_chat_agent = agent
+            return agent.chat(message)
 
     def _send_sse(self, payload: dict) -> None:
         body = ("data: " + json.dumps(payload, ensure_ascii=False) + "\\n\\n").encode("utf-8")
@@ -91,7 +92,7 @@ class UltronAPIHandler(BaseHTTPRequestHandler):
                     self.send_header("Connection", "keep-alive")
                     self.end_headers()
                     self._send_sse({"type": "stage", "stage": "processing"})
-                    reply = self._get_chat_agent().chat(message)
+                    reply = self._run_chat(message)
                     self._send_sse({"type": "stage", "stage": "responding"})
                     self._send_sse({"type": "final", "reply": reply, "strategy": "ultron-core"})
                     return
@@ -143,10 +144,14 @@ def main() -> None:
     host = os.getenv("ULTRON_API_HOST", "0.0.0.0")
     port = int(os.getenv("PORT", os.getenv("ULTRON_API_PORT", "8000")))
     server = ThreadingHTTPServer((host, port), UltronAPIHandler)
+    server._ultron_chat_lock = Lock()
     if os.getenv("ULTRON_START_WORKER", "0").lower() in {"1", "true", "yes"}:
-        from scripts.ultron_worker import run_worker
-        Thread(target=run_worker, kwargs={"once": False}, daemon=True, name="ultron-agent-worker").start()
-        print("ULTRON background worker iniciado no processo da API")
+        if not (os.getenv("ULTRON_LLM_API_KEY") or os.getenv("OPENAI_API_KEY")):
+            print("Worker não iniciado: configure ULTRON_LLM_API_KEY ou OPENAI_API_KEY")
+        else:
+            from scripts.ultron_worker import run_worker
+            Thread(target=run_worker, kwargs={"once": False}, daemon=True, name="ultron-agent-worker").start()
+            print("ULTRON background worker iniciado no processo da API")
     print(f"ULTRON API online em {host}:{port}")
     server.serve_forever()
 
