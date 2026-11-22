@@ -44,14 +44,14 @@ In `MIROKKK0/ultron` → Settings → Secrets and variables → Actions, add:
 
 The workflow dispatch payload contains only a random job ID. The actual target URL or uploaded IPA ID is fetched from ULTRON through the callback-authenticated endpoint, so it is not copied into the public workflow-dispatch input.
 
-**Release gate:** GitHub only accepts `workflow_dispatch` for a workflow file present on the repository's default branch. This integration PR currently targets the ULTRON core feature branch; the worker workflow must also reach `main` before Render can dispatch real jobs with `ULTRON_GITHUB_REF=main`. The PR itself does not merge or deploy anything.
+**Release gate:** GitHub only accepts `workflow_dispatch` for a workflow file present on the repository's default branch. PR #73 registers the worker workflow and scripts on `main`; Render dispatches the worker using `ULTRON_GITHUB_REF=feat/ultron-core-assistant`, which is the selected deployment branch containing the ULTRON API routes and worker code.
 
 ## iPhone workflow
 
 1. Open ULTRON → Engenharia reversa.
-2. For a site, enter an HTTPS URL, confirm authorization, and tap **Analisar site com Chromium + REA**. The runner checks the hostname, blocks private/reserved IP resolutions, rejects cross-origin redirects, opens a disposable browser profile, and runs REA's CDP inspection and bundle analysis.
-3. For an IPA, select the file, tap **Enviar IPA ao REA**, then tap **Analisar IPA com REA + Ghidra**. Uploads are temporary and expire after six hours.
-4. ULTRON polls the job status. When complete, it shows a report summary and a link to the GitHub Actions run, where the full evidence artifact is retained for 14 days.
+2. For a site, enter an HTTPS URL, confirm authorization, and tap **Analisar site com REA**. The runner checks the hostname, blocks private/reserved IP resolutions, rejects cross-origin redirects, opens a disposable browser profile, and runs REA's CDP inspection and bundle analysis.
+3. For an IPA, select the file, tap **Enviar IPA ao REA**, then tap **Análise profunda com REA + Ghidra**. Uploads are temporary and expire after six hours.
+4. ULTRON polls the job status, receives the worker summary through its authenticated callback, synthesizes a Portuguese technical report with its own brain, and links to the GitHub Actions run where the full evidence artifact is retained for 14 days.
 
 ## Evidence and limits
 
