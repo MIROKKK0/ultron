@@ -1,6 +1,7 @@
 """Read-only self-knowledge about ULTRON's checked-out source tree and Git history."""
 from __future__ import annotations
 
+import ast
 import os
 import re
 import subprocess
@@ -105,6 +106,68 @@ def _scheduled_workflows(root: Path, paths: list[str]) -> list[dict[str, str]]:
     return schedules
 
 
+def _architecture_map(root: Path, paths: list[str]) -> dict[str, Any]:
+    modules: list[str] = []
+    edges: set[tuple[str, str]] = set()
+    routes: set[tuple[str, str, str]] = set()
+    specialists: set[str] = set()
+    methods = {"get", "post", "put", "patch", "delete", "options", "head"}
+
+    for relative in paths:
+        if not relative.startswith("backend/") or not relative.endswith(".py"):
+            continue
+        source_path = root / relative
+        try:
+            source = source_path.read_text(encoding="utf-8", errors="replace")
+            tree = ast.parse(source, filename=relative)
+        except (OSError, SyntaxError, ValueError):
+            continue
+        module_name = relative[:-3].replace("/", ".")
+        modules.append(module_name)
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith("backend."):
+                        edges.add((module_name, alias.name))
+            elif isinstance(node, ast.ImportFrom):
+                imported = node.module or ""
+                if imported.startswith("backend."):
+                    edges.add((module_name, imported))
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for decorator in node.decorator_list:
+                    if not isinstance(decorator, ast.Call) or not isinstance(decorator.func, ast.Attribute):
+                        continue
+                    owner = decorator.func.value
+                    method = decorator.func.attr.lower()
+                    if not isinstance(owner, ast.Name) or owner.id != "app" or method not in methods:
+                        continue
+                    if decorator.args and isinstance(decorator.args[0], ast.Constant) and isinstance(decorator.args[0].value, str):
+                        routes.add((method.upper(), decorator.args[0].value, node.name))
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "Specialist":
+                if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                    specialists.add(node.args[0].value)
+
+    return {
+        "backend_modules": sorted(modules)[:250],
+        "dependency_graph": {
+            "node_count": len(modules),
+            "edge_count": len(edges),
+            "edges": [
+                {"from": source, "to": target}
+                for source, target in sorted(edges)[:300]
+            ],
+            "truncated": len(edges) > 300,
+        },
+        "api_routes": [
+            {"method": method, "path": path, "handler": handler}
+            for method, path, handler in sorted(routes)[:200]
+        ],
+        "api_route_count": len(routes),
+        "specialists": sorted(specialists),
+    }
+
+
 def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
     """Return a bounded, secret-free snapshot of the checked-out ULTRON project."""
     project_root = Path(root or Path(__file__).resolve().parents[1]).resolve()
@@ -120,6 +183,7 @@ def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
     )
 
     workflows = _scheduled_workflows(project_root, paths)
+    architecture = _architecture_map(project_root, paths)
     has_agent_eval = "scripts/agent_eval.py" in paths
     has_evolution_gate = ".github/workflows/agent-evolution.yml" in paths
     has_model_training = ".github/workflows/model-training.yml" in paths
@@ -142,6 +206,9 @@ def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
         "measurable_improvement_gate": has_improvement_gate,
         "automated_candidate_evaluation_workflow": has_evolution_gate,
         "scheduled_classifier_retraining_workflow": has_model_training,
+        "specialist_registry": len(architecture["specialists"]) == 6,
+        "api_route_inventory": architecture["api_route_count"] > 0,
+        "backend_dependency_graph": architecture["dependency_graph"]["edge_count"] > 0,
     }
     evolution = {
         "benchmark_available": has_agent_eval,
@@ -178,6 +245,7 @@ def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
             "components": component_map,
             "tracked_source_paths": paths[:250],
         },
+        "architecture": architecture,
         "capabilities": capabilities,
         "self_evolution": evolution,
         "limitations": [
