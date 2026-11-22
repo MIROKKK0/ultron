@@ -71,6 +71,12 @@ jobs:
           ref: 2.0.0-beta.1
           path: .xtool-source
 
+      - name: Resolve xtool dependencies
+        run: swift package --package-path .xtool-source resolve
+
+      - name: Patch swift-subprocess for Swift 6.4.3 compatibility
+        run: python3 scripts/patch_xtool_swift_subprocess.py .xtool-source
+
       - name: Build xtool CLI
         run: |
           swift build --package-path .xtool-source --configuration release --product xtool
