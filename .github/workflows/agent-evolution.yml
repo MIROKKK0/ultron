@@ -24,6 +24,8 @@ on:
       - "backend/web_research.py"
       - "scripts/agent_eval.py"
       - "scripts/compare_agent_eval.py"
+      - "scripts/recursive_evolution.py"
+      - "tests/test_recursive_evolution.py"
       - "tests/test_agent_evaluation.py"
       - "tests/test_hierarchical_planner.py"
       - "tests/test_tool_runtime.py"
