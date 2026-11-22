@@ -9,8 +9,8 @@ struct ReverseEngineeringView: View {
     @AppStorage("ultron.rea.lastJobID") private var jobID = ""
     @AppStorage("ultron.rea.lastRunURL") private var runURLString = ""
     @AppStorage("ultron.rea.lastWorkerStatus") private var workerStatus = ""
-    @AppStorage("ultron.rea.lastSynthesizedJobID") private var synthesizedJobID = ""
-    @AppStorage("ultron.rea.lastReport") private var savedReport = ""
+    @State private var synthesizedJobID = ""
+    @State private var savedReport = ""
 
     @State private var mode = "SITE"
     @State private var targetURL = ""
