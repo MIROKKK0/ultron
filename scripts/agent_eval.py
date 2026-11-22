@@ -93,10 +93,14 @@ def run() -> dict:
             and counts.get("backend", 0) > 0
             and counts.get("tests", 0) > 0
         )
-        checks["self_evolution_limits_are_explicit"] = (
+        checks["recursive_self_evolution_is_available_and_not_production"] = (
             awareness["self_evolution"]["benchmark_available"]
             and awareness["self_evolution"]["regression_and_improvement_gate_available"]
-            and awareness["self_evolution"]["autonomous_code_candidate_generation"] is False
+            and awareness["self_evolution"].get("autonomous_code_candidate_generation") is True
+            and awareness["self_evolution"].get("web_research_for_evolution") is True
+            and awareness["self_evolution"].get("critic_review_for_candidates") is True
+            and awareness["self_evolution"].get("automatic_merge_to_development") is True
+            and awareness["self_evolution"]["automatic_merge_to_production"] is False
             and awareness["self_evolution"]["automatic_deployment"] is False
         )
     except Exception:
