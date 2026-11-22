@@ -83,7 +83,7 @@ def run_intent_skill(message: str) -> str | None:
             f"promoção no ramo de desenvolvimento={'sim' if evolution.get('automatic_merge_to_development') else 'não'}; "
             f"disparo configurado={'sim' if evolution.get('server_dispatch_ready') else 'não'}; "
             f"merge em produção={'sim' if evolution['automatic_merge_to_production'] else 'não'}. "
-            "O worker pode gerar e testar mudanças em branches isoladas; a promoção ao núcleo de desenvolvimento depende do gate e da classificação da PR.\\n"
+            "O worker pode gerar e testar mudanças em branches isoladas; a promoção ao núcleo de desenvolvimento depende do gate e da classificação da PR (branch/PR).\n"
             + "\n".join(f"- {item}" for item in proposal["plan"])
         )
     return None
