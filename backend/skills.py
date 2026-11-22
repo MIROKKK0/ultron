@@ -77,7 +77,7 @@ def run_intent_skill(message: str) -> str | None:
             f"workflow de avaliação de branches={'sim' if evolution['candidate_branch_evaluation_available'] else 'não'}; "
             f"geração autônoma geral de patches={'sim' if evolution['autonomous_code_candidate_generation'] else 'não'}; "
             f"merge automático={'sim' if evolution['automatic_merge_to_production'] else 'não'}. "
-            "O ciclo atual avalia candidatos existentes; ainda não gera sozinho qualquer patch de software.\n"
+            "O ciclo atual avalia candidatos existentes; ainda não gera sozinho qualquer patch de software. Posso preparar branch/PR para revisão.\n"
             + "\n".join(f"- {item}" for item in proposal["plan"])
         )
     return None
