@@ -7,6 +7,10 @@ from __future__ import annotations
 
 import os
 import re
+import ipaddress
+import socket
+import uuid
+from urllib.parse import urlsplit
 import hmac
 import json
 import sqlite3
@@ -31,6 +35,10 @@ class ToolCallRequest(BaseModel):
 
 class IPAAnalyzeRequest(BaseModel):
     file_path: str = Field(min_length=1, max_length=1024)
+
+class SiteAnalysisRequest(BaseModel):
+    url: str = Field(min_length=8, max_length=2048)
+    authorized: bool = False
 
 
 def _bridge_config() -> tuple[str, str]:
@@ -93,6 +101,123 @@ async def rea_call_tool(name: str, payload: ToolCallRequest) -> dict[str, Any]:
     )
     return response.json()
 
+
+
+def _validate_public_site_url(value: str) -> str:
+    parsed = urlsplit(value.strip())
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise HTTPException(status_code=422, detail="Informe uma URL HTTPS pública sem usuário ou senha.")
+    host = parsed.hostname.rstrip(".").lower()
+    if host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
+        raise HTTPException(status_code=422, detail="Endereços locais ou internos não são aceitos.")
+    try:
+        literal = ipaddress.ip_address(host)
+        addresses = [literal]
+    except ValueError:
+        try:
+            records = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+            addresses = [ipaddress.ip_address(record[4][0]) for record in records]
+        except OSError as exc:
+            raise HTTPException(status_code=422, detail="Não foi possível resolver o domínio informado.") from exc
+    if not addresses or any(not address.is_global for address in addresses):
+        raise HTTPException(status_code=422, detail="O domínio resolve para uma rede não pública.")
+    return value.strip()
+
+
+def _github_config() -> tuple[str, str, str]:
+    token = os.getenv("ULTRON_GITHUB_TOKEN", "").strip()
+    repo = os.getenv("ULTRON_GITHUB_REPO", "MIROKKK0/ultron").strip()
+    ref = os.getenv("ULTRON_GITHUB_REF", "feat/rea-reverse-engineering-integration").strip()
+    if not token:
+        raise HTTPException(status_code=503, detail="O worker temporário de sites ainda não foi configurado no servidor.")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo) or not ref:
+        raise HTTPException(status_code=503, detail="Configuração do repositório GitHub inválida.")
+    return token, repo, ref
+
+
+async def _github_json(method: str, path: str, *, params: dict[str, Any] | None = None,
+                       payload: dict[str, Any] | None = None) -> tuple[int, Any]:
+    token, repo, _ = _github_config()
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+            response = await client.request(
+                method,
+                f"https://api.github.com/repos/{repo}{path}",
+                headers=headers,
+                params=params,
+                json=payload,
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Worker GitHub indisponível: {type(exc).__name__}") from exc
+    if response.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"GitHub Actions respondeu HTTP {response.status_code}: {response.text[:1000]}")
+    return response.status_code, (response.json() if response.content else None)
+
+
+async def _find_site_run(analysis_id: str) -> dict[str, Any] | None:
+    _, _, ref = _github_config()
+    _, payload = await _github_json(
+        "GET",
+        "/actions/workflows/rea-site-analysis.yml/runs",
+        params={"branch": ref, "event": "workflow_dispatch", "per_page": 20},
+    )
+    for run in payload.get("workflow_runs", []):
+        title = str(run.get("display_title") or run.get("name") or "")
+        if analysis_id in title:
+            return run
+    return None
+
+
+@router.post("/site/start")
+async def rea_start_site_analysis(payload: SiteAnalysisRequest) -> dict[str, Any]:
+    if not payload.authorized:
+        raise HTTPException(status_code=403, detail="Confirme que você tem autorização para analisar este site.")
+    target = _validate_public_site_url(payload.url)
+    _, repo, ref = _github_config()
+    analysis_id = uuid.uuid4().hex
+    await _github_json(
+        "POST",
+        "/actions/workflows/rea-site-analysis.yml/dispatches",
+        payload={
+            "ref": ref,
+            "inputs": {"analysis_id": analysis_id, "target_url": target},
+        },
+    )
+    run = await _find_site_run(analysis_id)
+    return {
+        "analysis_id": analysis_id,
+        "status": run.get("status", "queued") if run else "dispatched",
+        "run_id": run.get("id") if run else None,
+        "run_url": run.get("html_url") if run else f"https://github.com/{repo}/actions/workflows/rea-site-analysis.yml",
+        "worker": "GitHub-hosted ephemeral runner",
+    }
+
+
+@router.get("/site/status/{analysis_id}")
+async def rea_site_analysis_status(analysis_id: str) -> dict[str, Any]:
+    if not re.fullmatch(r"[a-f0-9]{32}", analysis_id):
+        raise HTTPException(status_code=400, detail="ID de análise inválido.")
+    _, repo, _ = _github_config()
+    run = await _find_site_run(analysis_id)
+    if not run:
+        return {
+            "analysis_id": analysis_id,
+            "status": "queued",
+            "run_url": f"https://github.com/{repo}/actions/workflows/rea-site-analysis.yml",
+        }
+    return {
+        "analysis_id": analysis_id,
+        "status": run.get("status"),
+        "conclusion": run.get("conclusion"),
+        "run_id": run.get("id"),
+        "run_url": run.get("html_url"),
+        "artifacts_url": run.get("artifacts_url"),
+    }
 
 @router.post("/ipa/analyze")
 async def rea_analyze_ipa(payload: IPAAnalyzeRequest) -> dict[str, Any]:
