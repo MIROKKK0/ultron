@@ -39,3 +39,33 @@ O workflow `.github/workflows/model-training.yml` retreina apenas o classificado
 ## Próxima etapa de evolução
 
 Conectar um agente de programação como proponente opcional (nunca como autoridade), capaz de gerar hipóteses e patches pequenos. ULTRON deve manter o contexto, a política de segurança, os benchmarks, a decisão de promoção e o registro de experimentos. O ciclo recomendado é: observar falha → criar teste → propor uma alteração isolada → executar baseline e candidato com a mesma régua → manter ou descartar → registrar o resultado → abrir PR.
+
+## Autoevolução recursiva do código
+
+O worker `scripts/recursive_evolution.py` acrescenta um ciclo real de engenharia de software:
+- inspeciona o mapa do projeto, o próprio código do worker, histórico Git, PRs incorporadas, execuções de CI e skills;
+- pesquisa fontes públicas e vídeos técnicos com a ferramenta web já usada pelo ULTRON;
+- escolhe uma melhoria e gera um patch unified diff;
+- aplica o patch apenas num checkout efêmero e numa branch candidata;
+- executa a suíte de testes e o benchmark congelado;
+- faz uma segunda chamada de revisão crítica sobre o diff e o resultado dos testes;
+- abre uma PR e pode incorporá-la automaticamente apenas em `feat/ultron-core-assistant` depois que os checks de CI passarem.
+
+O endpoint `POST /evolution/dispatch` usa a identidade autenticada da instalação. O cliente iOS reconhece frases explícitas como “ULTRON, evolua agora o próprio projeto” e chama essa rota com as credenciais locais; o chat público não pode disparar o worker. A skill `recursive_evolution` também está disponível pela rota de skills autenticada. O workflow agendado fica no branch padrão e faz checkout explícito do ramo de desenvolvimento.
+
+### Configuração necessária
+
+Adicionar como GitHub Actions secrets:
+- `ULTRON_LLM_API_KEY`
+- `ULTRON_LLM_BASE_URL` (endpoint HTTPS compatível com OpenAI Chat Completions)
+- `ULTRON_LLM_MODEL`
+
+O Render precisa de `ULTRON_GITHUB_TOKEN` com permissão Actions: write no repositório para que a API/skill dispare o workflow. Nenhum desses segredos deve ser gravado no código, no IPA ou em artefatos públicos.
+
+### O que evolui automaticamente
+
+O ciclo pode alterar backend, cliente iOS, skills, documentação, scripts, treinamento e testes. Mantém histórico de branches e PRs para que o ULTRON compare versões e aprenda com os resultados de ciclos anteriores.
+
+O worker não edita diretamente o checkout de produção, não lê segredos, não modifica workflows/infraestrutura/autenticação, não publica IPA e não implanta Render. A incorporação automática é limitada ao ramo de desenvolvimento; a publicação em `main` continua sendo um release separado.
+
+O modelo local de intenção continua sendo um classificador, não um LLM. A geração de patches depende do provedor de código configurado; sem as três secrets de LLM, o worker para com uma mensagem explícita em vez de fingir que evoluiu.

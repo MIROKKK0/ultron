@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.project_awareness import build_project_awareness
+from backend.evolution_dispatch import dispatch_evolution_workflow
 from backend.brain import run_multitask
 from backend.cognitive_workspace import CognitiveWorkspace
 from backend.memory_system import MemoryStore
@@ -273,6 +274,10 @@ class ReviewRequest(BaseModel):
 
 class ImprovementRequest(BaseModel):
     problem: str = Field(min_length=1, max_length=2000)
+
+
+class EvolutionDispatchRequest(BaseModel):
+    objective: str = Field(default="", max_length=1000)
 
 
 class PlanRequest(BaseModel):
@@ -1350,6 +1355,17 @@ def propose_improvement(request: ImprovementRequest) -> dict[str, Any]:
         "human_review_required": True,
     }
     return proposal
+
+
+@app.post("/evolution/dispatch", dependencies=[Depends(require_installation)])
+def dispatch_recursive_evolution(request: EvolutionDispatchRequest) -> dict[str, Any]:
+    """Ask the default-branch worker to research and evolve the development core."""
+    try:
+        return dispatch_evolution_workflow(request.objective)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/agent/plan", dependencies=[Depends(require_api_token)])

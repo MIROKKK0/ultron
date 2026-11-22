@@ -28,6 +28,15 @@ private struct ChatRequest: Encodable {
     }
 }
 
+private struct EvolutionDispatchRequest: Encodable {
+    let objective: String
+}
+
+private struct EvolutionDispatchResponse: Decodable {
+    let dispatched: Bool
+    let workflow: String
+}
+
 private struct BrainRunRequest: Encodable {
     let goal: String
     let history: [String]
@@ -261,6 +270,39 @@ struct ChatClient {
         throw ChatClientError.invalidResponse
     }
 
+    private func isExplicitEvolutionRequest(_ message: String) -> Bool {
+        let normalized = message.folding(
+            options: [.diacriticInsensitive, .caseInsensitive],
+            locale: Locale(identifier: "pt_BR")
+        )
+        let phrases = [
+            "autoevolua",
+            "auto evolua",
+            "evolua agora",
+            "inicie a autoevolucao",
+            "modifique seu codigo",
+            "melhore seu proprio codigo",
+            "evolua o projeto"
+        ]
+        return phrases.contains { normalized.contains($0) }
+    }
+
+    private func dispatchEvolution(_ objective: String, serverURL: String) async throws -> ChatResult {
+        let body = try JSONEncoder().encode(EvolutionDispatchRequest(objective: objective))
+        let data = try await authenticatedData(
+            path: "/evolution/dispatch",
+            method: "POST",
+            serverURL: serverURL,
+            body: body
+        )
+        let result = try JSONDecoder().decode(EvolutionDispatchResponse.self, from: data)
+        guard result.dispatched else { throw ChatClientError.invalidResponse }
+        return ChatResult(
+            reply: "Ciclo de autoevolução enviado ao GitHub Actions. Vou analisar o histórico do projeto, pesquisar fontes públicas, propor uma mudança, testar e fazer uma revisão crítica antes de qualquer incorporação.",
+            strategy: "recursive-evolution"
+        )
+    }
+
     func send(
         _ message: String,
         serverURL: String,
@@ -268,6 +310,13 @@ struct ChatClient {
         onPhase: @MainActor @escaping (BrainPhase) -> Void = { _ in }
     ) async throws -> ChatResult {
         await onPhase(.connecting)
+        // Evolution requests use the installation-authenticated route, never the public chat endpoint.
+        if isExplicitEvolutionRequest(message) {
+            await onPhase(.processing)
+            let result = try await dispatchEvolution(message, serverURL: serverURL)
+            await onPhase(.responding)
+            return result
+        }
         // Opportunistically flush previously queued writes; failures leave them encrypted locally.
         _ = try? await syncQueuedMemories(serverURL: serverURL)
         do {
