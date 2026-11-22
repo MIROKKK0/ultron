@@ -15,6 +15,7 @@ from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
 from ultron_core import UltronCore, SPECIALISTS
+from mcp.client import MCPClient, MCPError
 
 load_dotenv()
 
@@ -233,11 +234,12 @@ class Ultron:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "action": {"type":"string","enum":["remember","recall","graph","specialists","task","skills","save_skill","mcp_list","mcp_register","evolution_propose","health"]},
+                            "action": {"type":"string","enum":["remember","recall","graph","specialists","task","skills","save_skill","mcp_list","mcp_register","mcp_discover","mcp_call","evolution_propose","health"]},
                             "content":{"type":"string"}, "query":{"type":"string"}, "kind":{"type":"string"},
                             "specialist":{"type":"string"}, "name":{"type":"string"}, "description":{"type":"string"},
                             "procedure":{"type":"string"}, "evidence":{"type":"string"}, "endpoint":{"type":"string"},
-                            "title":{"type":"string"}, "rationale":{"type":"string"}, "patch":{"type":"string"}
+                            "title":{"type":"string"}, "rationale":{"type":"string"}, "patch":{"type":"string"},
+                            "server_name":{"type":"string"}, "tool_name":{"type":"string"}, "arguments":{"type":"object"}
                         },
                         "required":["action"]
                     }
@@ -289,6 +291,15 @@ class Ultron:
                 if action == "mcp_register":
                     self.core.register_mcp_server(arguments.get("name",""), arguments.get("endpoint",""))
                     return "Servidor MCP registrado; conexão ainda precisa ser validada."
+                if action in {"mcp_discover", "mcp_call"}:
+                    server_name = arguments.get("server_name") or arguments.get("name", "")
+                    server = next((item for item in self.core.list_mcp_servers() if item["name"] == server_name and item["enabled"]), None)
+                    if not server:
+                        return "Servidor MCP não encontrado ou desabilitado. Registre-o e habilite-o primeiro."
+                    with MCPClient(server["endpoint"]) as mcp:
+                        if action == "mcp_discover":
+                            return json.dumps(mcp.list_tools(), ensure_ascii=False)
+                        return json.dumps(mcp.call_tool(arguments.get("tool_name", ""), arguments.get("arguments", {})), ensure_ascii=False)
                 if action == "evolution_propose": return self.core.propose_evolution(arguments.get("title",""), arguments.get("rationale",""), arguments.get("patch",""))
                 if action == "health": return json.dumps(self.core.health(), ensure_ascii=False)
                 return "Ação do núcleo não reconhecida."
