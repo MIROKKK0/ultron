@@ -23,6 +23,7 @@ class SelfModel:
         "cálculos aritméticos restritos",
         "autoavaliação estruturada de respostas",
         "propostas de melhoria verificáveis",
+        "inventário somente leitura do próprio repositório e histórico Git do checkout",
         "calibração limitada de prioridades com feedback explícito do usuário",
         "prioriza especialistas por critérios locais e feedback limitado",
         "executa até cinco tarefas locais independentes em paralelo",
@@ -35,6 +36,7 @@ class SelfModel:
         "não acessa serviços externos sem integração e autorização",
         "não pesquisa a internet por conta própria sem uma ferramenta de pesquisa conectada",
         "não pode garantir superioridade sobre outros modelos sem benchmarks",
+        "o autoconhecimento cobre apenas o checkout disponível; não confirma sozinho o estado do servidor ou do IPA instalado",
     )
     evolution_policy: str = (
         "Calibrar prioridades de estratégia apenas com feedback explícito e limites fixos; "
