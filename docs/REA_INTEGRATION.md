@@ -24,9 +24,10 @@ The REA bridge uses temporary disk-backed uploads rather than holding an entire 
 
 1. Open ULTRON and tap the waveform/reverse-engineering icon.
 2. Connect and discover the REA MCP catalog.
-3. For a site, enter an HTTPS URL and choose a compatible REA tool. For an IPA, select the file, upload it, then choose a tool whose input schema accepts the returned file path.
-4. Review the displayed schema and generated JSON arguments before running the tool.
-5. Preserve the returned evidence and limitations in the analysis report.
+3. For an IPA, select the file, upload it, then use **Analisar IPA automaticamente**. ULTRON passes the bridge-owned upload path to REA's `open_binary` workflow. You can then select additional read-only tools using the discovered schemas.
+4. For a site, enter an HTTPS URL and choose a compatible REA tool only when its required browser/CDP target is available. The current iPhone workspace does not yet provision an isolated browser scenario for arbitrary URLs.
+5. Review the displayed schema and generated JSON arguments before invoking any additional tool.
+6. Preserve the returned Evidence and limitations in the analysis report.
 
 The workspace is deliberately schema-driven: MCP tools have different required inputs, and the app does not invent missing browser targets, CDP endpoints, or binary-provider configuration.
 
@@ -34,7 +35,7 @@ The workspace is deliberately schema-driven: MCP tools have different required i
 
 - REA website observation uses a Chrome-family browser and CDP target. A URL alone is not a browser session. The current workspace does not yet launch a per-user browser session or automatically navigate a target.
 - REA's passive web inspector does not click or execute arbitrary page JavaScript. For controlled scenarios, use REA's documented scenario workflow with explicit actions and authorization.
-- IPA upload is implemented, but upload is not the same as decompilation. The next step is to use the discovered Apple/package tools and validate the actual IPA tool schema. Deep native disassembly requires a supported provider such as Ghidra, Hopper, or IDA, which is not installed by this lightweight Render bridge.
+- IPA upload and the initial `open_binary` archive workflow are implemented. That produces a package inventory, not native decompilation. Follow-up Apple bundle/resource inspection and native code analysis require their own advertised REA tools. Deep native disassembly requires a supported provider such as Ghidra, Hopper, or IDA, which is not installed by this lightweight Render bridge.
 - The bridge proxy currently allows only read-oriented MCP tool names. Mutating, process-control, and execution tools are denied by default.
 - The analysis UI is an initial integrated workspace. Autonomous multi-step tool selection, evidence-backed reconstruction plans, generated source projects, and automatic rebuild loops remain separate acceptance gates.
 - xtool 2.0.0-beta.1 is a prerelease. CI must prove an unsigned IPA exists, passes ZIP validation, contains `Payload/ULTRON.app`, has an executable, and has the expected bundle identifier. A successful build does not sign or install the IPA on the iPhone.
