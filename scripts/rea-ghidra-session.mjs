@@ -81,15 +81,7 @@ async function call(name, args = {}, timeout = 1200000, reportName = name) {
   const parsed = parseToolResult(result);
   outputs.set(reportName, parsed);
   await fs.writeFile(`reports/ghidra-${reportName}.json`, JSON.stringify(parsed, null, 2), { mode: 0o600 });
-  if (result.isError) {
-    const detail = parsed?.error || parsed || {};
-    const code = detail.code || "unknown";
-    const message = String(detail.message || "tool returned an error").slice(0, 400);
-    const remediation = typeof detail.remediation === "string" ? detail.remediation :
-      detail.remediation?.action || detail.remediation?.message || "";
-    console.error("REA_TOOL_ERROR name=" + name + " code=" + code + " message=" + message + " remediation=" + String(remediation).slice(0, 300));
-    throw new Error("REA tool " + name + " returned " + code + ": " + message);
-  }
+  if (result.isError) throw new Error(`REA tool ${name} returned an error; inspect the protected worker report.`);
   return parsed;
 }
 
@@ -102,11 +94,7 @@ try {
   }
 
   await call("binary_session", {}, 120000, "binary-session-before-open");
-  const openTool = toolMap.get("open_binary");
-  const openArgs = argumentsFor(openTool, { path: binaryPath, provider_id: "ghidra" });
-  console.log("open_binary required fields:", JSON.stringify(openTool.inputSchema?.required || []));
-  console.log("open_binary properties:", JSON.stringify(Object.keys(openTool.inputSchema?.properties || {})));
-  console.log("open_binary argument keys:", JSON.stringify(Object.keys(openArgs)));
+  const openArgs = argumentsFor(toolMap.get("open_binary"), { path: binaryPath, provider_id: "ghidra" });
   await call("open_binary", openArgs, 120000);
   opened = true;
 
@@ -128,7 +116,7 @@ try {
     const row = toolAvailability.find(item => item.name === name || item.name?.split(".").pop() === name || item.tool === name || item.operation === name);
     return row && (row.available === false || row.available === "unavailable" || row.state === "unavailable" || row.status === "unavailable") ? row.reason || row.message || "provider reports unavailable" : null;
   };
-  await call("binary_overview", argumentsFor(toolMap.get("binary_overview")), 1200000);
+  await call("binary_overview", argumentsFor(toolMap.get("binary_overview")), 2100000);
   const procedures = await call("list_procedures", argumentsFor(toolMap.get("list_procedures")), 600000);
   const candidates = procedureCandidates(procedures);
   const priorities = [/UIApplicationMain/i, /application.*didFinishLaunching/i, /scene.*willConnect/i, /main$/i, /_main$/i, /AppDelegate/i, /SceneDelegate/i, /SwiftUI.*App/i, /URLSession/i, /WKWebView/i, /login|auth|network|api/i];
