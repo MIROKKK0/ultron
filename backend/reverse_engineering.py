@@ -7,13 +7,19 @@ from __future__ import annotations
 
 import os
 import re
+import hmac
+import json
+import sqlite3
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 router = APIRouter()
+worker_router = APIRouter()
 MAX_IPA_BYTES = 200 * 1024 * 1024
 TOOL_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 READ_ONLY_PREFIXES = ("analyze_", "inspect_", "list_", "compare_", "read_", "decode_", "disassemble_", "export_", "get_", "find_", "search_")
@@ -127,3 +133,202 @@ async def rea_upload_ipa(file: UploadFile = File(...)) -> dict[str, Any]:
         "filePath": result["filePath"],
         "next": "Escolha uma ferramenta REA cujo schema aceite caminho de arquivo e passe filePath nos argumentos.",
     }
+
+
+class AnalysisJobRequest(BaseModel):
+    target_type: str
+    target_url: str | None = None
+    file_id: str | None = None
+
+
+class WorkerCompletion(BaseModel):
+    status: str
+    result_summary: str = Field(default="", max_length=60000)
+    artifact_name: str = Field(default="ultron-analysis-evidence", max_length=100)
+    run_url: str = Field(default="", max_length=1000)
+    error: str = Field(default="", max_length=4000)
+
+
+def _job_db():
+    database_url = os.getenv("DATABASE_URL", "")
+    if database_url.startswith(("postgres://", "postgresql://")):
+        import psycopg
+        from psycopg.rows import dict_row
+        return psycopg.connect(database_url, row_factory=dict_row)
+    connection = sqlite3.connect(os.getenv("ULTRON_DB_PATH", "ultron.db"))
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def _job_query(db: Any, query: str, params: tuple = ()):
+    if db.__class__.__module__.startswith("psycopg"):
+        query = query.replace("?", "%s")
+    return db.execute(query, params)
+
+
+def _ensure_jobs_table() -> None:
+    with _job_db() as db:
+        _job_query(db, """
+            CREATE TABLE IF NOT EXISTS reverse_engineering_jobs (
+                job_id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                target_type TEXT NOT NULL,
+                target_url TEXT,
+                file_id TEXT,
+                status TEXT NOT NULL,
+                result_json TEXT,
+                run_url TEXT,
+                error TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
+
+def _worker_token_ok(value: str | None) -> bool:
+    expected = os.getenv("ULTRON_WORKER_CALLBACK_TOKEN", "")
+    supplied = value or ""
+    return bool(expected) and hmac.compare_digest(expected, supplied)
+
+
+def _job_record(job_id: str) -> dict[str, Any] | None:
+    _ensure_jobs_table()
+    with _job_db() as db:
+        row = _job_query(db, "SELECT * FROM reverse_engineering_jobs WHERE job_id=?", (job_id,)).fetchone()
+    return dict(row) if row else None
+
+
+@router.post("/jobs")
+async def create_analysis_job(
+    payload: AnalysisJobRequest,
+    x_installation_id: str | None = Header(default=None),
+) -> dict[str, Any]:
+    target_type = payload.target_type.lower().strip()
+    if target_type not in {"site", "ipa"}:
+        raise HTTPException(status_code=400, detail="target_type deve ser site ou ipa.")
+    target_url = None
+    file_id = None
+    if target_type == "site":
+        from urllib.parse import urlparse
+        parsed = urlparse((payload.target_url or "").strip())
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            raise HTTPException(status_code=400, detail="Informe uma URL HTTPS pública.")
+        if parsed.port not in (None, 443):
+            raise HTTPException(status_code=400, detail="A análise de sites aceita somente HTTPS na porta padrão.")
+        target_url = parsed.geturl()
+    else:
+        file_id = (payload.file_id or "").strip()
+        if not re.fullmatch(r"[0-9a-fA-F-]{36}-[A-Za-z0-9._-]{1,100}", file_id):
+            raise HTTPException(status_code=400, detail="Identificador de IPA inválido; envie o arquivo primeiro.")
+
+    token = os.getenv("ULTRON_GITHUB_TOKEN", "")
+    repository = os.getenv("ULTRON_GITHUB_REPOSITORY", "MIROKKK0/ultron")
+    ref = os.getenv("ULTRON_ANALYSIS_REF", "main")
+    if not token:
+        raise HTTPException(status_code=503, detail="Configure ULTRON_GITHUB_TOKEN no Render para habilitar os workers.")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        raise HTTPException(status_code=503, detail="ULTRON_GITHUB_REPOSITORY inválido.")
+
+    _ensure_jobs_table()
+    job_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    with _job_db() as db:
+        _job_query(db, """
+            INSERT INTO reverse_engineering_jobs
+            (job_id, owner_id, target_type, target_url, file_id, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
+        """, (job_id, x_installation_id or "unknown", target_type, target_url, file_id, now, now))
+
+    workflow_url = f"https://api.github.com/repos/{repository}/actions/workflows/reverse-engineering-worker.yml/dispatches"
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(
+                workflow_url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+                json={"ref": ref, "inputs": {"job_id": job_id}},
+            )
+        if response.status_code != 204:
+            raise RuntimeError(f"GitHub workflow dispatch respondeu HTTP {response.status_code}: {response.text[:1000]}")
+    except Exception as exc:
+        with _job_db() as db:
+            _job_query(db, "UPDATE reverse_engineering_jobs SET status='dispatch_failed', error=?, updated_at=? WHERE job_id=?",
+                       (str(exc)[:4000], datetime.now(timezone.utc).isoformat(), job_id))
+        raise HTTPException(status_code=502, detail="Não foi possível iniciar o worker isolado do GitHub Actions.") from exc
+
+    return {"job_id": job_id, "status": "queued", "target_type": target_type}
+
+
+@router.get("/jobs/{job_id}")
+async def get_analysis_job(job_id: str, x_installation_id: str | None = Header(default=None)) -> dict[str, Any]:
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", job_id):
+        raise HTTPException(status_code=400, detail="Identificador de análise inválido.")
+    record = _job_record(job_id)
+    if not record or record["owner_id"] != (x_installation_id or "unknown"):
+        raise HTTPException(status_code=404, detail="Análise não encontrada.")
+    result = json.loads(record["result_json"]) if record.get("result_json") else None
+    return {
+        "job_id": record["job_id"],
+        "status": record["status"],
+        "result": result,
+        "run_url": record.get("run_url"),
+        "error": record.get("error"),
+        "updated_at": record["updated_at"],
+    }
+
+
+@worker_router.get("/jobs/{job_id}/payload")
+async def worker_job_payload(job_id: str, x_ultron_worker_token: str | None = Header(default=None)) -> dict[str, Any]:
+    if not _worker_token_ok(x_ultron_worker_token):
+        raise HTTPException(status_code=401, detail="Worker não autorizado.")
+    record = _job_record(job_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Job não encontrado.")
+    with _job_db() as db:
+        _job_query(db, "UPDATE reverse_engineering_jobs SET status='running', updated_at=? WHERE job_id=?",
+                   (datetime.now(timezone.utc).isoformat(), job_id))
+    return {
+        "job_id": record["job_id"],
+        "target_type": record["target_type"],
+        "target_url": record.get("target_url"),
+        "file_id": record.get("file_id"),
+        "rea_bridge_url": os.getenv("REA_BRIDGE_URL", "").rstrip("/"),
+    }
+
+
+@worker_router.post("/jobs/{job_id}/complete")
+async def complete_worker_job(
+    job_id: str,
+    payload: WorkerCompletion,
+    x_ultron_worker_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    if not _worker_token_ok(x_ultron_worker_token):
+        raise HTTPException(status_code=401, detail="Worker não autorizado.")
+    if payload.status not in {"succeeded", "failed"}:
+        raise HTTPException(status_code=400, detail="Status final inválido.")
+    record = _job_record(job_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Job não encontrado.")
+    result = {
+        "summary": payload.result_summary,
+        "artifact_name": payload.artifact_name,
+        "run_url": payload.run_url,
+    }
+    now = datetime.now(timezone.utc).isoformat()
+    with _job_db() as db:
+        _job_query(db, """
+            UPDATE reverse_engineering_jobs
+            SET status=?, result_json=?, run_url=?, error=?, updated_at=?
+            WHERE job_id=?
+        """, (
+            payload.status,
+            json.dumps(result, ensure_ascii=False),
+            payload.run_url,
+            payload.error,
+            now,
+            job_id,
+        ))
+    return {"ok": True, "job_id": job_id, "status": payload.status}
