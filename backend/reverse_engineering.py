@@ -87,7 +87,7 @@ async def rea_call_tool(name: str, payload: ToolCallRequest) -> dict[str, Any]:
 
 @router.post("/ipa/upload")
 async def rea_upload_ipa(file: UploadFile = File(...)) -> dict[str, Any]:
-    filename = (file.filename or "").replace("\\", "/").split("/")[-1]
+    filename = re.sub(r"[^A-Za-z0-9._-]", "_", (file.filename or "upload.ipa").replace("\\", "/").split("/")[-1])[:100]
     if not filename.lower().endswith(".ipa"):
         raise HTTPException(status_code=415, detail="Envie um arquivo .ipa válido.")
     file.file.seek(0, 2)
