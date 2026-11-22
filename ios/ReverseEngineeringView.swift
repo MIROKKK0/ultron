@@ -60,6 +60,10 @@ struct ReverseEngineeringView: View {
                         Text("IPA").tag("IPA")
                     }
                     .pickerStyle(.segmented)
+                    .onChange(of: mode) { _ in
+                        selectedTool = filteredTools.first?.name ?? ""
+                        prefillArguments()
+                    }
                     if mode == "SITE" {
                         Text("A URL sozinha não cria uma sessão de navegador. As ferramentas de site precisam de um alvo CDP já disponível; o provisionamento de navegador isolado ainda está pendente.")
                             .font(.caption)
@@ -188,7 +192,7 @@ struct ReverseEngineeringView: View {
                 let response = try JSONDecoder().decode(REAToolsResponse.self, from: data)
                 catalogData = data
                 tools = response.tools
-                selectedTool = filteredTools.first?.name ?? response.tools.first?.name ?? ""
+                selectedTool = filteredTools.first?.name ?? ""
                 output = "Conexão com REA concluída. \(response.tools.count) ferramentas MCP disponíveis."
                 prefillArguments()
             } catch {
