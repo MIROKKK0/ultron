@@ -1,0 +1,142 @@
+name: ULTRON REA website analysis
+
+run-name: REA site inspection ${{ inputs.analysis_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      analysis_id:
+        description: ULTRON-generated request ID
+        required: true
+        type: string
+      target_url:
+        description: Public HTTPS site the caller is authorized to inspect
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rea-site-analysis-${{ inputs.analysis_id }}
+  cancel-in-progress: false
+
+jobs:
+  inspect-site:
+    name: Capture and analyze authorized website
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout ULTRON workflow helpers
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.1
+          cache: npm
+
+      - name: Install official REA CLI
+        run: |
+          npm install --global rea-agents@6.10.1
+          rea --version
+
+      - name: Find or install sandboxed Chromium
+        run: |
+          BROWSER_PATH="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [ -z "$BROWSER_PATH" ]; then
+            npm install --global playwright
+            playwright install --with-deps chromium
+            BROWSER_PATH="$(find "$HOME/.cache/ms-playwright" -type f -name chrome -perm -u+x | head -n 1)"
+          fi
+          test -n "$BROWSER_PATH"
+          test -x "$BROWSER_PATH"
+          echo "BROWSER_PATH=$BROWSER_PATH" >> "$GITHUB_ENV"
+          "$BROWSER_PATH" --version
+
+      - name: Validate public HTTPS target and create REA scenario
+        env:
+          TARGET_URL: ${{ inputs.target_url }}
+          ANALYSIS_ID: ${{ inputs.analysis_id }}
+        run: |
+          python3 - <<'PY'
+          import ipaddress, json, os, socket
+          from urllib.parse import urlsplit
+          raw = os.environ["TARGET_URL"].strip()
+          parsed = urlsplit(raw)
+          if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+              raise SystemExit("Only public HTTPS URLs without embedded credentials are accepted.")
+          host = parsed.hostname.rstrip(".").lower()
+          if host in {"localhost"} or host.endswith((".localhost", ".local", ".internal")):
+              raise SystemExit("Local and internal hostnames are not allowed.")
+          try:
+              literal = ipaddress.ip_address(host)
+              addresses = [literal]
+          except ValueError:
+              records = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+              addresses = [ipaddress.ip_address(record[4][0]) for record in records]
+          if not addresses or any(not address.is_global for address in addresses):
+              raise SystemExit("The target resolves to a non-public network address.")
+          os.makedirs("analysis", exist_ok=True)
+          scenario = {
+              "browser": {"mode": "launch", "executable_path": os.environ["BROWSER_PATH"], "headless": True},
+              "start_url": {"url": raw},
+              "actions": [
+                  {"step_id": "initial-render", "action": "wait_for_timeout", "duration_ms": 1800}
+              ],
+              "capture": {
+                  "at_end": ["dom", "accessibility", "url", "screenshot"],
+                  "events": ["network"],
+                  "network": {"response_body": True}
+              },
+              "detail": "summary"
+          }
+          with open("analysis/scenario.json", "w", encoding="utf-8") as output:
+              json.dump(scenario, output, ensure_ascii=False)
+          with open("analysis/request.json", "w", encoding="utf-8") as output:
+              json.dump({"analysis_id": os.environ["ANALYSIS_ID"], "target_url": raw}, output)
+          PY
+
+      - name: Capture browser evidence with REA
+        run: |
+          rea capture-browser-scenario analysis/scenario.json \
+            --detail summary \
+            --evidence_output analysis/capture-evidence.json \
+            --json > analysis/capture-summary.json
+
+      - name: Export observed website scripts
+        run: |
+          rea export-web-scripts analysis/capture-evidence.json analysis/exported-scripts \
+            --json > analysis/script-export.json
+
+      - name: Analyze exported JavaScript application
+        run: |
+          rea analyze-javascript-application analysis/exported-scripts/files \
+            --json > analysis/javascript-analysis.json
+
+      - name: Write analysis manifest
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path("analysis")
+          manifest = {
+              "analysis_id": os.environ.get("ANALYSIS_ID", ""),
+              "target_url": os.environ.get("TARGET_URL", ""),
+              "files": sorted(str(p.relative_to(root)) for p in root.rglob("*") if p.is_file()),
+              "notice": "Evidence describes one public browser session. It is not a claim of complete source recovery or permission to copy protected code or assets."
+          }
+          (root / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+          PY
+        env:
+          TARGET_URL: ${{ inputs.target_url }}
+          ANALYSIS_ID: ${{ inputs.analysis_id }}
+
+      - name: Upload REA website evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: REA-site-analysis-${{ inputs.analysis_id }}
+          path: analysis/
+          if-no-files-found: warn
+          retention-days: 7
