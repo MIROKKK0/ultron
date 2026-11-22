@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var brainPhase: BrainPhase = .idle
     @State private var showSettings = false
     @State private var showMemoryExplorer = false
+    @State private var showReverseEngineering = false
     @State private var errorMessage: String?
     @State private var serverOnline = false
     @State private var serverStatusChecked = false
@@ -35,6 +36,10 @@ struct ContentView: View {
                         Image(systemName: "circle.hexagongrid").font(.title3).padding(10)
                     }
                     .accessibilityLabel("Explorar memória neural")
+                    Button { showReverseEngineering = true } label: {
+                        Image(systemName: "waveform.path.ecg").font(.title3).padding(10)
+                    }
+                    .accessibilityLabel("Engenharia reversa com REA")
                     Button { showSettings = true } label: {
                         Image(systemName: "slider.horizontal.3").font(.title3).padding(10)
                     }
@@ -105,6 +110,9 @@ struct ContentView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView(serverURL: $serverURL, onClearHistory: clearLocalHistory)
                     .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showReverseEngineering) {
+                ReverseEngineeringView(serverURL: serverURL, client: client)
             }
             .sheet(isPresented: $showMemoryExplorer) {
                 NavigationStack {
@@ -339,7 +347,7 @@ private struct MessageBubble: View {
                     }
                     .padding(.horizontal, 8)
                     if let feedbackError {
-                        Text("Falha no feedback: \\(feedbackError)")
+                        Text("Falha no feedback: \(feedbackError)")
                             .font(.caption2)
                             .foregroundStyle(.red)
                             .padding(.horizontal, 8)

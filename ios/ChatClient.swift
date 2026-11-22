@@ -406,6 +406,111 @@ struct ChatClient {
         return try JSONDecoder().decode(HistoryImportResult.self, from: data)
     }
 
+    func reaTools(serverURL: String) async throws -> Data {
+        try await authenticatedData(
+            path: "/v2/reverse-engineering/tools",
+            method: "GET",
+            serverURL: serverURL
+        )
+    }
+
+    func analyzeREAIPA(filePath: String, serverURL: String) async throws -> Data {
+        let body = try JSONSerialization.data(withJSONObject: ["file_path": filePath])
+        return try await authenticatedData(
+            path: "/v2/reverse-engineering/ipa/analyze",
+            method: "POST",
+            serverURL: serverURL,
+            body: body
+        )
+    }
+
+    func startREAWorkerJob(targetType: String, targetURL: String? = nil, fileID: String? = nil, authorized: Bool = false, serverURL: String) async throws -> Data {
+        var body: [String: Any] = ["target_type": targetType, "authorized": authorized]
+        if let targetURL { body["target_url"] = targetURL }
+        if let fileID { body["file_id"] = fileID }
+        let encoded = try JSONSerialization.data(withJSONObject: body)
+        return try await authenticatedData(
+            path: "/v2/reverse-engineering/jobs",
+            method: "POST",
+            serverURL: serverURL,
+            body: encoded
+        )
+    }
+
+    func reaWorkerJobStatus(id: String, serverURL: String) async throws -> Data {
+        guard id.range(of: "^[a-fA-F0-9-]{36}$", options: .regularExpression) != nil else {
+            throw ChatClientError.invalidResponse
+        }
+        return try await authenticatedData(
+            path: "/v2/reverse-engineering/jobs/\(id)",
+            method: "GET",
+            serverURL: serverURL
+        )
+    }
+
+    func callREATool(_ name: String, arguments: Data, serverURL: String) async throws -> Data {
+        guard name.range(of: "^[A-Za-z0-9_.-]{1,128}$", options: .regularExpression) != nil else {
+            throw ChatClientError.invalidResponse
+        }
+        let body = try JSONSerialization.data(
+            withJSONObject: ["arguments": try JSONSerialization.jsonObject(with: arguments)]
+        )
+        return try await authenticatedData(
+            path: "/v2/reverse-engineering/tools/\(name)/call",
+            method: "POST",
+            serverURL: serverURL,
+            body: body
+        )
+    }
+
+    func uploadREAIPA(fileURL: URL, serverURL: String) async throws -> Data {
+        let credentials = try await registerInstallationIfNeeded(serverURL: serverURL)
+        guard let url = endpoint("/v2/reverse-engineering/ipa/upload", serverURL: serverURL) else {
+            throw ChatClientError.invalidServerURL
+        }
+        let access = fileURL.startAccessingSecurityScopedResource()
+        defer { if access { fileURL.stopAccessingSecurityScopedResource() } }
+        let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let size = (attributes[.size] as? NSNumber)?.intValue ?? 0
+        guard size > 0, size <= 200 * 1024 * 1024,
+              fileURL.pathExtension.lowercased() == "ipa" else {
+            throw ChatClientError.invalidResponse
+        }
+
+        let boundary = UUID().uuidString
+        let bodyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ultron-rea-\(UUID().uuidString).multipart")
+        FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
+        defer { try? FileManager.default.removeItem(at: bodyURL) }
+        let output = try FileHandle(forWritingTo: bodyURL)
+        let input = try FileHandle(forReadingFrom: fileURL)
+        defer {
+            try? input.close()
+            try? output.close()
+        }
+        let safeFilename = String(fileURL.lastPathComponent.map {
+            $0.isLetter || $0.isNumber || "._-".contains($0) ? $0 : "_"
+        }.prefix(100))
+        let header = "--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(safeFilename)\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+        try output.write(contentsOf: Data(header.utf8))
+        while let chunk = try input.read(upToCount: 1024 * 1024), !chunk.isEmpty {
+            try output.write(contentsOf: chunk)
+        }
+        try output.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
+        try output.close()
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 300
+        request.setValue(credentials.id, forHTTPHeaderField: "X-Installation-ID")
+        request.setValue(credentials.token, forHTTPHeaderField: "X-Installation-Token")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        let (data, response) = try await URLSession.shared.upload(for: request, fromFile: bodyURL)
+        guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw ChatClientError.serverError(http.statusCode) }
+        return data
+    }
+
     func sendFeedback(_ rating: Int, strategy: String, serverURL: String) async throws {
         guard let url = endpoint("/feedback", serverURL: serverURL) else {
             throw ChatClientError.invalidServerURL

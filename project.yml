@@ -1,7 +1,8 @@
 name: ULTRON
 options:
+  bundleIdPrefix: com.mirokkk0
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "17.0"
 targets:
   ULTRON:
     type: application
@@ -10,9 +11,9 @@ targets:
       - path: ios
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.ultron.assistant
+        PRODUCT_BUNDLE_IDENTIFIER: com.mirokkk0.ultron
         PRODUCT_NAME: ULTRON
+        INFOPLIST_KEY_CFBundleDisplayName: ULTRON
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: ULTRON
