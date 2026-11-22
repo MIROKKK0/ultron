@@ -11,6 +11,9 @@ struct ContentView: View {
     @State private var brainPhase: BrainPhase = .idle
     @State private var showSettings = false
     @State private var showNeuralUniverse = false
+    @State private var remoteNeuralNodes: [NeuralMemoryNode] = []
+    @State private var remoteNeuralEdges: [NeuralMemoryEdge] = []
+    @State private var neuralSourceLabel = "Histórico local"
     @State private var errorMessage: String?
     @State private var serverOnline = false
     @State private var serverStatusChecked = false
@@ -31,7 +34,12 @@ struct ContentView: View {
                         .fill(serverOnline ? .green : (serverStatusChecked ? .red : .orange))
                         .frame(width: 8, height: 8)
                         .accessibilityLabel(serverOnline ? "API online" : (serverStatusChecked ? "API offline" : "Verificando API"))
-                    Button { showNeuralUniverse = true } label: {
+                    Button {
+                        Task {
+                            await loadNeuralUniverse()
+                            showNeuralUniverse = true
+                        }
+                    } label: {
                         Image(systemName: "point.3.connected.trianglepath.dotted").font(.title3).padding(10)
                     }
                     .accessibilityLabel("Universo Neural")
@@ -107,7 +115,11 @@ struct ContentView: View {
                     .presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $showNeuralUniverse) {
-                NeuralUniverseView(nodes: localMemoryNodes, edges: localMemoryEdges)
+                NeuralUniverseView(
+                    nodes: remoteNeuralNodes.isEmpty ? localMemoryNodes : remoteNeuralNodes,
+                    edges: remoteNeuralNodes.isEmpty ? localMemoryEdges : remoteNeuralEdges,
+                    sourceLabel: neuralSourceLabel
+                )
             }
         }
         .preferredColorScheme(.dark)
@@ -115,7 +127,10 @@ struct ContentView: View {
             restoreLocalHistory()
             await refreshServerStatus()
         }
-        .onChange(of: messages) { _ in persistLocalHistory() }
+        .onChange(of: messages) { _ in
+            persistLocalHistory()
+            Task { await syncLocalMemories() }
+        }
         .onChange(of: serverURL) { _ in
             serverStatusChecked = false
             Task { await refreshServerStatus() }
@@ -138,6 +153,31 @@ struct ContentView: View {
         return zip(localMemoryNodes, localMemoryNodes.dropFirst()).map { pair in
             NeuralMemoryEdge(sourceID: pair.0.id, targetID: pair.1.id, relation: "conversation")
         }
+    }
+
+    private func loadNeuralUniverse() async {
+        do {
+            let graph = try await client.fetchMemoryGraph(
+                serverURL: serverURL,
+                installationID: KeychainStore.getOrCreateInstallationID()
+            )
+            remoteNeuralNodes = graph.nodes
+            remoteNeuralEdges = graph.edges
+            neuralSourceLabel = "Memória do servidor"
+        } catch {
+            remoteNeuralNodes = []
+            remoteNeuralEdges = []
+            neuralSourceLabel = "Histórico local · servidor indisponível"
+        }
+    }
+
+    private func syncLocalMemories() async {
+        guard KeychainStore.read("api_token")?.isEmpty == false else { return }
+        try? await client.syncMemories(
+            messages,
+            serverURL: serverURL,
+            installationID: KeychainStore.getOrCreateInstallationID()
+        )
     }
 
     private func restoreLocalHistory() {
@@ -309,6 +349,7 @@ private struct SettingsView: View {
     let onClearHistory: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var draftURL = ""
+    @State private var apiTokenDraft = ""
     @State private var confirmClearHistory = false
 
     var body: some View {
@@ -319,7 +360,10 @@ private struct SettingsView: View {
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    Text("Use o endereço HTTPS do servidor. O chat público usa limite de requisições e não pede token manual.")
+                    SecureField("Token privado da API", text: $apiTokenDraft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Text("O token é salvo no Keychain deste iPhone e enviado somente às rotas privadas de memória.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -334,6 +378,9 @@ private struct SettingsView: View {
                 Section {
                     Button("Salvar configuração") {
                         serverURL = draftURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !apiTokenDraft.isEmpty {
+                            KeychainStore.save(apiTokenDraft, for: "api_token")
+                        }
                         dismiss()
                     }
                     .disabled(!draftURL.lowercased().hasPrefix("https://"))
@@ -361,6 +408,7 @@ private struct SettingsView: View {
             }
             .onAppear {
                 draftURL = serverURL
+                apiTokenDraft = KeychainStore.read("api_token") ?? ""
             }
         }
         .preferredColorScheme(.dark)
