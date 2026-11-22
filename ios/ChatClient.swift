@@ -399,6 +399,30 @@ struct ChatClient {
         )
     }
 
+    func startREAWorkerJob(targetType: String, targetURL: String? = nil, fileID: String? = nil, serverURL: String) async throws -> Data {
+        var body: [String: String] = ["target_type": targetType]
+        if let targetURL { body["target_url"] = targetURL }
+        if let fileID { body["file_id"] = fileID }
+        let encoded = try JSONSerialization.data(withJSONObject: body)
+        return try await authenticatedData(
+            path: "/v2/reverse-engineering/jobs",
+            method: "POST",
+            serverURL: serverURL,
+            body: encoded
+        )
+    }
+
+    func reaWorkerJobStatus(id: String, serverURL: String) async throws -> Data {
+        guard id.range(of: "^[a-fA-F0-9-]{36}$", options: .regularExpression) != nil else {
+            throw ChatClientError.invalidResponse
+        }
+        return try await authenticatedData(
+            path: "/v2/reverse-engineering/jobs/\\(id)",
+            method: "GET",
+            serverURL: serverURL
+        )
+    }
+
     func callREATool(_ name: String, arguments: Data, serverURL: String) async throws -> Data {
         guard name.range(of: "^[A-Za-z0-9_.-]{1,128}$", options: .regularExpression) != nil else {
             throw ChatClientError.invalidResponse
