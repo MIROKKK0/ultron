@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from backend.tutor_mode import TUTORING_SYSTEM_INSTRUCTIONS, is_programming_tutor_request
+
 SYSTEM_PROMPT = """Você é o ULTRON, um assistente geral em português brasileiro.
 Responda diretamente, com clareza, profundidade proporcional à pergunta e passos úteis.
 Use o contexto da conversa somente quando ele estiver explicitamente fornecido.

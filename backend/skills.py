@@ -5,8 +5,10 @@ from backend.agent_core import SELF_MODEL, improvement_proposal, plan_task
 from backend.intent_model import predict_intent, resolve_intent, model_status
 from backend.project_awareness import build_project_awareness
 from backend.evolution_dispatch import dispatch_evolution_workflow
+from backend.tutor_mode import TUTORING_SYSTEM_INSTRUCTIONS
 
 SKILLS = {
+    "programming_tutor": {"title": "Tutor de programação", "intents": ["learn_programming"], "risk": "low"},
     "conversation": {"title": "Conversa", "intents": ["greeting", "thanks"], "risk": "low"},
     "help": {"title": "Ajuda e comandos", "intents": ["help"], "risk": "low"},
     "identity": {"title": "Autoconhecimento", "intents": ["identity"], "risk": "low"},
@@ -37,9 +39,10 @@ def run_intent_skill(message: str) -> str | None:
     if intent == "thanks":
         return "Por nada! Pode continuar. Vou priorizar respostas diretas e verificáveis."
     if intent == "help":
-        return ("Habilidades ativas: conversa, planejamento, cálculo seguro, pesquisa web, "
-                "diagnóstico, memória protegida, autoavaliação e autoevolução recursiva do projeto. "
-                "Exemplos: /plan objetivo, /calc 12*(3+4), /research assunto, /self, /skills.")
+        return ("Habilidades ativas: conversa natural, planejamento, cálculo seguro, pesquisa web, "
+                "tutoria de programação, diagnóstico, memória protegida, autoavaliação e autoevolução recursiva. "
+                "Fale normalmente: 'planeje meu projeto', 'pesquise sobre X', 'calcule 12*(3+4)', "
+                "'me ensine Python com exercícios' ou 'ULTRON, evolua o próprio projeto'. Não precisa decorar comandos.")
     if intent == "identity":
         awareness = build_project_awareness()
         git = awareness["git"]
@@ -91,6 +94,13 @@ def run_intent_skill(message: str) -> str | None:
 def run_named_skill(name: str, input_text: str) -> dict:
     if name not in SKILLS:
         raise ValueError("Habilidade desconhecida.")
+    if name == "programming_tutor":
+        return {
+            "skill": name,
+            "response": "Modo tutor de programação disponível. Peça uma explicação, um exemplo ou um exercício; vou oferecer dicas antes da solução e explicar erros sem reescrever seu projeto inteiro.",
+            "model": predict_intent(input_text),
+            "teaching_protocol": TUTORING_SYSTEM_INSTRUCTIONS,
+        }
     if name == "recursive_evolution":
         try:
             result = dispatch_evolution_workflow(input_text)

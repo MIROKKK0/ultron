@@ -12,6 +12,8 @@ import unicodedata
 from functools import lru_cache
 from pathlib import Path
 
+from backend.tutor_mode import is_programming_tutor_request
+
 MODEL_PATH = Path(__file__).with_name("model") / "intent_model.json"
 ANCHORS = {
     "greeting": ("oi", "olá", "ola", "bom dia", "boa tarde", "boa noite", "e aí", "eai", "saudações"),
@@ -112,7 +114,9 @@ def predict_intent(text: str) -> dict:
 
 def resolve_intent(text: str) -> dict:
     lowered = unicodedata.normalize("NFKC", text.casefold()).strip()
-    if re.match(r"^/(?:plan|brain)\b", lowered) or re.search(r"\b(planej|planejar|planeje|planejamento|organize|organizar|etapas|roteiro)\w*", lowered):
+    if is_programming_tutor_request(lowered):
+        intent = "learn_programming"
+    elif re.match(r"^/(?:plan|brain)\b", lowered) or re.search(r"\b(planej|planejar|planeje|planejamento|organize|organizar|etapas|roteiro)\w*", lowered):
         intent = "plan"
     elif re.search(r"\b(evolu|melhor|autoavalia|autoaperfei|bugs?|revise sua|diagnóstico interno|diagnostico interno)\w*", lowered):
         intent = "improve"

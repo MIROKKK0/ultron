@@ -64,6 +64,40 @@ class GenerativeModelTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             generate_reply("Oi")
 
+    @patch.dict("os.environ", {
+        "ULTRON_LLM_API_KEY": "test-secret",
+        "ULTRON_LLM_BASE_URL": "https://provider.example/v1",
+        "ULTRON_LLM_MODEL": "ultron-compatible-test",
+    }, clear=True)
+    @patch("backend.generative.httpx.post")
+    def test_programming_requests_receive_tutor_protocol(self, post):
+        response = Mock()
+        response.json.return_value = {"choices": [{"message": {"content": "Vamos por partes."}}]}
+        response.raise_for_status.return_value = None
+        post.return_value = response
+
+        generate_reply("Me ensine Python com exercícios para iniciantes")
+        system = post.call_args.kwargs["json"]["messages"][0]["content"]
+        self.assertIn("MODO TUTOR DE PROGRAMAÇÃO", system)
+        self.assertIn("dica antes da solução", system)
+        self.assertIn("Feynman", system)
+
+    @patch.dict("os.environ", {
+        "ULTRON_LLM_API_KEY": "test-secret",
+        "ULTRON_LLM_BASE_URL": "https://provider.example/v1",
+        "ULTRON_LLM_MODEL": "ultron-compatible-test",
+    }, clear=True)
+    @patch("backend.generative.httpx.post")
+    def test_regular_requests_do_not_receive_tutor_protocol(self, post):
+        response = Mock()
+        response.json.return_value = {"choices": [{"message": {"content": "Olá."}}]}
+        response.raise_for_status.return_value = None
+        post.return_value = response
+
+        generate_reply("Qual é a capital do Brasil?")
+        system = post.call_args.kwargs["json"]["messages"][0]["content"]
+        self.assertNotIn("MODO TUTOR DE PROGRAMAÇÃO", system)
+
     @patch.dict("os.environ", {}, clear=True)
     def test_missing_provider_configuration_fails_explicitly(self):
         with self.assertRaises(RuntimeError):

@@ -6,7 +6,12 @@ from backend.skills import list_skills, run_intent_skill, run_named_skill
 class SkillTests(unittest.TestCase):
     def test_skill_catalog_is_present(self):
         names = {item["name"] for item in list_skills()}
-        self.assertTrue({"conversation", "planner", "self_review", "safe_evolution", "recursive_evolution", "memory"} <= names)
+        self.assertTrue({"conversation", "planner", "self_review", "safe_evolution", "recursive_evolution", "memory", "programming_tutor"} <= names)
+
+    def test_programming_tutor_skill_exposes_teaching_protocol(self):
+        result = run_named_skill("programming_tutor", "me ensine Python")
+        self.assertIn("dicas antes da solução", result["response"])
+        self.assertIn("Feynman", result["teaching_protocol"])
 
     def test_planner_skill_runs(self):
         response = run_intent_skill("planeje meu projeto em etapas")

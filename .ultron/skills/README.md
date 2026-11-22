@@ -7,3 +7,4 @@ As skills executáveis ficam registradas em `backend/skills.py`. Os arquivos des
 - `self-review.md`: revisão heurística e identificação de limitações.
 - `safe-evolution.md`: métricas, testes, branch e PR com revisão humana.
 - `memory.md`: memória somente por endpoints autenticados.
+- `programming-tutor.md`: ensino de programação por exemplos pequenos, dicas graduais, depuração guiada e método Feynman.
