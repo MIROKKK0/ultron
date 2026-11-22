@@ -17,11 +17,14 @@ router = APIRouter()
 MAX_IPA_BYTES = 200 * 1024 * 1024
 TOOL_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 READ_ONLY_PREFIXES = ("analyze_", "inspect_", "list_", "compare_", "read_", "decode_", "disassemble_", "export_", "get_", "find_", "search_")
-READ_ONLY_EXACT = {"capture_web_screenshot", "observe_web_session", "export_evidence_bundle"}
+READ_ONLY_EXACT = {"open_binary", "capture_web_screenshot", "observe_web_session", "export_evidence_bundle"}
 
 
 class ToolCallRequest(BaseModel):
     arguments: dict[str, Any] = Field(default_factory=dict)
+
+class IPAAnalyzeRequest(BaseModel):
+    file_path: str = Field(min_length=1, max_length=1024)
 
 
 def _bridge_config() -> tuple[str, str]:
@@ -83,6 +86,18 @@ async def rea_call_tool(name: str, payload: ToolCallRequest) -> dict[str, Any]:
         json={"arguments": payload.arguments},
     )
     return response.json()
+
+
+@router.post("/ipa/analyze")
+async def rea_analyze_ipa(payload: IPAAnalyzeRequest) -> dict[str, Any]:
+    # Only paths returned by this bridge's upload endpoint may be opened.
+    normalized = payload.file_path.replace("\\", "/")
+    if not normalized.startswith("/tmp/rea-uploads/") or ".." in normalized.split("/"):
+        raise HTTPException(status_code=400, detail="O caminho não pertence à área temporária de uploads do REA.")
+    catalog = (await rea_tools())["tools"]
+    if not any(item.get("name") == "open_binary" for item in catalog):
+        raise HTTPException(status_code=503, detail="O servidor REA não anunciou open_binary.")
+    return await rea_call_tool("open_binary", ToolCallRequest(arguments={"path": normalized}))
 
 
 @router.post("/ipa/upload")
