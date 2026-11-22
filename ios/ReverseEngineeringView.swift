@@ -74,6 +74,8 @@ struct ReverseEngineeringView: View {
                         }
                         Button("Enviar IPA ao REA", systemImage: "arrow.up.doc", action: uploadIPA)
                             .disabled(busy || selectedIPA == nil)
+                        Button("Analisar IPA automaticamente", systemImage: "sparkles", action: analyzeIPA)
+                            .disabled(busy || uploadedFilePath.isEmpty)
                         if !uploadedFilePath.isEmpty {
                             Text("Arquivo recebido pelo bridge. Caminho disponível para a ferramenta REA.")
                                 .font(.caption)
@@ -181,6 +183,21 @@ struct ReverseEngineeringView: View {
                 prefillArguments()
             } catch {
                 output = "Falha ao conectar ao REA: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func analyzeIPA() {
+        guard !uploadedFilePath.isEmpty else { return }
+        busy = true
+        output = "ULTRON está abrindo o IPA no REA e iniciando o inventário estático…"
+        Task {
+            defer { busy = false }
+            do {
+                let data = try await client.analyzeREAIPA(filePath: uploadedFilePath, serverURL: serverURL)
+                output = String(data: data, encoding: .utf8) ?? "O REA retornou uma resposta não textual."
+            } catch {
+                output = "A análise automática do IPA falhou: \\(error.localizedDescription)"
             }
         }
     }
