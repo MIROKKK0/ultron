@@ -9,8 +9,6 @@ on:
       - "backend/agent_core.py"
       - "backend/project_awareness.py"
       - "backend/skills.py"
-      - "docs/PROJECT_AWARENESS.md"
-      - "docs/SELF_EVOLUTION.md"
       - "tests/test_app.py"
       - "tests/test_project_awareness.py"
       - "backend/brain.py"
@@ -23,7 +21,6 @@ on:
       - "tests/test_hierarchical_planner.py"
       - "tests/test_tool_runtime.py"
       - "training/**"
-      - "docs/COGNITIVE_ARCHITECTURE_V1.md"
     types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
