@@ -310,6 +310,7 @@ struct ChatClient {
         onPhase: @MainActor @escaping (BrainPhase) -> Void = { _ in }
     ) async throws -> ChatResult {
         await onPhase(.connecting)
+        // Evolution requests use the installation-authenticated route, never the public chat endpoint.
         if isExplicitEvolutionRequest(message) {
             await onPhase(.processing)
             let result = try await dispatchEvolution(message, serverURL: serverURL)
