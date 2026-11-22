@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { Client } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
 const binaryPath = process.argv[2];
 if (!binaryPath || !binaryPath.startsWith("/")) throw new Error("An absolute Mach-O path is required.");
@@ -11,7 +11,7 @@ const transport = new StdioClientTransport({
   args: ["mcp"],
   stderr: "pipe"
 });
-transport.stderr?.on("data", chunk => process.stderr.write(chunk));
+transport.stderr?.on("data", chunk => { fs.appendFile("reports/rea-mcp-stderr.log", chunk).catch(() => {}); });
 const outputs = new Map();
 let opened = false;
 let toolMap = new Map();
@@ -40,7 +40,7 @@ function procedureCandidates(value) {
     const external = procedure.external === true || item.external === true;
     if (external) return;
     if (typeof address === "string" || typeof name === "string") {
-      const identity = typeof address === "string" ? address : name;
+      const identity = typeof name === "string" && name.length ? name : address;
       if (typeof identity === "string" && identity.length) found.set(identity, {
         procedure: identity,
         address: typeof address === "string" ? address : null,
@@ -74,15 +74,22 @@ function argumentsFor(tool, seed = {}) {
   }
   return args;
 }
-async function call(name, args = {}, timeout = 1200000) {
+async function call(name, args = {}, timeout = 1200000, reportName = name) {
   const result = await client.callTool({ name, arguments: args }, {
-    timeout,
-    resetTimeoutOnProgress: true
+    timeout
   });
   const parsed = parseToolResult(result);
-  outputs.set(name, parsed);
-  await fs.writeFile(`reports/ghidra-${name}.json`, JSON.stringify(parsed, null, 2), { mode: 0o600 });
-  if (result.isError) throw new Error(`REA tool ${name} returned an error: ${JSON.stringify(parsed).slice(0, 2500)}`);
+  outputs.set(reportName, parsed);
+  await fs.writeFile(`reports/ghidra-${reportName}.json`, JSON.stringify(parsed, null, 2), { mode: 0o600 });
+  if (result.isError) {
+    const detail = parsed?.error || parsed || {};
+    const code = detail.code || "unknown";
+    const message = String(detail.message || "tool returned an error").slice(0, 400);
+    const remediation = typeof detail.remediation === "string" ? detail.remediation :
+      detail.remediation?.action || detail.remediation?.message || "";
+    console.error("REA_TOOL_ERROR name=" + name + " code=" + code + " message=" + message + " remediation=" + String(remediation).slice(0, 300));
+    throw new Error("REA tool " + name + " returned " + code + ": " + message);
+  }
   return parsed;
 }
 
@@ -90,15 +97,38 @@ try {
   await client.connect(transport);
   const catalog = await client.listTools();
   toolMap = new Map((catalog.tools || []).map(tool => [tool.name, tool]));
-  for (const required of ["open_binary", "binary_overview", "list_procedures", "analyze_function", "close_binary"]) {
+  for (const required of ["binary_session", "open_binary", "binary_overview", "list_procedures", "analyze_function", "close_binary"]) {
     if (!toolMap.has(required)) throw new Error(`Pinned REA package does not advertise required tool ${required}.`);
   }
 
-  const openArgs = argumentsFor(toolMap.get("open_binary"), { path: binaryPath, provider_id: "ghidra" });
+  await call("binary_session", {}, 120000, "binary-session-before-open");
+  const openTool = toolMap.get("open_binary");
+  const openArgs = argumentsFor(openTool, { path: binaryPath, provider_id: "ghidra" });
+  console.log("open_binary required fields:", JSON.stringify(openTool.inputSchema?.required || []));
+  console.log("open_binary properties:", JSON.stringify(Object.keys(openTool.inputSchema?.properties || {})));
+  console.log("open_binary argument keys:", JSON.stringify(Object.keys(openArgs)));
   await call("open_binary", openArgs, 120000);
   opened = true;
 
-  await call("binary_overview", argumentsFor(toolMap.get("binary_overview")), 1200000);
+  const sessionInfo = await call("binary_session", {}, 120000, "binary-session-after-open");
+  function findKey(value, key) {
+    if (!value || typeof value !== "object") return undefined;
+    if (Object.prototype.hasOwnProperty.call(value, key)) return value[key];
+    for (const child of Object.values(value)) {
+      const found = findKey(child, key);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  const rawAvailability = findKey(sessionInfo, "tool_availability");
+  const toolAvailability = Array.isArray(rawAvailability) ? rawAvailability :
+    rawAvailability && typeof rawAvailability === "object" ?
+      Object.entries(rawAvailability).map(([name, value]) => ({ name, ...(typeof value === "object" ? value : { available: Boolean(value) }) })) : [];
+  const unavailable = name => {
+    const row = toolAvailability.find(item => item.name === name || item.name?.split(".").pop() === name || item.tool === name || item.operation === name);
+    return row && (row.available === false || row.available === "unavailable" || row.state === "unavailable" || row.status === "unavailable") ? row.reason || row.message || "provider reports unavailable" : null;
+  };
+  await call("binary_overview", argumentsFor(toolMap.get("binary_overview")), 2100000);
   const procedures = await call("list_procedures", argumentsFor(toolMap.get("list_procedures")), 600000);
   const candidates = procedureCandidates(procedures);
   const priorities = [/UIApplicationMain/i, /application.*didFinishLaunching/i, /scene.*willConnect/i, /main$/i, /_main$/i, /AppDelegate/i, /SceneDelegate/i, /SwiftUI.*App/i, /URLSession/i, /WKWebView/i, /login|auth|network|api/i];
@@ -113,7 +143,8 @@ try {
   await fs.writeFile("reports/ghidra-selected-procedures.json", JSON.stringify(selected, null, 2), { mode: 0o600 });
 
   let analyzed = 0;
-  for (const item of selected) {
+  const analysisUnavailable = unavailable("analyze_function");
+  for (const item of (analysisUnavailable ? [] : selected)) {
     try {
       const result = await call("analyze_function", argumentsFor(toolMap.get("analyze_function"), {
         procedure: item.procedure,
@@ -145,11 +176,15 @@ try {
     toolCount: catalog.tools.length,
     procedureCandidates: candidates.length,
     functionDossiers: analyzed,
+    toolAvailability,
     auxiliaryAnalyses: ["get_objc_classes", "get_objc_protocols", "analyze_swift_types", "inspect_native_dispatch_metadata"].filter(name => outputs.has(name)),
-    limitations: candidates.length ? [] : ["REA returned no procedure identities from list_procedures."]
+    limitations: [
+      ...(candidates.length ? [] : ["REA returned no procedure identities from list_procedures."]),
+      ...(analysisUnavailable ? [`analyze_function unavailable: ${analysisUnavailable}`] : [])
+    ]
   };
   await fs.writeFile("reports/ghidra-session-summary.json", JSON.stringify(summary, null, 2), { mode: 0o600 });
-  console.log(JSON.stringify(summary));
+  console.log("Persistent REA/Ghidra analysis session completed.");
 } finally {
   if (opened) {
     try { await call("close_binary", argumentsFor(toolMap.get("close_binary") || { inputSchema: { properties: {}, required: [] } }), 120000); }

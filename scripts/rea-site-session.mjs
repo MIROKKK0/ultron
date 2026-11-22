@@ -1,8 +1,6 @@
-import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import { promisify } from "node:util";
-import dns from "node:dns/promises";
-import net from "node:net";
+import { assertPublicHost } from "./site-network-policy.mjs";
 import { chromium } from "playwright";
 
 const execFile = promisify((await import("node:child_process")).execFile);
@@ -11,93 +9,137 @@ const target = new URL(job.target_url || "");
 if (target.protocol !== "https:" || !target.hostname || target.username || target.password || (target.port && target.port !== "443")) {
   throw new Error("Only public HTTPS URLs on the default port are accepted.");
 }
-const blockedV4 = [/^0\./, /^10\./, /^127\./, /^169\.254\./, /^172\.(1[6-9]|2\d|3[01])\./, /^192\.168\./, /^192\.0\.0\./, /^198\.(18|19)\./, /^224\./, /^255\./];
-function publicAddress(address) {
-  const family = net.isIP(address);
-  if (family === 4) return !blockedV4.some(pattern => pattern.test(address));
-  if (family === 6) {
-    const a = address.toLowerCase();
-    return !(a === "::" || a === "::1" || a.startsWith("fc") || a.startsWith("fd") || a.startsWith("fe8") || a.startsWith("fe9") || a.startsWith("fea") || a.startsWith("feb") || a.startsWith("::ffff:127.") || a.startsWith("::ffff:10."));
-  }
-  return false;
-}
-async function assertPublicHost(host) {
-  if (net.isIP(host)) {
-    if (!publicAddress(host)) throw new Error("Private or reserved IP target blocked.");
-    return;
-  }
-  const addresses = await dns.lookup(host, { all: true, verbatim: true });
-  if (!addresses.length || addresses.some(item => !publicAddress(item.address))) throw new Error("DNS resolved to a private or reserved address; request blocked.");
-}
 await assertPublicHost(target.hostname);
 const reportDir = "reports";
 await fs.mkdir(reportDir, { recursive: true });
-const profile = "/tmp/ultron-rea-browser-profile";
-await fs.rm(profile, { recursive: true, force: true });
-const child = spawn(chromium.executablePath(), [
-  "--headless=new", "--remote-debugging-port=9222", "--remote-debugging-address=127.0.0.1",
-  `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check",
-  "--disable-background-networking", "--disable-extensions", "--disable-sync",
-  "--disable-dev-shm-usage", "--disable-features=Translate,MediaRouter"
-], { detached: true, stdio: "ignore" });
-child.unref();
-const endpoint = "http://127.0.0.1:9222";
+const endpoint = (process.env.REA_CDP_ENDPOINT || "http://127.0.0.1:9222").replace(/\/+$/, "");
+process.env.NO_PROXY = [process.env.NO_PROXY, "127.0.0.1", "localhost"].filter(Boolean).join(",");
+process.env.no_proxy = process.env.NO_PROXY;
 let ready = false;
 for (let i = 0; i < 60; i++) {
-  try { const response = await fetch(endpoint + "/json/version"); if (response.ok) { ready = true; break; } } catch {}
+  try {
+    const response = await execFile("curl", ["--fail", "--silent", "--show-error", endpoint + "/json/version"], {
+      timeout: 3000,
+      maxBuffer: 1024 * 1024
+    });
+    if (response.stdout) { ready = true; break; }
+  } catch {}
   await new Promise(resolve => setTimeout(resolve, 500));
 }
 if (!ready) throw new Error("Disposable Chromium CDP endpoint did not become ready.");
-const browser = await chromium.connectOverCDP(endpoint);
+console.log("Disposable Chromium CDP endpoint is ready.");
+const browser = await chromium.connectOverCDP(endpoint, { timeout: 30000 });
 try {
-  const context = await browser.newContext({ acceptDownloads: false, ignoreHTTPSErrors: false });
+  const context = await browser.newContext({ acceptDownloads: false, ignoreHTTPSErrors: false, serviceWorkers: "block" });
   await context.route("**/*", async route => {
     const requestUrl = route.request().url();
     if (requestUrl.startsWith("data:") || requestUrl.startsWith("blob:") || requestUrl.startsWith("about:")) return route.continue();
     let parsed;
     try { parsed = new URL(requestUrl); } catch { return route.abort("blockedbyclient"); }
     if (!["http:", "https:", "ws:", "wss:"].includes(parsed.protocol)) return route.abort("blockedbyclient");
+    if (route.request().isNavigationRequest() && route.request().frame().parentFrame() === null && parsed.origin !== target.origin) {
+      return route.abort("blockedbyclient");
+    }
     try { await assertPublicHost(parsed.hostname); return route.continue(); } catch { return route.abort("blockedbyclient"); }
   });
+  await context.routeWebSocket("**/*", async socket => {
+    try {
+      const wsURL = new URL(socket.url());
+      if (!["ws:", "wss:"].includes(wsURL.protocol)) return socket.close({ code: 1008, reason: "Unsupported WebSocket protocol" });
+      await assertPublicHost(wsURL.hostname);
+      socket.connectToServer();
+    } catch {
+      await socket.close({ code: 1008, reason: "Private or reserved WebSocket destination blocked" });
+    }
+  });
   const page = await context.newPage();
-  await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: 45000 });
+  try {
+    await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: 45000 });
+  } catch {
+    throw new Error("The approved site could not be loaded; inspect the protected worker report.");
+  }
   await page.waitForTimeout(3500);
   const finalUrl = new URL(page.url());
   if (finalUrl.origin !== target.origin) throw new Error("The site redirected to another origin; review and authorize that destination separately.");
   const origin = target.origin;
-  const reaEnv = { ...process.env, REA_BROWSER_OBSERVE_ENABLED: "true", REA_BROWSER_CDP_ENDPOINTS_JSON: JSON.stringify([endpoint]), REA_BROWSER_ALLOWED_ORIGINS_JSON: JSON.stringify([origin]) };
   const runRea = async (name, args, output) => {
-    const result = await execFile("rea", [name, endpoint, ...args, "--json"], { env: reaEnv, timeout: 600000, maxBuffer: 128 * 1024 * 1024 });
-    await fs.writeFile(output, result.stdout || result.stderr || "", { mode: 0o600 });
-    return result.stdout || "";
+    try {
+      const result = await execFile("rea", [name, endpoint, ...args, "--json"], { env: process.env, timeout: 600000, maxBuffer: 128 * 1024 * 1024 });
+      await fs.writeFile(output, result.stdout || result.stderr || "", { mode: 0o600 });
+      return result.stdout || "";
+    } catch (error) {
+      await fs.writeFile(output + ".error.txt", String(error.stderr || error.message || "REA command failed"), { mode: 0o600 });
+      throw new Error(`REA command ${name} failed; diagnostics are stored in the protected worker report.`);
+    }
   };
-  const targetsText = await runRea("list-browser-targets", [], `${reportDir}/browser-targets.json`);
-  const targetsJson = JSON.parse(targetsText);
-  const candidates = [];
-  const visit = value => {
-    if (!value) return;
-    if (Array.isArray(value)) return value.forEach(visit);
-    if (typeof value !== "object") return;
-    const url = typeof value.url === "string" ? value.url : "";
-    const id = value.target_id || value.targetId || value.id;
-    if (typeof id === "string" && url.startsWith(origin)) candidates.push({ id, url });
-    Object.values(value).forEach(visit);
+  const capturePage = async (pageURL, index) => {
+    const targetsText = await runRea("list-browser-targets", ["--allowed-origins", origin], `${reportDir}/browser-targets-${index}.json`);
+    const targetsJson = JSON.parse(targetsText);
+    const candidates = [];
+    const visit = value => {
+      if (!value) return;
+      if (Array.isArray(value)) return value.forEach(visit);
+      if (typeof value !== "object") return;
+      const url = typeof value.url === "string" ? value.url : "";
+      const id = value.target_id || value.targetId || value.id;
+      if (typeof id === "string" && url.startsWith(origin)) candidates.push({ id, url });
+      Object.values(value).forEach(visit);
+    };
+    visit(targetsJson);
+    const selected = candidates[0];
+    if (!selected) throw new Error("REA did not discover the isolated page target at the approved origin.");
+    const prefix = `${reportDir}/page-${String(index).padStart(2, "0")}`;
+    await runRea("inspect-web-page", [selected.id, "--observation-ms", "1500", "--include-script-sources"], `${prefix}-inspection.json`);
+    await runRea("analyze-web-bundle", [selected.id], `${prefix}-bundle-analysis.json`);
+    await runRea("capture-web-screenshot", [selected.id], `${prefix}-screenshot.json`);
+    return { url: pageURL, targetId: selected.id, title: await page.title() };
   };
-  visit(targetsJson);
-  const selected = candidates[0];
-  if (!selected) throw new Error("REA did not discover the isolated page target at the approved origin.");
-  await runRea("inspect-web-page", [selected.id, "--observation-ms", "1500"], `${reportDir}/web-inspection.json`);
-  await runRea("analyze-web-bundle", [selected.id], `${reportDir}/web-bundle-analysis.json`);
-  await runRea("capture-web-screenshot", [selected.id], `${reportDir}/web-screenshot.json`);
-  await runRea("observe-web-session", [selected.id, "--observation-ms", "4000"], `${reportDir}/web-session-observation.json`);
+
+  const pages = [];
+  pages.push(await capturePage(page.url(), 1));
+  const rawLinks = await page.locator("a[href]").evaluateAll(anchors => anchors.map(anchor => anchor.href));
+  const routeQueue = [];
+  const seen = new Set([target.href]);
+  const unsafePath = /(?:logout|log-out|signout|sign-out|delete|remove|purchase|checkout|payment|subscribe|unsubscribe|cancel|confirm|submit|create)/i;
+  for (const href of rawLinks) {
+    try {
+      const candidate = new URL(href);
+      candidate.hash = "";
+      candidate.search = "";
+      if (candidate.origin !== target.origin || candidate.protocol !== "https:" || candidate.username || candidate.password || unsafePath.test(candidate.pathname)) continue;
+      if (!seen.has(candidate.href)) {
+        seen.add(candidate.href);
+        routeQueue.push(candidate.href);
+      }
+    } catch {}
+  }
+
+  for (const routeURL of routeQueue.slice(0, 7)) {
+    try {
+      await page.goto(routeURL, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.waitForTimeout(1500);
+    } catch {
+      await fs.appendFile(`${reportDir}/limitations.txt`, "A same-origin page failed to load and was skipped.\\n");
+      continue;
+    }
+    const current = new URL(page.url());
+    if (current.origin !== target.origin) {
+      await fs.appendFile(`${reportDir}/limitations.txt`, "A linked page redirected outside the approved origin and was skipped.\\n");
+      continue;
+    }
+    pages.push(await capturePage(current.href, pages.length + 1));
+  }
+
   await fs.writeFile(`${reportDir}/site-session.json`, JSON.stringify({
-    requestedOrigin: origin, finalUrl: finalUrl.href, cdpEndpoint: endpoint,
-    isolatedBrowserProfile: true, targetId: selected.id, targetTitle: await page.title(),
-    steps: ["list-browser-targets", "inspect-web-page", "analyze-web-bundle", "capture-web-screenshot", "observe-web-session"]
+    requestedOrigin: origin,
+    initialUrl: target.href,
+    isolatedBrowserProfile: true,
+    maxSameOriginPages: 8,
+    pagesVisited: pages,
+    crawlPolicy: "GET links only; no forms, authentication, purchases, destructive actions or cross-origin redirects"
   }, null, 2), { mode: 0o600 });
   await context.close();
 } finally {
   await browser.close().catch(() => {});
-  child.kill("SIGTERM");
 }
 console.log("REA site observation and bundle analysis completed.");
