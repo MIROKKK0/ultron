@@ -118,8 +118,7 @@ jobs:
             });
             const safePaths = [
               /^docs\//,
-              /^tests\//,
-              /^backend\/project_awareness\.py$/
+              /^tests\//
             ];
             const safe = files.length > 0 && files.every(file =>
               safePaths.some(pattern => pattern.test(file.filename))
