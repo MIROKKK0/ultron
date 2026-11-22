@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import { promisify } from "node:util";
 import dns from "node:dns/promises";
@@ -50,16 +49,7 @@ async function assertPublicHost(host) {
 await assertPublicHost(target.hostname);
 const reportDir = "reports";
 await fs.mkdir(reportDir, { recursive: true });
-const profile = "/tmp/ultron-rea-browser-profile";
-await fs.rm(profile, { recursive: true, force: true });
-const child = spawn(chromium.executablePath(), [
-  "--headless=new", "--remote-debugging-port=9222", "--remote-debugging-address=127.0.0.1",
-  `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check",
-  "--disable-background-networking", "--disable-extensions", "--disable-sync",
-  "--disable-dev-shm-usage", "--disable-features=Translate,MediaRouter"
-], { detached: true, stdio: "ignore" });
-child.unref();
-const endpoint = "http://127.0.0.1:9222";
+const endpoint = process.env.REA_CDP_ENDPOINT || "http://127.0.0.1:9222";
 let ready = false;
 for (let i = 0; i < 60; i++) {
   try { const response = await fetch(endpoint + "/json/version"); if (response.ok) { ready = true; break; } } catch {}
@@ -155,6 +145,5 @@ try {
   await context.close();
 } finally {
   await browser.close().catch(() => {});
-  child.kill("SIGTERM");
 }
 console.log("REA site observation and bundle analysis completed.");
