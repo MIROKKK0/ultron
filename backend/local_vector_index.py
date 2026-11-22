@@ -130,7 +130,7 @@ class LocalVectorIndex:
                 m.confidence,m.created_at,m.last_accessed_at,m.access_count
             FROM cognitive_memory_vectors v
             JOIN cognitive_memories m ON m.id=v.memory_id AND m.owner_id=v.owner_id
-            WHERE v.owner_id=? AND v.encoder_version=? AND (? IS NULL OR m.kind=?)""",
+            WHERE v.owner_id=? AND v.encoder_version=? AND (CAST(? AS TEXT) IS NULL OR m.kind=?)""",
             (owner_id, self.vectorizer.VERSION, kind, kind)).fetchall()
         ranked = []
         for row in rows:

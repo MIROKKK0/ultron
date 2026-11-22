@@ -83,7 +83,7 @@ class MemoryStore:
         if kind is not None and kind not in KINDS:
             raise ValueError("Tipo de memória inválido.")
         rows = self._execute(
-            "SELECT id,kind,content,source,confidence,created_at,last_accessed_at,access_count FROM cognitive_memories WHERE owner_id=? AND (? IS NULL OR kind=?) ORDER BY id DESC LIMIT 200",
+            "SELECT id,kind,content,source,confidence,created_at,last_accessed_at,access_count FROM cognitive_memories WHERE owner_id=? AND (CAST(? AS TEXT) IS NULL OR kind=?) ORDER BY id DESC LIMIT 200",
             (owner_id, kind, kind)).fetchall()
         terms = set(re.findall(r"[a-zà-ú0-9]{3,}", query.casefold()))
         scored = []
