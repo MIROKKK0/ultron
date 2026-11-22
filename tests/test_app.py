@@ -9,7 +9,7 @@ os.environ["ULTRON_DB_PATH"] = str(Path(tempfile.gettempdir()) / "ultron-tests.s
 os.environ["ULTRON_API_TOKEN"] = "test-ultron-token"
 
 from fastapi.testclient import TestClient
-from backend.app import app, calculate, save_conversation
+from backend.app import app, calculate, save_conversation, require_installation
 
 client = TestClient(app)
 AUTH = {"Authorization": "Bearer test-ultron-token"}
@@ -413,24 +413,35 @@ class UltronTests(unittest.TestCase):
         self.assertTrue(agents["evaluator"]["result"]["checks"]["planner_ran"])
 
 
+    def test_recursive_evolution_dispatch_requires_installation_auth(self):
+        response = client.post("/evolution/dispatch", json={"objective": "melhorar o núcleo"})
+        self.assertEqual(response.status_code, 401)
+
     def test_recursive_evolution_dispatch_requires_github_token(self):
-        with patch.dict(os.environ, {"ULTRON_GITHUB_TOKEN": ""}, clear=False):
-            response = client.post("/evolution/dispatch", json={"objective": "melhorar o núcleo"}, headers=AUTH)
+        app.dependency_overrides[require_installation] = lambda: "test-installation"
+        try:
+            with patch.dict(os.environ, {"ULTRON_GITHUB_TOKEN": ""}, clear=False):
+                response = client.post("/evolution/dispatch", json={"objective": "melhorar o núcleo"})
+        finally:
+            app.dependency_overrides.pop(require_installation, None)
         self.assertEqual(response.status_code, 503)
 
     def test_recursive_evolution_dispatches_default_branch_worker(self):
-        with patch.dict(os.environ, {
-            "ULTRON_GITHUB_TOKEN": "github-test-token",
-            "ULTRON_GITHUB_REPOSITORY": "MIROKKK0/ultron",
-            "ULTRON_EVOLUTION_WORKFLOW_REF": "main",
-        }, clear=False):
-            with patch("backend.evolution_dispatch.httpx.post") as post:
-                post.return_value.status_code = 204
-                response = client.post(
-                    "/evolution/dispatch",
-                    json={"objective": "melhorar o autoconhecimento"},
-                    headers=AUTH,
-                )
+        app.dependency_overrides[require_installation] = lambda: "test-installation"
+        try:
+            with patch.dict(os.environ, {
+                "ULTRON_GITHUB_TOKEN": "github-test-token",
+                "ULTRON_GITHUB_REPOSITORY": "MIROKKK0/ultron",
+                "ULTRON_EVOLUTION_WORKFLOW_REF": "main",
+            }, clear=False):
+                with patch("backend.evolution_dispatch.httpx.post") as post:
+                    post.return_value.status_code = 204
+                    response = client.post(
+                        "/evolution/dispatch",
+                        json={"objective": "melhorar o autoconhecimento"},
+                    )
+        finally:
+            app.dependency_overrides.pop(require_installation, None)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["dispatched"])
         self.assertEqual(response.json()["development_target"], "feat/ultron-core-assistant")
@@ -439,7 +450,6 @@ class UltronTests(unittest.TestCase):
             post.call_args.kwargs["json"]["inputs"]["objective"],
             "melhorar o autoconhecimento",
         )
-
 
 if __name__ == "__main__":
     unittest.main()
