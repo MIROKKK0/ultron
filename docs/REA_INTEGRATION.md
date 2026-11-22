@@ -1,56 +1,75 @@
-# ULTRON + REA + xtool integration
+# ULTRON + REA + isolated browser + Ghidra + xtool
 
-## Product boundary
+## Architecture
 
-The iOS app remains ULTRON. REA is a specialist reverse-engineering engine exposed through its MCP bridge; xtool is a build tool for the ULTRON Xcode project. This is one user experience, not a fork of REA or a replacement of ULTRON's identity, memory, or decision authority.
+ULTRON remains the product, identity, memory owner, planner and final decision-maker. REA is a specialist engine. xtool builds the resulting iOS project; it does not reverse-engineer or reconstruct an application by itself.
 
-- ULTRON authenticates each iPhone installation with its existing Keychain-backed installation credential.
-- ULTRON's FastAPI backend proxies the REA bridge using a server-side bearer secret. The REA secret is never placed in the IPA.
-- The iOS reverse-engineering workspace discovers MCP tools, shows their descriptions and input schemas, uploads an IPA, and invokes an explicitly selected read-only analysis tool.
-- xtool is pinned to 2.0.0-beta.1 in CI; XcodeGen generates the Xcode project from `project.yml`.
+The analysis path is split by resource profile:
 
-## Render configuration
+- **Website:** a disposable Chromium profile is launched on an ephemeral GitHub Actions runner. Playwright opens the requested HTTPS origin, the browser exposes CDP only on loopback, and REA attaches to that target to collect bounded page, script, bundle, screenshot and session evidence.
+- **IPA:** the uploaded IPA is streamed to the REA bridge's temporary disk area. A GitHub Actions runner downloads it through a bearer-authenticated endpoint, validates the ZIP, extracts the app bundle and Mach-O executable, then runs REA with its Ghidra provider for static native analysis.
+- **ULTRON:** dispatches jobs, stores their owner/status/result in the configured database, polls the worker result and summarizes evidence. The REA bridge token and worker callback token never ship in the iOS app.
+- **xtool:** remains the separate build lane. It can build the generated/edited ULTRON Xcode project into an unsigned IPA; Apple signing and device installation are separate steps.
 
-The ULTRON API service needs these environment variables:
+This avoids installing Chromium or Ghidra in the small Render API process.
+
+## Why these providers
+
+REA's CDP inspector is passive: it attaches to an existing Chrome-family page and records DOM/resource/script/runtime evidence. It does not provide general browser control. Playwright creates the disposable browser session and navigates to the target; REA then inspects that session. The worker uses a fresh profile with no personal cookies or logged-in browser state. CDP stays bound to `127.0.0.1:9222`; it is never published as a public service.
+
+Ghidra is the native-analysis provider selected for this project because it is open-source and can run headlessly. REA's current setup guide documents Ghidra 12.1.x with a full JDK 21 installation and a `procps`-compatible `ps` on Linux. The workflow pins Ghidra 12.1.4 and verifies the official ZIP SHA-256 before use. Ghidra's headless analyzer is designed for automated import, analysis and scripts.
+
+Hopper and IDA remain optional alternatives, not prerequisites. Hopper is commercial and IDA requires its own license/provider setup. They are not installed by this workflow.
+
+## Render environment
+
+The ULTRON API service needs:
 
 - `REA_BRIDGE_URL=https://rea-bridge-vt6z.onrender.com`
-- `REA_BRIDGE_TOKEN`: the same long random bearer token configured as `REA_BRIDGE_TOKEN` on the REA bridge service.
-- `ULTRON_GITHUB_TOKEN`: a fine-grained GitHub token scoped only to `MIROKKK0/ultron`, with Actions read/write permission, used only by the ULTRON server to dispatch the temporary website-analysis workflow.
+- `REA_BRIDGE_TOKEN`: same 32+ character secret configured on the REA bridge service.
+- `ULTRON_GITHUB_TOKEN`: fine-grained GitHub token scoped to `MIROKKK0/ultron` with Actions read/write permission. It is used only by the backend to dispatch the workflow.
 - `ULTRON_GITHUB_REPO=MIROKKK0/ultron`
-- `ULTRON_GITHUB_REF=feat/rea-reverse-engineering-integration` (change to the deployment branch after merging the integration PR).
+- `ULTRON_GITHUB_REF=main` once the worker workflow has been merged into the repository's default branch.
+- `ULTRON_WORKER_CALLBACK_TOKEN`: a separate random secret of at least 32 characters, shared with the GitHub Actions repository secret.
 
-Set the secret in Render's service environment settings; do not commit it, put it in the iOS app, or expose it in logs. The bridge must be deployed and its authenticated `/api/ready` endpoint must return HTTP 200 with a nonzero discovered tool count.
+Set secrets in Render's service environment settings. Never commit them or put them in the IPA.
 
-The REA bridge uses temporary disk-backed uploads rather than holding an entire IPA in Node.js memory. Temporary files are deleted after six hours on the next bridge startup. Render's filesystem is ephemeral; do not treat uploaded paths as durable storage.
+## GitHub Actions repository secrets
 
-## Using the iPhone workspace
+In `MIROKKK0/ultron` → Settings → Secrets and variables → Actions, add:
 
-1. Open ULTRON and tap the waveform/reverse-engineering icon.
-2. Connect and discover the REA MCP catalog.
-3. For an IPA, select the file, upload it, then use **Analisar IPA automaticamente**. ULTRON passes the bridge-owned upload path to REA's `open_binary` workflow. You can then select additional read-only tools using the discovered schemas.
-4. For a site, enter an HTTPS URL and choose a compatible REA tool only when its required browser/CDP target is available. The current iPhone workspace does not yet provision an isolated browser scenario for arbitrary URLs.
-5. Review the displayed schema and generated JSON arguments before invoking any additional tool.
-6. Preserve the returned Evidence and limitations in the analysis report.
+- `REA_BRIDGE_TOKEN`: exactly the same value as Render's `REA_BRIDGE_TOKEN`.
+- `ULTRON_WORKER_CALLBACK_URL`: the base HTTPS URL of the deployed ULTRON API, without a trailing slash.
+- `ULTRON_WORKER_CALLBACK_TOKEN`: exactly the same value as Render's `ULTRON_WORKER_CALLBACK_TOKEN`.
 
-The workspace is deliberately schema-driven: MCP tools have different required inputs, and the app does not invent missing browser targets, CDP endpoints, or binary-provider configuration.
+The workflow dispatch payload contains only a random job ID. The actual target URL or uploaded IPA ID is fetched from ULTRON through the callback-authenticated endpoint, so it is not copied into the public workflow-dispatch input.
 
-## Capability limits and next gates
+**Release gate:** GitHub only accepts `workflow_dispatch` for a workflow file present on the repository's default branch. This integration PR currently targets the ULTRON core feature branch; the worker workflow must also reach `main` before Render can dispatch real jobs with `ULTRON_GITHUB_REF=main`. The PR itself does not merge or deploy anything.
 
-- REA website observation uses a Chrome-family browser and CDP target. A URL alone is not a browser session. The current workspace does not yet launch a per-user browser session or automatically navigate a target.
-- REA's passive web inspector does not click or execute arbitrary page JavaScript. For controlled scenarios, use REA's documented scenario workflow with explicit actions and authorization.
-- IPA upload and the initial `open_binary` archive workflow are implemented. That produces a package inventory, not native decompilation. Follow-up Apple bundle/resource inspection and native code analysis require their own advertised REA tools. Deep native disassembly requires a supported provider such as Ghidra, Hopper, or IDA, which is not installed by this lightweight Render bridge.
-- The bridge proxy currently allows only read-oriented MCP tool names. Mutating, process-control, and execution tools are denied by default.
-- The analysis UI is an initial integrated workspace. Autonomous multi-step tool selection, evidence-backed reconstruction plans, generated source projects, and automatic rebuild loops remain separate acceptance gates.
-- xtool 2.0.0-beta.1 is a prerelease. CI must prove an unsigned IPA exists, passes ZIP validation, contains `Payload/ULTRON.app`, has an executable, and has the expected bundle identifier. A successful build does not sign or install the IPA on the iPhone.
+## iPhone workflow
+
+1. Open ULTRON → Engenharia reversa.
+2. For a site, enter an HTTPS URL, confirm authorization, and tap **Analisar site com Chromium + REA**. The runner checks the hostname, blocks private/reserved IP resolutions, rejects cross-origin redirects, opens a disposable browser profile, and runs REA's CDP inspection and bundle analysis.
+3. For an IPA, select the file, tap **Enviar IPA ao REA**, then tap **Analisar IPA com REA + Ghidra**. Uploads are temporary and expire after six hours.
+4. ULTRON polls the job status. When complete, it shows a report summary and a link to the GitHub Actions run, where the full evidence artifact is retained for 14 days.
+
+## Evidence and limits
+
+- Website capture includes the selected page's DOM/resource/script evidence, static JavaScript bundle analysis, a screenshot and a short observation window. Script sources are treated as untrusted input. CDP capture is passive and starts only after the browser has navigated; it does not prove events that occurred before attachment.
+- This first website worker loads the landing URL and captures it. It does not yet autonomously explore every menu, submit forms, log in, or reproduce every user journey. Those require explicit Playwright scenario steps and authorization.
+- The worker blocks private/reserved IP destinations at URL/DNS validation and request routing, but this is not a general-purpose hostile-site sandbox. It runs in a short-lived hosted runner, uses a fresh profile, and receives no personal cookies or user credentials. Never provide credentials for an account with sensitive data.
+- IPA analysis extracts the main app Mach-O executable and up to four bundled `.dylib` files. REA/Ghidra reports metadata, procedures and native-analysis evidence; it does not restore the original source code. FairPlay-encrypted or otherwise protected executable sections may remain unanalyzable.
+- This first native worker runs REA's Ghidra provider overview on the main executable and selected libraries. Function-by-function decompilation, Objective-C/Swift metadata recovery, framework/resource inventory, and richer evidence-to-source mapping remain additional analysis stages.
+- Rebuilding a website/app means producing a clean-room implementation from observed behavior and assets that the user is authorized to reuse. It does not copy private server code, credentials, private APIs, paid assets, or protected source.
+- xtool 2.0.0-beta.1 is prerelease. Its build must independently pass ZIP, app bundle, executable and bundle-ID checks. An unsigned IPA is not signed or installed automatically.
 
 ## Acceptance checklist
 
-- [ ] Configure matching bridge token on both Render services.
-- [ ] Authenticated REA readiness returns HTTP 200 and discovers at least one tool.
-- [ ] iPhone installation can list the MCP catalog.
-- [ ] IPA upload streams successfully without loading the full file into ULTRON API memory.
-- [ ] At least one real IPA inspection tool returns evidence for a test IPA.
-- [ ] At least one real website inspection workflow returns evidence for an authorized test site.
-- [ ] Native deep analysis is enabled only after a supported provider is installed and verified.
-- [ ] xtool workflow produces and validates an unsigned IPA.
-- [ ] A reconstruction is built in a separate workspace and compared against explicit acceptance tests; original code, credentials, private APIs, and protected assets are not copied.
+- [ ] Deploy the updated REA bridge and confirm authenticated `/api/ready` returns HTTP 200 with a nonzero MCP tool count.
+- [ ] Set matching bridge and worker callback secrets in Render and GitHub Actions.
+- [ ] Merge/promote the worker workflow to the default branch so workflow dispatch is available.
+- [ ] Verify a real public test site yields CDP targets, script evidence, bundle-analysis output and screenshot artifact.
+- [ ] Verify a non-encrypted test IPA yields a Ghidra provider doctor pass and a main Mach-O analysis report.
+- [ ] Confirm failed/partial analyses report limitations instead of being marked successful.
+- [ ] Run xtool separately and validate the generated unsigned IPA.
+- [ ] Build any reconstruction in a separate workspace and compare it against explicit functional acceptance tests.
