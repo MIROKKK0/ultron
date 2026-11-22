@@ -129,7 +129,7 @@ def _video_search(query: str, max_results: int, searcher: Any = None) -> list[di
         max_results=max(1, min(max_results * 3, 20)),
     )
     results = []
-    requested_platform = "tiktok" if re.search(r"tik\\s?tok", query, re.IGNORECASE) else "youtube"
+    requested_platform = "tiktok" if re.search(r"tik\s?tok", query, re.IGNORECASE) else "youtube"
     for item in raw or []:
         title = str(item.get("title", "")).strip()[:300]
         original_url = str(item.get("content", item.get("url", ""))).strip()
