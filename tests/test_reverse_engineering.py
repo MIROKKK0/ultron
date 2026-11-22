@@ -1,7 +1,7 @@
 import os
 import asyncio
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 from backend.reverse_engineering import AnalysisJobRequest
@@ -34,6 +34,24 @@ class ReverseEngineeringConfigTests(unittest.TestCase):
                 rea._bridge_config(),
                 ("https://rea-bridge.example", "x" * 40),
             )
+
+    def test_tool_catalog_is_cached_between_calls_and_can_refresh(self):
+        class FakeResponse:
+            def json(self):
+                return {"tools": [{"name": "inspect_web_page", "inputSchema": {"type": "object"}}]}
+
+        rea._TOOL_CATALOG_CACHE = []
+        rea._TOOL_CATALOG_CACHED_AT = 0.0
+        request = AsyncMock(return_value=FakeResponse())
+        with patch.object(rea, "_request", new=request):
+            first = asyncio.run(rea._tool_catalog(force_refresh=True))
+            cached = asyncio.run(rea._tool_catalog())
+            refreshed = asyncio.run(rea._tool_catalog(force_refresh=True))
+        self.assertEqual(first, cached)
+        self.assertEqual(cached, refreshed)
+        self.assertEqual(request.await_count, 2)
+        rea._TOOL_CATALOG_CACHE = []
+        rea._TOOL_CATALOG_CACHED_AT = 0.0
 
     def test_tool_names_are_bounded_and_safe(self):
         self.assertIsNotNone(rea.TOOL_NAME.fullmatch("inspect_web_page"))
