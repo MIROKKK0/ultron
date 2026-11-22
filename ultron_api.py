@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
 from urllib.parse import parse_qs, urlparse
 
 from ultron_core import UltronCore, SPECIALISTS
@@ -101,6 +102,10 @@ def main() -> None:
     host = os.getenv("ULTRON_API_HOST", "0.0.0.0")
     port = int(os.getenv("PORT", os.getenv("ULTRON_API_PORT", "8000")))
     server = ThreadingHTTPServer((host, port), UltronAPIHandler)
+    if os.getenv("ULTRON_START_WORKER", "0").lower() in {"1", "true", "yes"}:
+        from scripts.ultron_worker import run_worker
+        Thread(target=run_worker, kwargs={"once": False}, daemon=True, name="ultron-agent-worker").start()
+        print("ULTRON background worker iniciado no processo da API")
     print(f"ULTRON API online em {host}:{port}")
     server.serve_forever()
 
