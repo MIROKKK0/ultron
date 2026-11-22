@@ -113,7 +113,7 @@ jobs:
       - name: Install REA and MCP SDK
         run: |
           npm install --global rea-agents@6.10.1
-          npm install --no-save --no-package-lock @modelcontextprotocol/sdk@1.29.0
+          npm install --no-save --no-package-lock @modelcontextprotocol/client@2.3.1
       - name: Build a tiny arm64 Mach-O test target
         run: |
           cat > "$RUNNER_TEMP/fixture.c" <<'C'
@@ -256,7 +256,7 @@ jobs:
 
       - name: Install MCP SDK for persistent REA session
         if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
-        run: npm install --no-save --no-package-lock @modelcontextprotocol/sdk@1.29.0
+        run: npm install --no-save --no-package-lock @modelcontextprotocol/client@2.3.1
 
       - name: Verify REA Ghidra provider
         if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
