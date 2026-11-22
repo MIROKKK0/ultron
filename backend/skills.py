@@ -30,21 +30,6 @@ def _format_plan(goal: str) -> str:
     return "\n".join(lines)
 
 def run_intent_skill(message: str) -> str | None:
-    normalized = message.casefold()
-    explicit_evolution = (
-        "autoevolua" in normalized
-        or "auto evolua" in normalized
-        or "evolua agora" in normalized
-        or "inicie a autoevolução" in normalized
-        or "inicie a autoevolucao" in normalized
-        or "modifique seu código" in normalized
-        or "modifique seu codigo" in normalized
-        or "melhore seu próprio código" in normalized
-        or "melhore seu proprio codigo" in normalized
-        or "evolua o projeto" in normalized
-    )
-    if explicit_evolution:
-        return run_named_skill("recursive_evolution", message)["response"]
     prediction = resolve_intent(message)
     intent = prediction["intent"]
     if intent == "greeting":
