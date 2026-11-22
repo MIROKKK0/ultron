@@ -46,14 +46,23 @@ async function assertPublicHost(host) {
 await assertPublicHost(target.hostname);
 const reportDir = "reports";
 await fs.mkdir(reportDir, { recursive: true });
-const endpoint = process.env.REA_CDP_ENDPOINT || "http://127.0.0.1:9222";
+const endpoint = (process.env.REA_CDP_ENDPOINT || "http://127.0.0.1:9222").replace(/\/+$/, "");
+process.env.NO_PROXY = [process.env.NO_PROXY, "127.0.0.1", "localhost"].filter(Boolean).join(",");
+process.env.no_proxy = process.env.NO_PROXY;
 let ready = false;
 for (let i = 0; i < 60; i++) {
-  try { const response = await fetch(endpoint + "/json/version"); if (response.ok) { ready = true; break; } } catch {}
+  try {
+    const response = await execFile("curl", ["--fail", "--silent", "--show-error", endpoint + "/json/version"], {
+      timeout: 3000,
+      maxBuffer: 1024 * 1024
+    });
+    if (response.stdout) { ready = true; break; }
+  } catch {}
   await new Promise(resolve => setTimeout(resolve, 500));
 }
 if (!ready) throw new Error("Disposable Chromium CDP endpoint did not become ready.");
-const browser = await chromium.connectOverCDP(endpoint);
+console.log("Disposable Chromium CDP endpoint is ready.");
+const browser = await chromium.connectOverCDP(endpoint, { timeout: 30000 });
 try {
   const context = await browser.newContext({ acceptDownloads: false, ignoreHTTPSErrors: false });
   await context.route("**/*", async route => {
