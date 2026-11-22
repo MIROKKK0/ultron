@@ -399,8 +399,8 @@ struct ChatClient {
         )
     }
 
-    func startREAWorkerJob(targetType: String, targetURL: String? = nil, fileID: String? = nil, serverURL: String) async throws -> Data {
-        var body: [String: String] = ["target_type": targetType]
+    func startREAWorkerJob(targetType: String, targetURL: String? = nil, fileID: String? = nil, authorized: Bool = false, serverURL: String) async throws -> Data {
+        var body: [String: Any] = ["target_type": targetType, "authorized": authorized]
         if let targetURL { body["target_url"] = targetURL }
         if let fileID { body["file_id"] = fileID }
         let encoded = try JSONSerialization.data(withJSONObject: body)
