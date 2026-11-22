@@ -22,6 +22,8 @@ _COMPONENTS = {
     "scripts": "benchmark, treino e ferramentas de engenharia",
     "training": "corpus, tokenizadores e experimentos de modelos",
     "docs": "arquitetura, decisões e documentação",
+    ".ultron": "skills e instruções locais do agente",
+    ".agents": "skills e instruções de desenvolvimento",
     ".github/workflows": "CI, treino, validação e automações",
 }
 
@@ -49,7 +51,7 @@ def _inventory(root: Path) -> tuple[list[str], dict[str, int]]:
     for current, dirs, files in os.walk(root, followlinks=False):
         dirs[:] = sorted(
             name for name in dirs
-            if name not in _IGNORED_DIRS and (not name.startswith(".") or name == ".github")
+            if name not in _IGNORED_DIRS and (not name.startswith(".") or name in {".github", ".ultron", ".agents"})
         )
         current_path = Path(current)
         for name in files:
@@ -62,7 +64,7 @@ def _inventory(root: Path) -> tuple[list[str], dict[str, int]]:
                 continue
             paths.append(relative)
     paths.sort()
-    for directory in ("backend", "ios", "tests", "scripts", "training", "docs"):
+    for directory in ("backend", "ios", "tests", "scripts", "training", "docs", ".ultron", ".agents"):
         counts[directory] = sum(path.startswith(directory + "/") for path in paths)
     counts["github_workflows"] = sum(path.startswith(".github/workflows/") for path in paths)
     counts["python"] = sum(path.endswith(".py") for path in paths)
