@@ -111,8 +111,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh pr checks "${{ steps.candidate.outputs.url }}" --watch --fail-fast --interval 15
 
-      - name: ULTRON promotes its approved candidate to the development core
+      - name: Promote only candidates marked eligible by the frozen evolution gate
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr merge "${{ steps.candidate.outputs.url }}" --squash --delete-branch
+          PR_URL: ${{ steps.candidate.outputs.url }}
+        run: |
+          labels="$(gh pr view "$PR_URL" --json labels --jq '[.labels[].name] | join(",")')"
+          if [[ ",$labels," == *",ultron-eligible-for-promotion,"* ]]; then
+            gh pr merge "$PR_URL" --squash --delete-branch
+          else
+            echo "ULTRON gate did not mark this candidate eligible. PR remains open for human review."
+            echo "Current labels: $labels"
+          fi
 
