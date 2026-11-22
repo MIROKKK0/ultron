@@ -129,7 +129,8 @@ jobs:
           echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC" >> "$GITHUB_ENV"
           echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC" >> "$GITHUB_ENV"
           echo "GHIDRA_HEADLESS_MAXMEM=3G" >> "$GITHUB_ENV"
-          echo "REA_GHIDRA_STARTUP_TIMEOUT_MS=1200000" >> "$GITHUB_ENV"
+          echo "REA_GHIDRA_STARTUP_TIMEOUT_MS=1800000" >> "$GITHUB_ENV"
+          echo "REA_GHIDRA_DECOMPILE_TIMEOUT_SECONDS=600" >> "$GITHUB_ENV"
       - name: Install REA and MCP SDK
         run: |
           npm install --global rea-agents@6.10.1
@@ -172,7 +173,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -273,7 +274,8 @@ jobs:
           unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
           echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC" >> "$GITHUB_ENV"
           echo "GHIDRA_HEADLESS_MAXMEM=3G" >> "$GITHUB_ENV"
-          echo "REA_GHIDRA_STARTUP_TIMEOUT_MS=1200000" >> "$GITHUB_ENV"
+          echo "REA_GHIDRA_STARTUP_TIMEOUT_MS=1800000" >> "$GITHUB_ENV"
+          echo "REA_GHIDRA_DECOMPILE_TIMEOUT_SECONDS=600" >> "$GITHUB_ENV"
           sudo apt-get update
           sudo apt-get install -y procps file
 
