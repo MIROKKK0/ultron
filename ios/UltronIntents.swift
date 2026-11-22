@@ -28,8 +28,8 @@ struct UltronShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: AskUltronIntent(),
             phrases: [
-                "Perguntar ao \\(.applicationName)",
-                "Falar com \\(.applicationName)"
+                "Perguntar ao \(.applicationName)",
+                "Falar com \(.applicationName)"
             ],
             shortTitle: "Perguntar",
             systemImageName: "brain.head.profile"

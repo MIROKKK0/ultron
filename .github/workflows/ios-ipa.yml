@@ -1,0 +1,69 @@
+name: ULTRON iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "feat/ios-ipa-bootstrap"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-unsigned-ipa:
+    name: Build and validate unsigned iOS IPA
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Build for physical iOS devices
+        run: |
+          xcodebuild \
+            -project ULTRON.xcodeproj \
+            -scheme ULTRON \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH="build/DerivedData/Build/Products/Release-iphoneos/ULTRON.app"
+          test -d "$APP_PATH"
+          test -x "$APP_PATH/ULTRON"
+          plutil -lint "$APP_PATH/Info.plist"
+          mkdir -p build/ipa/Payload
+          cp -R "$APP_PATH" build/ipa/Payload/ULTRON.app
+          (cd build/ipa && /usr/bin/zip -qry "$GITHUB_WORKSPACE/ULTRON-unsigned.ipa" Payload)
+          test -s ULTRON-unsigned.ipa
+          /usr/bin/unzip -l ULTRON-unsigned.ipa | grep -q 'Payload/ULTRON.app/Info.plist'
+          shasum -a 256 ULTRON-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ULTRON-unsigned-IPA
+          path: ULTRON-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
