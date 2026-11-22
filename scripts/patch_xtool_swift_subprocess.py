@@ -26,6 +26,9 @@ new = "return try await self.write(Array(data), to: diskIO, for: processIdentifi
 if new in source:
     print("swift-subprocess compatibility patch already present")
 elif old in source:
+    # Upstream checkout may mark vendored sources read-only; make only this
+    # temporary CI copy writable before applying the narrow compatibility edit.
+    path.chmod(path.stat().st_mode | 0o200)
     path.write_text(source.replace(old, new, 1))
     print("patched swift-subprocess Data input for Swift 6.4.3")
 else:
