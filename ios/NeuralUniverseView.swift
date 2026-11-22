@@ -14,11 +14,17 @@ struct NeuralMemoryEdge: Identifiable, Codable, Hashable {
     let sourceID: String
     let targetID: String
     let relation: String
+    enum CodingKeys: String, CodingKey {
+        case sourceID = "source_id"
+        case targetID = "target_id"
+        case relation
+    }
 }
 
 struct NeuralUniverseView: View {
     let nodes: [NeuralMemoryNode]
     let edges: [NeuralMemoryEdge]
+    var sourceLabel: String = "Memórias locais"
     @State private var selectedNode: NeuralMemoryNode?
 
     var body: some View {
@@ -33,7 +39,7 @@ struct NeuralUniverseView: View {
                     Label("UNIVERSO NEURAL", systemImage: "brain.head.profile")
                         .font(.headline.weight(.bold))
                     Spacer()
-                    Text("\(nodes.count) nós · \(edges.count) conexões")
+                    Text(sourceLabel + " · \(nodes.count) nós")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
