@@ -244,6 +244,7 @@ class Ultron:
                     }
                 }
             }
+        ]
 
     def _execute_tool(self, name: str, arguments: Dict) -> str:
         try:
