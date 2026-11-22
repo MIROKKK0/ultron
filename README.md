@@ -69,3 +69,15 @@ python ultron.py
 - Multi-agente (especialistas)
 
 absolute olliE pro Sam.
+
+
+## Núcleo autônomo e API
+
+- Núcleo independente do modelo: `ultron_core.py`
+- API privada para memória e tarefas: `python ultron_api.py`
+- Worker de tarefas em segundo plano: `python scripts/ultron_worker.py`
+- Cliente MCP Streamable HTTP: `mcp/client.py`
+- Ciclo de autoevolução por testes, benchmark e PR: `.github/workflows/recursive-evolution.yml`
+- Arquitetura, configuração e limitações: [docs/ULTRON_AUTONOMY.md](docs/ULTRON_AUTONOMY.md)
+
+A API exige `ULTRON_API_TOKEN`. Para manter memórias e tarefas após reinícios, configure `ULTRON_DATA_DIR` ou `ULTRON_CORE_DB` em armazenamento persistente. Não coloque tokens no Git.
