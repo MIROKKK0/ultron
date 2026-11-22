@@ -383,7 +383,7 @@ struct ChatClient {
             throw ChatClientError.invalidResponse
         }
         return try await authenticatedData(
-            path: "/v2/reverse-engineering/site/status/\\(id)",
+            path: "/v2/reverse-engineering/site/status/\(id)",
             method: "GET",
             serverURL: serverURL
         )
@@ -417,7 +417,7 @@ struct ChatClient {
             throw ChatClientError.invalidResponse
         }
         return try await authenticatedData(
-            path: "/v2/reverse-engineering/jobs/\\(id)",
+            path: "/v2/reverse-engineering/jobs/\(id)",
             method: "GET",
             serverURL: serverURL
         )
