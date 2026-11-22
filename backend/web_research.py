@@ -13,12 +13,12 @@ from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 logger = logging.getLogger(__name__)
 
 VIDEO_TERMS = re.compile(
-    r"\b(v[ií]deo|v[ií]deos|youtube|clipe|gameplay|trailer|shorts?)\b",
+    r"\b(v[ií]deo|v[ií]deos|youtube|tiktok|tik\s?tok|clipe|gameplay|trailer|shorts?)\b",
     re.IGNORECASE,
 )
 STOP_WORDS = {
     "para", "com", "sem", "sobre", "mais", "melhor", "video", "videos",
-    "youtube", "vídeo", "vídeos", "quero", "procure", "pesquise", "encontre", "mostre",
+    "youtube", "tiktok", "tik", "tok", "vídeo", "vídeos", "quero", "procure", "pesquise", "encontre", "mostre",
     "por", "uma", "uns", "dos", "das", "que", "de", "do", "da", "no", "na", "em", "e", "um", "the", "and", "for",
 }
 
@@ -109,6 +109,14 @@ def _youtube_host(url: str) -> bool:
     return host == "youtu.be" or host == "youtube.com" or host.endswith(".youtube.com")
 
 
+def _tiktok_host(url: str) -> bool:
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except ValueError:
+        return False
+    return host == "tiktok.com" or host.endswith(".tiktok.com")
+
+
 def _video_search(query: str, max_results: int, searcher: Any = None) -> list[dict]:
     if searcher is None:
         from ddgs import DDGS
@@ -121,12 +129,14 @@ def _video_search(query: str, max_results: int, searcher: Any = None) -> list[di
         max_results=max(1, min(max_results * 3, 20)),
     )
     results = []
+    requested_platform = "tiktok" if re.search(r"tik\\s?tok", query, re.IGNORECASE) else "youtube"
     for item in raw or []:
         title = str(item.get("title", "")).strip()[:300]
         original_url = str(item.get("content", item.get("url", ""))).strip()
         url = _canonical_url(original_url)
         snippet = str(item.get("description", item.get("body", ""))).strip()[:1200]
-        if not title or not url or not _youtube_host(url):
+        platform_match = _tiktok_host(url) if requested_platform == "tiktok" else _youtube_host(url)
+        if not title or not url or not platform_match:
             continue
         score = _relevance(query, title, snippet)
         if score < 0.12:
@@ -137,7 +147,7 @@ def _video_search(query: str, max_results: int, searcher: Any = None) -> list[di
             "snippet": snippet,
             "relevance": round(score, 3),
             "type": "video",
-            "publisher": str(item.get("publisher", "YouTube"))[:120],
+            "publisher": str(item.get("publisher", "TikTok" if requested_platform == "tiktok" else "YouTube"))[:120],
             "duration": str(item.get("duration", ""))[:40],
         })
     results.sort(key=lambda item: item["relevance"], reverse=True)
@@ -165,12 +175,12 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
                 "results": [],
                 "search_type": "video",
                 "summary": (
-                    "Não encontrei vídeos do YouTube suficientemente relacionados. "
-                    "Tente acrescentar o nome do jogo, pessoa ou assunto."
+                    f"Não encontrei vídeos do {requested_platform.title()} suficientemente relacionados. "
+                    "Tente acrescentar o nome do projeto ou assunto."
                 ),
             }
         summary = "\n".join(
-            f"{index}. {item['title']}\n   {item['snippet']}\n   Duração: {item['duration'] or 'não informada'}\n   YouTube: {item['url']}"
+            f"{index}. {item['title']}\n   {item['snippet']}\n   Duração: {item['duration'] or 'não informada'}\n   {requested_platform.title()}: {item['url']}"
             for index, item in enumerate(videos, 1)
         )
         return {
@@ -178,7 +188,7 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
             "count": len(videos),
             "results": videos,
             "search_type": "video",
-            "summary": "Vídeos do YouTube encontrados e ordenados por relevância:\n" + summary,
+            "summary": f"Vídeos do {requested_platform.title()} encontrados e ordenados por relevância:\n" + summary,
         }
 
     fallback_backends = ("duckduckgo", "brave", "mojeek", "startpage", "yahoo", "wikipedia", "grokipedia")
