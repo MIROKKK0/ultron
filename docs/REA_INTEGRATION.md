@@ -17,7 +17,7 @@ This avoids installing Chromium or Ghidra in the small Render API process.
 
 REA's CDP inspector is passive: it attaches to an existing Chrome-family page and records DOM/resource/script/runtime evidence. It does not provide general browser control. Playwright creates the disposable browser session and navigates to the target; REA then inspects that session. The worker uses a fresh profile with no personal cookies or logged-in browser state. CDP stays bound to `127.0.0.1:9222`; it is never published as a public service.
 
-Ghidra is the native-analysis provider selected for this project because it is open-source and can run headlessly. REA's current setup guide documents Ghidra 12.1.x with a full JDK 21 installation and a `procps`-compatible `ps` on Linux. The workflow pins Ghidra 12.2 and verifies the official ZIP SHA-256 before use. Ghidra's headless analyzer is designed for automated import, analysis and scripts.
+Ghidra is the native-analysis provider selected for this project because it is open-source and can run headlessly. REA's current setup guide accepts Ghidra 12.2 with a 64-bit full JDK 25 and a `procps`-compatible `ps` on Linux; the current provider no longer accepts Ghidra 12.1.x. The workflow pins Ghidra 12.2 and verifies the release ZIP SHA-256 before use. Ghidra's headless analyzer is designed for automated import, analysis and scripts.
 
 Hopper and IDA remain optional alternatives, not prerequisites. Hopper is commercial and IDA requires its own license/provider setup. They are not installed by this workflow.
 
@@ -29,7 +29,7 @@ The ULTRON API service needs:
 - `REA_BRIDGE_TOKEN`: same 32+ character secret configured on the REA bridge service.
 - `ULTRON_GITHUB_TOKEN`: fine-grained GitHub token scoped to `MIROKKK0/ultron` with Actions read/write permission. It is used only by the backend to dispatch the workflow.
 - `ULTRON_GITHUB_REPO=MIROKKK0/ultron`
-- `ULTRON_GITHUB_REF=feat/ultron-core-assistant` (the Render deployment branch; PR #73 registers the workflow file on `main`, while dispatch runs the worker from this selected branch).
+- `ULTRON_GITHUB_REF=main` (the default branch, where the registered worker workflow and scripts are promoted by PR #75).
 - `ULTRON_WORKER_CALLBACK_TOKEN`: a separate random secret of at least 32 characters, shared with the GitHub Actions repository secret.
 
 Set secrets in Render's service environment settings. Never commit them or put them in the IPA.
@@ -44,12 +44,12 @@ In `MIROKKK0/ultron` → Settings → Secrets and variables → Actions, add:
 
 The workflow dispatch payload contains only a random job ID. The actual target URL or uploaded IPA ID is fetched from ULTRON through the callback-authenticated endpoint, so it is not copied into the public workflow-dispatch input.
 
-**Release gate:** GitHub only accepts `workflow_dispatch` for a workflow file present on the repository's default branch. PR #73 is merged into `main`, registering the worker workflow. PR #75 updates that default-branch registration to the current Ghidra 12.2/JDK 25 contract. Render dispatches the worker using `ULTRON_GITHUB_REF=feat/ultron-core-assistant`, which contains the ULTRON API routes and worker code.
+**Release gate:** GitHub only accepts `workflow_dispatch` for a workflow file present on the repository's default branch. PR #75 must be merged into `main` to promote the current sandboxed Chromium and Ghidra 12.2/JDK 25 worker. The ULTRON API itself is deployed from `feat/ultron-core-assistant`; it dispatches the workflow on `main` using `ULTRON_GITHUB_REF=main`.
 
 ## iPhone workflow
 
 1. Open ULTRON → Engenharia reversa.
-2. For a site, enter an HTTPS URL, confirm authorization, and tap **Analisar site com REA**. The runner checks the hostname, blocks private/reserved IP resolutions, rejects cross-origin redirects, opens a disposable browser profile, and runs REA's CDP inspection and bundle analysis.
+2. For a site, enter an HTTPS URL, confirm authorization, and tap **Analisar site com REA**. The runner checks DNS and IP ranges, filters HTTP and WebSocket requests, rejects cross-origin top-level redirects, blocks service workers, opens a disposable non-root Chromium container, and runs REA's CDP inspection and bundle analysis.
 3. For an IPA, select the file, tap **Enviar IPA ao REA**, then tap **Análise profunda com REA + Ghidra**. Uploads are temporary and expire after six hours.
 4. ULTRON polls the job status, receives a bounded worker summary through its authenticated callback, synthesizes a Portuguese technical report with its own brain, and links to the GitHub Actions run for diagnostic logs. Raw IPA, page source, screenshots and pseudocode are not uploaded as public workflow artifacts; they remain in the ephemeral worker and are discarded when the job ends.
 
@@ -68,7 +68,7 @@ The workflow dispatch payload contains only a random job ID. The actual target U
 
 - [ ] Deploy the updated REA bridge and confirm authenticated `/api/ready` returns HTTP 200 with a nonzero MCP tool count.
 - [ ] Set matching bridge and worker callback secrets in Render and GitHub Actions.
-- [ ] Merge/promote the worker workflow to the default branch so workflow dispatch is available.
+- [ ] Merge PR #75 to promote the current worker workflow and scripts to the default branch.
 - [ ] Verify a real public test site yields CDP targets, script evidence, bundle-analysis output and per-page screenshots on the ephemeral runner; confirm no raw artifact is published.
 - [ ] Verify a non-encrypted test IPA yields a Ghidra provider doctor pass and a main Mach-O analysis report stored in ULTRON's job database; confirm no raw IPA or pseudocode artifact is published.
 - [ ] Confirm failed/partial analyses report limitations instead of being marked successful.
