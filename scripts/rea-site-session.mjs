@@ -75,6 +75,9 @@ try {
     let parsed;
     try { parsed = new URL(requestUrl); } catch { return route.abort("blockedbyclient"); }
     if (!["http:", "https:", "ws:", "wss:"].includes(parsed.protocol)) return route.abort("blockedbyclient");
+    if (route.request().isNavigationRequest() && route.request().frame().parentFrame() === null && parsed.origin !== target.origin) {
+      return route.abort("blockedbyclient");
+    }
     try { await assertPublicHost(parsed.hostname); return route.continue(); } catch { return route.abort("blockedbyclient"); }
   });
   const page = await context.newPage();
@@ -122,7 +125,7 @@ try {
       const candidate = new URL(href);
       candidate.hash = "";
       candidate.search = "";
-      if (candidate.origin !== target.origin || candidate.protocol !== "https:" || unsafePath.test(candidate.pathname)) continue;
+      if (candidate.origin !== target.origin || candidate.protocol !== "https:" || candidate.username || candidate.password || unsafePath.test(candidate.pathname)) continue;
       if (!seen.has(candidate.href)) {
         seen.add(candidate.href);
         routeQueue.push(candidate.href);
