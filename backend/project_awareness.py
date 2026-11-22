@@ -44,9 +44,8 @@ def _git(root: Path, *args: str, timeout: float = 4.0) -> str | None:
 
 
 def _safe_path(value: str) -> bool:
-    normalized = value.replace("\\", "/").lstrip("./")
+    normalized = value.replace("\\\\", "/").lstrip("/")
     return bool(normalized) and not _SECRET_PATH.search(normalized)
-
 
 def _inventory(root: Path) -> tuple[list[str], dict[str, int]]:
     paths: list[str] = []
@@ -54,7 +53,7 @@ def _inventory(root: Path) -> tuple[list[str], dict[str, int]]:
     for current, dirs, files in os.walk(root, followlinks=False):
         dirs[:] = sorted(
             name for name in dirs
-            if name not in _IGNORED_DIRS and not name.startswith(".")
+            if name not in _IGNORED_DIRS and (not name.startswith(".") or name == ".github")
         )
         current_path = Path(current)
         for name in files:
@@ -72,7 +71,6 @@ def _inventory(root: Path) -> tuple[list[str], dict[str, int]]:
     counts["github_workflows"] = sum(path.startswith(".github/workflows/") for path in paths)
     counts["python"] = sum(path.endswith(".py") for path in paths)
     counts["swift"] = sum(path.endswith(".swift") for path in paths)
-    counts["tests"] = counts["tests"]
     return paths, counts
 
 
@@ -106,7 +104,6 @@ def _scheduled_workflows(root: Path, paths: list[str]) -> list[dict[str, str]]:
         for match in re.finditer(r"(?m)^\\s*-\\s*cron:\\s*[\"']?([^\"'\\n]+)", content):
             schedules.append({"workflow": relative, "cron": match.group(1).strip()})
     return schedules
-
 
 def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
     """Return a bounded, secret-free snapshot of the checked-out ULTRON project."""
