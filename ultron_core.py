@@ -2,7 +2,7 @@
 from __future__ import annotations
 import json, os, sqlite3, uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -112,9 +112,13 @@ class UltronCore:
   self.event("task.queued",{"id":tid,"specialist":specialist}); return tid
  def next_task(self):
   with self._connect() as db:
+   db.execute("BEGIN IMMEDIATE")
+   stale=(datetime.now(timezone.utc)-timedelta(minutes=30)).isoformat()
+   db.execute("UPDATE tasks SET status='queued',updated_at=? WHERE status='running' AND updated_at<?",(self._now(),stale))
    row=db.execute("SELECT * FROM tasks WHERE status='queued' ORDER BY created_at LIMIT 1").fetchone()
    if not row:return None
-   now=self._now(); db.execute("UPDATE tasks SET status='running',updated_at=? WHERE id=?",(now,row["id"]))
+   now=self._now()
+   db.execute("UPDATE tasks SET status='running',updated_at=? WHERE id=? AND status='queued'",(now,row["id"]))
    return Task(row["id"],row["objective"],row["specialist"],"running",row["created_at"],now,row["result"])
  def finish_task(self,task_id,result,status="completed"):
   if status not in {"completed","failed","needs_review"}: raise ValueError("Estado final inválido.")
