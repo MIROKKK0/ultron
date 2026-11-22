@@ -8,6 +8,7 @@ from backend.evolution_dispatch import dispatch_evolution_workflow
 from backend.tutor_mode import TUTORING_SYSTEM_INSTRUCTIONS
 
 SKILLS = {
+    # Natural-language skill; no slash command is required.
     "programming_tutor": {"title": "Tutor de programação", "intents": ["learn_programming"], "risk": "low"},
     "conversation": {"title": "Conversa", "intents": ["greeting", "thanks"], "risk": "low"},
     "help": {"title": "Ajuda e comandos", "intents": ["help"], "risk": "low"},
