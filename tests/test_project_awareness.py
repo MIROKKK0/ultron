@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from backend.project_awareness import build_project_awareness
@@ -35,6 +36,17 @@ class ProjectAwarenessTests(unittest.TestCase):
             )
             self.assertFalse(report["self_evolution"]["autonomous_code_candidate_generation"])
             self.assertFalse(report["self_evolution"]["automatic_merge_to_production"])
+
+    def test_evolution_readiness_reports_only_secret_presence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "backend").mkdir()
+            (root / "backend" / "app.py").write_text("app = True\\n", encoding="utf-8")
+            with patch.dict("os.environ", {"ULTRON_GITHUB_TOKEN": "do-not-return-this-token"}, clear=False):
+                report = build_project_awareness(root)
+        self.assertTrue(report["self_evolution"]["dispatch_token_configured"])
+        self.assertFalse(report["self_evolution"]["server_dispatch_ready"])
+        self.assertNotIn("do-not-return-this-token", str(report))
 
     def test_git_history_is_reported_without_exposing_file_contents(self):
         with tempfile.TemporaryDirectory() as temporary:
