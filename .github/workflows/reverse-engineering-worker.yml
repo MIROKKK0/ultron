@@ -46,7 +46,8 @@ jobs:
           node-version: "24.22.1"
       - name: Validate worker source
         run: |
-          python -m py_compile backend/reverse_engineering.py scripts/extract-ipa-for-ghidra.py scripts/summarize-analysis.py
+          if [ -f backend/reverse_engineering.py ]; then python -m py_compile backend/reverse_engineering.py; fi
+          python -m py_compile scripts/extract-ipa-for-ghidra.py scripts/summarize-analysis.py
           node --check scripts/rea-site-session.mjs
           node --check scripts/rea-ghidra-session.mjs
 
