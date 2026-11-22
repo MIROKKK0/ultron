@@ -81,6 +81,7 @@ private struct MemorySyncItem: Encodable {
 private struct MemorySyncRequest: Encodable {
     let installation_id: String
     let memories: [MemorySyncItem]
+    let replace: Bool
 }
 
 struct ChatClient {
@@ -233,7 +234,7 @@ struct ChatClient {
         var request = try authenticatedRequest(path: "/api/memory/sync", serverURL: serverURL)
         request.httpMethod = "POST"
         request.httpBody = try JSONEncoder().encode(
-            MemorySyncRequest(installation_id: installationID, memories: items)
+            MemorySyncRequest(installation_id: installationID, memories: items, replace: true)
         )
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
