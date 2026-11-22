@@ -38,7 +38,7 @@ from backend.runtime_diagnostics import memory_snapshot
 from backend.intent_model import model_status
 from backend.skills import list_skills, run_intent_skill, run_named_skill
 from backend.web_research import search_web
-from backend.reverse_engineering import router as reverse_engineering_router
+from backend.reverse_engineering import router as reverse_engineering_router, worker_router as reverse_engineering_worker_router
 
 APP_NAME = "ULTRON"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -85,6 +85,10 @@ app.include_router(
     reverse_engineering_router,
     prefix="/v2/reverse-engineering",
     dependencies=[Depends(require_installation)],
+)
+app.include_router(
+    reverse_engineering_worker_router,
+    prefix="/internal/reverse-engineering",
 )
 
 
