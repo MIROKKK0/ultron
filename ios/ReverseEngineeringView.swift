@@ -258,7 +258,7 @@ struct ReverseEngineeringView: View {
             Para site, explique páginas visitadas, estrutura observada, rotas, recursos JavaScript e limites da captura.
             Não afirme que o código-fonte original foi recuperado. Se o objetivo for recriar, proponha uma implementação limpa sem copiar código, credenciais, marcas ou ativos protegidos.
             Resumo do worker:
-            \(String(summary.prefix(12000)))
+            \(String(summary.prefix(24000)))
             """
             let synthesis = try await client.send(prompt, serverURL: serverURL)
             synthesizedJobID = currentJobID
