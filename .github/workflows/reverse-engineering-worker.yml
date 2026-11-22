@@ -7,16 +7,6 @@ on:
         description: ULTRON analysis job identifier
         required: true
         type: string
-  push:
-    branches:
-      - feat/rea-reverse-engineering-integration
-    paths:
-      - ".github/workflows/reverse-engineering-worker.yml"
-      - "backend/reverse_engineering.py"
-      - "scripts/rea-site-session.mjs"
-      - "scripts/extract-ipa-for-ghidra.py"
-      - "scripts/summarize-analysis.py"
-      - "scripts/rea-ghidra-session.mjs"
   pull_request:
     paths:
       - ".github/workflows/reverse-engineering-worker.yml"
