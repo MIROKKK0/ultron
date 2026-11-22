@@ -15,6 +15,9 @@ The ULTRON API service needs these environment variables:
 
 - `REA_BRIDGE_URL=https://rea-bridge-vt6z.onrender.com`
 - `REA_BRIDGE_TOKEN`: the same long random bearer token configured as `REA_BRIDGE_TOKEN` on the REA bridge service.
+- `ULTRON_GITHUB_TOKEN`: a fine-grained GitHub token scoped only to `MIROKKK0/ultron`, with Actions read/write permission, used only by the ULTRON server to dispatch the temporary website-analysis workflow.
+- `ULTRON_GITHUB_REPO=MIROKKK0/ultron`
+- `ULTRON_GITHUB_REF=feat/rea-reverse-engineering-integration` (change to the deployment branch after merging the integration PR).
 
 Set the secret in Render's service environment settings; do not commit it, put it in the iOS app, or expose it in logs. The bridge must be deployed and its authenticated `/api/ready` endpoint must return HTTP 200 with a nonzero discovered tool count.
 
