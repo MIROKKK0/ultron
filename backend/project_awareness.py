@@ -178,7 +178,6 @@ def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
             "O ciclo atual mede e valida candidatos existentes, sem gerador autônomo geral de patches."
         ),
     }
-    }
     return {
         "project": "ULTRON",
         "snapshot_version": 1,
