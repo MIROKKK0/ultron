@@ -34,6 +34,7 @@ class UltronCore:
    db.executescript("""
    CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY,content TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'fact',importance INTEGER NOT NULL DEFAULT 3,source TEXT NOT NULL DEFAULT 'user',created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
    CREATE TABLE IF NOT EXISTS memory_links(source_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,target_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,relation TEXT NOT NULL DEFAULT 'related',PRIMARY KEY(source_id,target_id,relation));
+   CREATE TABLE IF NOT EXISTS synced_memories(installation_id TEXT NOT NULL,memory_id TEXT NOT NULL,content TEXT NOT NULL,kind TEXT NOT NULL,importance INTEGER NOT NULL,source TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(installation_id,memory_id));
    CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY,objective TEXT NOT NULL,specialist TEXT NOT NULL,status TEXT NOT NULL,result TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
    CREATE TABLE IF NOT EXISTS skills(name TEXT PRIMARY KEY,description TEXT NOT NULL,procedure TEXT NOT NULL,evidence TEXT NOT NULL DEFAULT '',uses INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
    CREATE TABLE IF NOT EXISTS mcp_servers(name TEXT PRIMARY KEY,endpoint TEXT NOT NULL,transport TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL);
@@ -68,11 +69,39 @@ class UltronCore:
   return scored[:max(1,min(500,int(limit)))]
  def link_memories(self,source_id,target_id,relation="related"):
   with self._connect() as db: db.execute("INSERT OR IGNORE INTO memory_links VALUES(?,?,?)",(source_id,target_id,relation))
- def memory_graph(self,limit=250):
+ def sync_memories(self,installation_id,memories):
+  if not installation_id or len(installation_id)>128: raise ValueError("installation_id inválido")
+  if not isinstance(memories,list) or len(memories)>500: raise ValueError("Lote de memórias inválido")
+  accepted=0
+  with self._connect() as db:
+   for item in memories:
+    if not isinstance(item,dict): continue
+    memory_id=str(item.get("id","")).strip()
+    content=str(item.get("content","")).strip()
+    if not memory_id or not content or len(memory_id)>128 or len(content)>12000: continue
+    now=self._now()
+    db.execute("""INSERT INTO synced_memories VALUES(?,?,?,?,?,?,?,?)
+      ON CONFLICT(installation_id,memory_id) DO UPDATE SET
+      content=excluded.content,kind=excluded.kind,importance=excluded.importance,
+      source=excluded.source,updated_at=excluded.updated_at
+      WHERE excluded.updated_at >= synced_memories.updated_at""",
+      (installation_id,memory_id,content,str(item.get("kind","fact"))[:64],
+       max(1,min(5,int(item.get("importance",3)))),str(item.get("source","ios"))[:128],
+       str(item.get("created_at",now)),str(item.get("updated_at",now))))
+    accepted += 1
+  self.event("memory.sync",{"installation_id":installation_id,"accepted":accepted})
+  return {"installation_id":installation_id,"accepted":accepted}
+ def memory_graph(self,limit=250,installation_id=None):
   with self._connect() as db:
    nodes=[dict(r) for r in db.execute("SELECT id,content,kind,importance FROM memories ORDER BY updated_at DESC LIMIT ?",(limit,))]
    edges=[dict(r) for r in db.execute("SELECT source_id,target_id,relation FROM memory_links LIMIT ?",(limit*3,))]
-  return {"nodes":nodes,"edges":edges}
+   if installation_id:
+    synced=db.execute("SELECT memory_id,content,kind,importance,updated_at FROM synced_memories WHERE installation_id=? ORDER BY updated_at DESC LIMIT ?",(installation_id,limit)).fetchall()
+    nodes.extend({"id":f"{installation_id}:{r['memory_id']}","content":r["content"],"kind":r["kind"],"importance":r["importance"],"updated_at":r["updated_at"]} for r in synced)
+  return {"nodes":nodes[:limit],"edges":edges}
+ def list_tasks(self,limit=100):
+  with self._connect() as db:
+   return [dict(r) for r in db.execute("SELECT id,objective,specialist,status,result,created_at,updated_at FROM tasks ORDER BY created_at DESC LIMIT ?",(max(1,min(500,int(limit))),))]
  def create_task(self,objective,specialist="architect"):
   if specialist not in SPECIALISTS: raise ValueError(f"Especialista desconhecido: {specialist}")
   tid,now=str(uuid.uuid4()),self._now()
