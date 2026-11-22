@@ -1,35 +1,67 @@
 #!/usr/bin/env python3
-"""Apply a narrow Swift 6.4 compatibility fix to xtool's pinned swift-subprocess checkout.
+"""Apply narrow Swift 6.4 compatibility fixes to xtool's pinned dependency checkout.
 
-Swift 6.4.3 does not expose Data.bytes on Darwin. The dependency already accepts
-[UInt8] through the same AsyncIO write path, so Array(data) preserves the bytes
-without changing subprocess behavior. This only edits the ephemeral CI checkout.
+Swift 6.4.3 no longer exposes the Data.mutableBytes convenience used by
+swift-crypto 5.0.3 on this code path. Its existing withUnsafeMutableBytes
+fallback is compatible and preserves the in-place AEAD operation. The patch
+also adapts swift-subprocess Data.bytes to [UInt8]. Only the ephemeral CI
+checkout is edited; no vendored dependency is committed to ULTRON.
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-if len(sys.argv) != 2:
-    raise SystemExit("usage: patch_swift_subprocess.py <xtool-checkout>")
 
-root = Path(sys.argv[1])
-matches = list(root.glob(".build/checkouts/swift-subprocess/Sources/Subprocess/SubprocessFoundation/Input+Foundation.swift"))
-if len(matches) != 1:
-    raise SystemExit(f"expected one swift-subprocess source file, found {len(matches)}")
+def patch_file(root: Path, relative_path: str, old: str, new: str, label: str) -> None:
+    matches = list(root.glob(relative_path))
+    if len(matches) != 1:
+        raise SystemExit(f"expected one {label} source file, found {len(matches)}")
 
-path = matches[0]
-source = path.read_text()
-old = "return try await self.write(data.bytes, to: diskIO, for: processIdentifier)"
-new = "return try await self.write(Array(data), to: diskIO, for: processIdentifier)"
+    path = matches[0]
+    source = path.read_text()
+    if new in source:
+        print(f"{label} compatibility patch already present")
+        return
+    if old not in source:
+        raise SystemExit(f"{label} source changed; refusing an unverified patch")
 
-if new in source:
-    print("swift-subprocess compatibility patch already present")
-elif old in source:
-    # Upstream checkout may mark vendored sources read-only; make only this
-    # temporary CI copy writable before applying the narrow compatibility edit.
+    # Dependency checkouts may mark vendored sources read-only. Change only
+    # this temporary CI copy before applying the narrow compatibility edit.
     path.chmod(path.stat().st_mode | 0o200)
     path.write_text(source.replace(old, new, 1))
-    print("patched swift-subprocess Data input for Swift 6.4.3")
-else:
-    raise SystemExit("upstream swift-subprocess source changed; refusing an unverified patch")
+    print(f"patched {label} for Swift 6.4.3")
+
+
+if len(sys.argv) != 2:
+    raise SystemExit("usage: patch_xtool_swift_subprocess.py <xtool-checkout>")
+
+root = Path(sys.argv[1])
+
+patch_file(
+    root,
+    ".build/checkouts/swift-subprocess/Sources/Subprocess/Input+Foundation.swift",
+    "return try await self.write(data.bytes, to: diskIO, for: processIdentifier)",
+    "return try await self.write(Array(data), to: diskIO, for: processIdentifier)",
+    "swift-subprocess Data input",
+)
+
+patch_file(
+    root,
+    ".build/checkouts/swift-crypto/Sources/CryptoBoringWrapper/AEAD/BoringSSLAEAD.swift",
+    """        if #available(visionOS 1.1, *) {
+            var outputSpan = output.mutableBytes
+            try open(message: &outputSpan, nonce: nonceBytes, tag: tagBytes, authenticatedData: authenticatedData)
+        } else {
+            // For some reason `Data.mutableBytes` is not available on visionOS 1.0 so we'll bounce through wUSMB.
+            try output.withUnsafeMutableBytes { bytes in
+                var outputSpan = bytes.mutableBytes
+                try open(message: &outputSpan, nonce: nonceBytes, tag: tagBytes, authenticatedData: authenticatedData)
+            }
+        }""",
+    """        try output.withUnsafeMutableBytes { bytes in
+            var outputSpan = bytes.mutableBytes
+            try open(message: &outputSpan, nonce: nonceBytes, tag: tagBytes, authenticatedData: authenticatedData)
+        }""",
+    "swift-crypto Data mutable buffer",
+)
