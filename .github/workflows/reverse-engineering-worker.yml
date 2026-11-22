@@ -16,6 +16,7 @@ on:
       - "scripts/rea-site-session.mjs"
       - "scripts/extract-ipa-for-ghidra.py"
       - "scripts/summarize-analysis.py"
+      - "scripts/rea-ghidra-session.mjs"
   pull_request:
     paths:
       - ".github/workflows/reverse-engineering-worker.yml"
@@ -47,6 +48,7 @@ jobs:
         run: |
           python -m py_compile backend/reverse_engineering.py scripts/extract-ipa-for-ghidra.py scripts/summarize-analysis.py
           node --check scripts/rea-site-session.mjs
+          node --check scripts/rea-ghidra-session.mjs
 
   analyze:
     if: github.event_name == 'workflow_dispatch'
@@ -62,7 +64,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.23.4"
+          node-version: "22.23.5"
 
       - name: Prepare workspace
         run: mkdir -p reports work
@@ -159,25 +161,19 @@ jobs:
         if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
         run: python scripts/extract-ipa-for-ghidra.py "$RUNNER_TEMP/target.ipa" work
 
+      - name: Install MCP SDK for persistent REA session
+        if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
+        run: npm install --no-save --no-package-lock @modelcontextprotocol/sdk@1.29.0
+
       - name: Verify REA Ghidra provider
         if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
         run: rea doctor --provider ghidra --json > reports/ghidra-doctor.json
 
-      - name: Analyze main iOS executable with REA + Ghidra
+      - name: Run persistent REA MCP + Ghidra analysis
         if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
         run: |
           binary="$(python -c 'import json; print(json.load(open("work/ipa-manifest.json"))["main"]["executable"])')"
-          timeout 1800 rea inspect "$binary" --provider ghidra --json > reports/ghidra-main.json
-
-      - name: Analyze bundled dynamic libraries
-        if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
-        continue-on-error: true
-        run: |
-          index=0
-          while IFS= read -r binary; do
-            index=$((index + 1))
-            timeout 1200 rea inspect "$binary" --provider ghidra --json > "reports/ghidra-library-$index.json" || echo "Library analysis incomplete: $binary" >> reports/limitations.txt
-          done < <(python -c 'import json; [print(x) for x in json.load(open("work/ipa-manifest.json"))["libraries"]]')
+          timeout 3600 node scripts/rea-ghidra-session.mjs "$binary"
 
       - name: Create ULTRON evidence summary
         if: always()
