@@ -119,8 +119,8 @@ jobs:
           sudo apt-get install -y procps file clang lld
       - name: Download and verify official Ghidra 12.2
         run: |
-          curl --fail --location --retry 3 \
-            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip" \
+          curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 1200 \
+            "https://sourceforge.net/projects/ghidra.mirror/files/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip/download" \
             -o "$RUNNER_TEMP/ghidra.zip"
           echo "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
           mkdir -p "$RUNNER_TEMP/ghidra"
