@@ -30,7 +30,7 @@ permissions:
 
 concurrency:
   group: ultron-rea-analysis-${{ github.event.inputs.job_id || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   validate:
@@ -119,8 +119,8 @@ jobs:
           sudo apt-get install -y procps file clang lld
       - name: Download and verify official Ghidra 12.2
         run: |
-          curl --fail --location --retry 3 -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/assets/665189215" \
+          curl --fail --location --retry 3 \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip" \
             -o "$RUNNER_TEMP/ghidra.zip"
           echo "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
           mkdir -p "$RUNNER_TEMP/ghidra"
