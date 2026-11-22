@@ -20,6 +20,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
+from backend.project_awareness import build_project_awareness
 from backend.brain import run_multitask
 from backend.cognitive_workspace import CognitiveWorkspace
 from backend.memory_system import MemoryStore
@@ -1321,6 +1322,12 @@ def self_knowledge() -> dict[str, Any]:
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
     }
     return {"identity": SELF_MODEL.public_dict(), "runtime": health}
+
+
+@app.get("/project/awareness", dependencies=[Depends(require_api_token)])
+def project_awareness() -> dict[str, Any]:
+    """Expose a read-only, secret-free map of the checked-out ULTRON project."""
+    return build_project_awareness()
 
 
 @app.post("/reflect", dependencies=[Depends(require_api_token)])
