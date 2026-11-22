@@ -30,6 +30,21 @@ def _format_plan(goal: str) -> str:
     return "\n".join(lines)
 
 def run_intent_skill(message: str) -> str | None:
+    normalized = message.casefold()
+    explicit_evolution = (
+        "autoevolua" in normalized
+        or "auto evolua" in normalized
+        or "evolua agora" in normalized
+        or "inicie a autoevolução" in normalized
+        or "inicie a autoevolucao" in normalized
+        or "modifique seu código" in normalized
+        or "modifique seu codigo" in normalized
+        or "melhore seu próprio código" in normalized
+        or "melhore seu proprio codigo" in normalized
+        or "evolua o projeto" in normalized
+    )
+    if explicit_evolution:
+        return run_named_skill("recursive_evolution", message)["response"]
     prediction = resolve_intent(message)
     intent = prediction["intent"]
     if intent == "greeting":
@@ -38,7 +53,7 @@ def run_intent_skill(message: str) -> str | None:
         return "Por nada! Pode continuar. Vou priorizar respostas diretas e verificáveis."
     if intent == "help":
         return ("Habilidades ativas: conversa, planejamento, cálculo seguro, pesquisa web, "
-                "diagnóstico, memória protegida, autoavaliação e proposta de autoevolução. "
+                "diagnóstico, memória protegida, autoavaliação e autoevolução recursiva do projeto. "
                 "Exemplos: /plan objetivo, /calc 12*(3+4), /research assunto, /self, /skills.")
     if intent == "identity":
         awareness = build_project_awareness()
@@ -54,9 +69,9 @@ def run_intent_skill(message: str) -> str | None:
             f"{awareness['inventory']['total_files']} arquivos inventariados, "
             f"{counts['backend']} módulos backend, {counts['tests']} arquivos de teste e "
             f"{counts['swift']} arquivos Swift. Mudanças recentes: {history}. "
-            "Meu classificador de intenções é próprio; o adaptador generativo é opcional. "
-            "A presença de módulos no repositório não prova que estejam implantados no iPhone. "
-            "Ainda não tenho um gerador autônomo geral de código."
+            "Meu classificador de intenções é próprio; o worker de código usa um provedor opcional configurado no GitHub Actions. "
+            "Posso pesquisar fontes públicas, consultar meu histórico de PR/CI, gerar patches e pedir uma revisão crítica. "
+            "A presença do worker no repositório não prova que as secrets estejam configuradas ou que ele já tenha executado."
         )
     if intent == "plan":
         return _format_plan(message)
