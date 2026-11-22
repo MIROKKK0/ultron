@@ -49,11 +49,23 @@ class UltronCore:
   with self._connect() as db: db.execute("INSERT INTO memories VALUES(?,?,?,?,?,?,?)",(mid,content.strip(),kind,max(1,min(5,int(importance))),source,now,now))
   self.event("memory.created",{"id":mid,"kind":kind}); return mid
  def recall(self,query="",limit=20):
+  """Retrieve memories by lexical relevance, then importance and recency."""
+  import re
+  terms=set(re.findall(r"[\\wÀ-ÿ]{2,}",query.casefold()))
   with self._connect() as db:
-   sql="SELECT * FROM memories"; args=()
-   if query.strip(): sql+=" WHERE content LIKE ?"; args=(f"%{query}%",)
-   rows=db.execute(sql+" ORDER BY importance DESC,updated_at DESC LIMIT ?",args+(limit,)).fetchall()
-  return [dict(r) for r in rows]
+   rows=db.execute("SELECT * FROM memories ORDER BY updated_at DESC").fetchall()
+  scored=[]
+  for row in rows:
+   item=dict(row)
+   tokens=set(re.findall(r"[\\wÀ-ÿ]{2,}",item["content"].casefold()))
+   overlap=len(terms & tokens)
+   if terms and overlap == 0:
+    continue
+   score=(overlap / max(1,len(terms))) * 10 + int(item["importance"]) * 0.25
+   item["relevance_score"]=round(score,4)
+   scored.append(item)
+  scored.sort(key=lambda item:(item["relevance_score"],item["updated_at"]),reverse=True)
+  return scored[:max(1,min(500,int(limit)))]
  def link_memories(self,source_id,target_id,relation="related"):
   with self._connect() as db: db.execute("INSERT OR IGNORE INTO memory_links VALUES(?,?,?)",(source_id,target_id,relation))
  def memory_graph(self,limit=250):
