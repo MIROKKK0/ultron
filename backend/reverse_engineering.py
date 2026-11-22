@@ -6,6 +6,7 @@ identity and installation authentication; REA remains a replaceable specialist.
 from __future__ import annotations
 
 import os
+import asyncio
 import re
 import ipaddress
 import socket
@@ -177,7 +178,7 @@ async def _find_site_run(analysis_id: str) -> dict[str, Any] | None:
 async def rea_start_site_analysis(payload: SiteAnalysisRequest) -> dict[str, Any]:
     if not payload.authorized:
         raise HTTPException(status_code=403, detail="Confirme que você tem autorização para analisar este site.")
-    target = _validate_public_site_url(payload.url)
+    target = await asyncio.to_thread(_validate_public_site_url, payload.url)
     _, repo, ref = _github_config()
     analysis_id = uuid.uuid4().hex
     await _github_json(
