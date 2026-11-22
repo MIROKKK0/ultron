@@ -1357,7 +1357,7 @@ def propose_improvement(request: ImprovementRequest) -> dict[str, Any]:
     return proposal
 
 
-@app.post("/evolution/dispatch", dependencies=[Depends(require_api_token)])
+@app.post("/evolution/dispatch", dependencies=[Depends(require_installation)])
 def dispatch_recursive_evolution(request: EvolutionDispatchRequest) -> dict[str, Any]:
     """Ask the default-branch worker to research and evolve the development core."""
     try:
