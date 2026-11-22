@@ -121,6 +121,9 @@ struct ChatClient {
         request.httpMethod = "POST"
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = KeychainStore.read("api_token"), !token.isEmpty {
+            request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = try JSONEncoder().encode(ChatRequest(message: message, history: history))
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
@@ -145,6 +148,9 @@ struct ChatClient {
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        if let token = KeychainStore.read("api_token"), !token.isEmpty {
+            request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = try JSONEncoder().encode(ChatRequest(message: message, history: history))
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
@@ -249,6 +255,9 @@ struct ChatClient {
         request.httpMethod = "POST"
         request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = KeychainStore.read("api_token"), !token.isEmpty {
+            request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = try JSONEncoder().encode(
             FeedbackRequest(rating: rating, strategy: strategy, comment: "")
         )
