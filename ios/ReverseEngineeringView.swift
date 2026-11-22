@@ -21,6 +21,7 @@ struct ReverseEngineeringView: View {
     @State private var selectedIPA: URL?
     @State private var showImporter = false
     @State private var tools: [REATool] = []
+    @State private var catalogData: Data?
     @State private var selectedTool = ""
     @State private var filter = ""
     @State private var arguments = "{}"
@@ -36,7 +37,9 @@ struct ReverseEngineeringView: View {
             let text = (tool.name + " " + (tool.description ?? "")).lowercased()
             return terms.contains(where: text.contains)
         }
-        return (matching.isEmpty ? tools : matching).sorted { $0.name < $1.name }
+        let candidates = (matching.isEmpty ? tools : matching).sorted { $0.name < $1.name }
+        guard !filter.isEmpty else { return candidates }
+        return candidates.filter { ($0.name + " " + ($0.description ?? "")).localizedCaseInsensitiveContains(filter) }
     }
 
     private var selectedDescription: String {
@@ -104,9 +107,13 @@ struct ReverseEngineeringView: View {
 
                 if !selectedTool.isEmpty {
                     Section("Argumentos da ferramenta") {
-                        Text("Confira o schema antes de executar. Para IPA, use o caminho retornado pelo upload no campo de arquivo.")
+                        Text("Confira os campos exigidos pela ferramenta. Para IPA, o caminho retornado pelo upload é inserido automaticamente quando o schema reconhece um campo de arquivo.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Text(selectedSchemaText)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
                         TextEditor(text: $arguments)
                             .font(.system(.footnote, design: .monospaced))
                             .frame(minHeight: 140)
@@ -167,6 +174,7 @@ struct ReverseEngineeringView: View {
             do {
                 let data = try await client.reaTools(serverURL: serverURL)
                 let response = try JSONDecoder().decode(REAToolsResponse.self, from: data)
+                catalogData = data
                 tools = response.tools
                 selectedTool = filteredTools.first?.name ?? response.tools.first?.name ?? ""
                 output = "Conexão com REA concluída. \(response.tools.count) ferramentas MCP disponíveis."
@@ -195,26 +203,59 @@ struct ReverseEngineeringView: View {
         }
     }
 
-    private func prefillArguments() {
-        guard let tool = tools.first(where: { $0.name == selectedTool }),
-              let data = try? JSONSerialization.data(withJSONObject: ["tools": [["name": tool.name]]]),
-              let catalog = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let _ = catalog["tools"] else { return }
-        // The MCP schema is rendered by the server; start with safe, editable JSON.
-        // The target is never guessed into an unknown required field.
-        if mode == "SITE", let url = URL(string: targetURL), url.scheme == "https" {
-            arguments = (try? String(data: JSONSerialization.data(
-                withJSONObject: ["url": url.absoluteString],
-                options: [.prettyPrinted, .sortedKeys]
-            ), encoding: .utf8)) ?? "{}"
-        } else if mode == "IPA", !uploadedFilePath.isEmpty {
-            arguments = (try? String(data: JSONSerialization.data(
-                withJSONObject: ["filePath": uploadedFilePath],
-                options: [.prettyPrinted, .sortedKeys]
-            ), encoding: .utf8)) ?? "{}"
-        } else {
-            arguments = "{}"
+    private var selectedSchemaText: String {
+        guard let catalogData,
+              let root = try? JSONSerialization.jsonObject(with: catalogData) as? [String: Any],
+              let items = root["tools"] as? [[String: Any]],
+              let tool = items.first(where: { ($0["name"] as? String) == selectedTool }),
+              let schema = tool["inputSchema"],
+              let data = try? JSONSerialization.data(withJSONObject: schema, options: [.prettyPrinted, .sortedKeys]) else {
+            return "Schema não informado pelo servidor REA."
         }
+        return String(data: data, encoding: .utf8) ?? "Schema indisponível."
+    }
+
+    private func prefillArguments() {
+        guard let catalogData,
+              let root = try? JSONSerialization.jsonObject(with: catalogData) as? [String: Any],
+              let items = root["tools"] as? [[String: Any]],
+              let tool = items.first(where: { ($0["name"] as? String) == selectedTool }),
+              let schema = tool["inputSchema"] as? [String: Any],
+              let properties = schema["properties"] as? [String: [String: Any]] else {
+            arguments = "{}"
+            return
+        }
+        let required = Set(schema["required"] as? [String] ?? [])
+        var values: [String: Any] = [:]
+        for (key, property) in properties {
+            let normalized = key.lowercased()
+            let rawType = property["type"]
+            let type = rawType as? String ?? (rawType as? [String])?.first ?? "string"
+            if mode == "SITE", (normalized.contains("url") || normalized == "target") {
+                if let url = URL(string: targetURL), url.scheme == "https" {
+                    values[key] = url.absoluteString
+                } else if required.contains(key) {
+                    values[key] = ""
+                }
+            } else if mode == "IPA", !uploadedFilePath.isEmpty,
+                      ["path", "file", "binary", "artifact", "package"].contains(where: normalized.contains) {
+                values[key] = uploadedFilePath
+            } else if required.contains(key) {
+                switch type {
+                case "string": values[key] = ""
+                case "number", "integer": values[key] = 0
+                case "boolean": values[key] = false
+                case "array": values[key] = [Any]()
+                case "object": values[key] = [String: Any]()
+                default: break
+                }
+            }
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys]) else {
+            arguments = "{}"
+            return
+        }
+        arguments = String(data: data, encoding: .utf8) ?? "{}"
     }
 
     private func callTool() {
