@@ -126,6 +126,7 @@ struct ContentView: View {
         .task {
             restoreLocalHistory()
             await refreshServerStatus()
+            await syncLocalMemories()
         }
         .onChange(of: messages) { _ in
             persistLocalHistory()
@@ -134,6 +135,9 @@ struct ContentView: View {
         .onChange(of: serverURL) { _ in
             serverStatusChecked = false
             Task { await refreshServerStatus() }
+        }
+        .onChange(of: showSettings) { isPresented in
+            if !isPresented { Task { await syncLocalMemories() } }
         }
     }
 
