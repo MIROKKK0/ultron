@@ -12,6 +12,9 @@ on:
       - ".github/workflows/reverse-engineering-worker.yml"
       - "backend/reverse_engineering.py"
       - "scripts/rea-site-session.mjs"
+      - "scripts/site-network-policy.mjs"
+      - "scripts/site-network-policy.test.mjs"
+      - "scripts/playwright-seccomp.json"
       - "scripts/extract-ipa-for-ghidra.py"
       - "scripts/summarize-analysis.py"
 
@@ -39,7 +42,11 @@ jobs:
           if [ -f backend/reverse_engineering.py ]; then python -m py_compile backend/reverse_engineering.py; fi
           python -m py_compile scripts/extract-ipa-for-ghidra.py scripts/summarize-analysis.py
           node --check scripts/rea-site-session.mjs
+          node --check scripts/site-network-policy.mjs
+          node --check scripts/site-network-policy.test.mjs
           node --check scripts/rea-ghidra-session.mjs
+          node --test scripts/site-network-policy.test.mjs
+          python -m json.tool scripts/playwright-seccomp.json > /dev/null
 
   site-worker-smoke:
     if: github.event_name != 'workflow_dispatch'
