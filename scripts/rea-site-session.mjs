@@ -11,17 +11,35 @@ const target = new URL(job.target_url || "");
 if (target.protocol !== "https:" || !target.hostname || target.username || target.password || (target.port && target.port !== "443")) {
   throw new Error("Only public HTTPS URLs on the default port are accepted.");
 }
-const blockedV4 = [/^0\./, /^10\./, /^127\./, /^169\.254\./, /^172\.(1[6-9]|2\d|3[01])\./, /^192\.168\./, /^192\.0\.0\./, /^198\.(18|19)\./, /^224\./, /^255\./];
+const blockedV4 = [
+  /^0\\./, /^10\\./, /^100\\.(6[4-9]|[7-9]\\d|1[01]\\d|12[0-7])\\./,
+  /^127\\./, /^169\\.254\\./, /^172\\.(1[6-9]|2\\d|3[01])\\./,
+  /^192\\.0\\.0\\./, /^192\\.0\\.2\\./, /^192\\.88\\.99\\./, /^192\\.168\\./,
+  /^198\\.(18|19)\\./, /^198\\.51\\.100\\./, /^203\\.0\\.113\\./,
+  /^224\\./, /^240\\./, /^255\\./
+];
 function publicAddress(address) {
   const family = net.isIP(address);
   if (family === 4) return !blockedV4.some(pattern => pattern.test(address));
   if (family === 6) {
     const a = address.toLowerCase();
-    return !(a === "::" || a === "::1" || a.startsWith("fc") || a.startsWith("fd") || a.startsWith("fe8") || a.startsWith("fe9") || a.startsWith("fea") || a.startsWith("feb") || a.startsWith("::ffff:127.") || a.startsWith("::ffff:10."));
+    if (a.startsWith("::ffff:")) {
+      const mapped = a.slice(7);
+      if (net.isIP(mapped) === 4) return publicAddress(mapped);
+    }
+    return !(a === "::" || a === "::1" || a.startsWith("fc") || a.startsWith("fd") ||
+      a.startsWith("fe8") || a.startsWith("fe9") || a.startsWith("fea") ||
+      a.startsWith("feb") || a.startsWith("ff") || a.startsWith("2001:db8:") ||
+      a.startsWith("2001:10:") || a.startsWith("2002:"));
   }
   return false;
 }
 async function assertPublicHost(host) {
+  const normalizedHost = host.toLowerCase().replace(/\.$/, "");
+  if (normalizedHost === "localhost" || normalizedHost.endsWith(".localhost") ||
+      normalizedHost.endsWith(".local") || normalizedHost.endsWith(".internal")) {
+    throw new Error("Local or internal hostnames are blocked.");
+  }
   if (net.isIP(host)) {
     if (!publicAddress(host)) throw new Error("Private or reserved IP target blocked.");
     return;
@@ -57,6 +75,9 @@ try {
     let parsed;
     try { parsed = new URL(requestUrl); } catch { return route.abort("blockedbyclient"); }
     if (!["http:", "https:", "ws:", "wss:"].includes(parsed.protocol)) return route.abort("blockedbyclient");
+    if (route.request().isNavigationRequest() && route.request().frame().parentFrame() === null && parsed.origin !== target.origin) {
+      return route.abort("blockedbyclient");
+    }
     try { await assertPublicHost(parsed.hostname); return route.continue(); } catch { return route.abort("blockedbyclient"); }
   });
   const page = await context.newPage();
@@ -65,35 +86,71 @@ try {
   const finalUrl = new URL(page.url());
   if (finalUrl.origin !== target.origin) throw new Error("The site redirected to another origin; review and authorize that destination separately.");
   const origin = target.origin;
-  const reaEnv = { ...process.env, REA_BROWSER_OBSERVE_ENABLED: "true", REA_BROWSER_CDP_ENDPOINTS_JSON: JSON.stringify([endpoint]), REA_BROWSER_ALLOWED_ORIGINS_JSON: JSON.stringify([origin]) };
   const runRea = async (name, args, output) => {
-    const result = await execFile("rea", [name, endpoint, ...args, "--json"], { env: reaEnv, timeout: 600000, maxBuffer: 128 * 1024 * 1024 });
+    const result = await execFile("rea", [name, endpoint, ...args, "--json"], { env: process.env, timeout: 600000, maxBuffer: 128 * 1024 * 1024 });
     await fs.writeFile(output, result.stdout || result.stderr || "", { mode: 0o600 });
     return result.stdout || "";
   };
-  const targetsText = await runRea("list-browser-targets", [], `${reportDir}/browser-targets.json`);
-  const targetsJson = JSON.parse(targetsText);
-  const candidates = [];
-  const visit = value => {
-    if (!value) return;
-    if (Array.isArray(value)) return value.forEach(visit);
-    if (typeof value !== "object") return;
-    const url = typeof value.url === "string" ? value.url : "";
-    const id = value.target_id || value.targetId || value.id;
-    if (typeof id === "string" && url.startsWith(origin)) candidates.push({ id, url });
-    Object.values(value).forEach(visit);
+  const capturePage = async (pageURL, index) => {
+    const targetsText = await runRea("list-browser-targets", ["--allowed-origins", origin], `${reportDir}/browser-targets-${index}.json`);
+    const targetsJson = JSON.parse(targetsText);
+    const candidates = [];
+    const visit = value => {
+      if (!value) return;
+      if (Array.isArray(value)) return value.forEach(visit);
+      if (typeof value !== "object") return;
+      const url = typeof value.url === "string" ? value.url : "";
+      const id = value.target_id || value.targetId || value.id;
+      if (typeof id === "string" && url.startsWith(origin)) candidates.push({ id, url });
+      Object.values(value).forEach(visit);
+    };
+    visit(targetsJson);
+    const selected = candidates[0];
+    if (!selected) throw new Error("REA did not discover the isolated page target at the approved origin.");
+    const prefix = `${reportDir}/page-${String(index).padStart(2, "0")}`;
+    await runRea("inspect-web-page", [selected.id, "--observation-ms", "1500", "--include-script-sources"], `${prefix}-inspection.json`);
+    await runRea("analyze-web-bundle", [selected.id], `${prefix}-bundle-analysis.json`);
+    await runRea("capture-web-screenshot", [selected.id], `${prefix}-screenshot.json`);
+    return { url: pageURL, targetId: selected.id, title: await page.title() };
   };
-  visit(targetsJson);
-  const selected = candidates[0];
-  if (!selected) throw new Error("REA did not discover the isolated page target at the approved origin.");
-  await runRea("inspect-web-page", [selected.id, "--observation-ms", "1500"], `${reportDir}/web-inspection.json`);
-  await runRea("analyze-web-bundle", [selected.id], `${reportDir}/web-bundle-analysis.json`);
-  await runRea("capture-web-screenshot", [selected.id], `${reportDir}/web-screenshot.json`);
-  await runRea("observe-web-session", [selected.id, "--observation-ms", "4000"], `${reportDir}/web-session-observation.json`);
+
+  const pages = [];
+  pages.push(await capturePage(page.url(), 1));
+  const rawLinks = await page.locator("a[href]").evaluateAll(anchors => anchors.map(anchor => anchor.href));
+  const routeQueue = [];
+  const seen = new Set([target.href]);
+  const unsafePath = /(?:logout|log-out|signout|sign-out|delete|remove|purchase|checkout|payment|subscribe|unsubscribe|cancel|confirm|submit|create)/i;
+  for (const href of rawLinks) {
+    try {
+      const candidate = new URL(href);
+      candidate.hash = "";
+      candidate.search = "";
+      if (candidate.origin !== target.origin || candidate.protocol !== "https:" || candidate.username || candidate.password || unsafePath.test(candidate.pathname)) continue;
+      if (!seen.has(candidate.href)) {
+        seen.add(candidate.href);
+        routeQueue.push(candidate.href);
+      }
+    } catch {}
+  }
+
+  for (const routeURL of routeQueue.slice(0, 7)) {
+    await page.goto(routeURL, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForTimeout(1500);
+    const current = new URL(page.url());
+    if (current.origin !== target.origin) {
+      await fs.appendFile(`${reportDir}/limitations.txt`, "A linked page redirected outside the approved origin and was skipped.\\n");
+      continue;
+    }
+    pages.push(await capturePage(current.href, pages.length + 1));
+  }
+
   await fs.writeFile(`${reportDir}/site-session.json`, JSON.stringify({
-    requestedOrigin: origin, finalUrl: finalUrl.href, cdpEndpoint: endpoint,
-    isolatedBrowserProfile: true, targetId: selected.id, targetTitle: await page.title(),
-    steps: ["list-browser-targets", "inspect-web-page", "analyze-web-bundle", "capture-web-screenshot", "observe-web-session"]
+    requestedOrigin: origin,
+    initialUrl: target.href,
+    isolatedBrowserProfile: true,
+    maxSameOriginPages: 8,
+    pagesVisited: pages,
+    crawlPolicy: "GET links only; no forms, authentication, purchases, destructive actions or cross-origin redirects"
   }, null, 2), { mode: 0o600 });
   await context.close();
 } finally {
