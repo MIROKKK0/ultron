@@ -16,7 +16,7 @@ def compact_json(path, limit=1800):
             text = json.dumps(safe, ensure_ascii=False)
         else:
             text = json.dumps({"type": type(data).__name__, "items": len(data) if isinstance(data, list) else 1}, ensure_ascii=False)
-        text = re.sub(r"(?i)(token|secret|password|authorization|api[_-]?key)(\\s*[:=]\\s*)[^,\\s\\\"]+", r"\\1\\2[REDACTED]", text)
+        text = re.sub(r"(?i)(token|secret|password|authorization|api[_-]?key)(\s*[:=]\s*)[^,\s\\\"]+", r"\1\2[REDACTED]", text)
         return text[:limit]
     except Exception:
         return f"JSON could not be summarized ({path.stat().st_size} bytes)."
@@ -35,9 +35,9 @@ if kind == "site":
             "Browser profile: isolated, disposable, no personal cookies",
         ]
     for p in sorted(reports.glob("page-*-inspection.json")):
-        parts.append(f"\\n{p.name}: {compact_json(p)}")
+        parts.append(f"\n{p.name}: {compact_json(p)}")
     for p in sorted(reports.glob("page-*-bundle-analysis.json")):
-        parts.append(f"\\n{p.name}: {compact_json(p)}")
+        parts.append(f"\n{p.name}: {compact_json(p)}")
 elif kind == "ipa":
     manifest_path = Path("work/ipa-manifest.json")
     if manifest_path.exists():
@@ -52,16 +52,16 @@ elif kind == "ipa":
         ]
     session_summary = reports / "ghidra-session-summary.json"
     if session_summary.exists():
-        parts.append("\\nPersistent REA/Ghidra session summary:\\n" + session_summary.read_text(errors="replace")[:6000])
+        parts.append("\nPersistent REA/Ghidra session summary:\n" + session_summary.read_text(errors="replace")[:6000])
     doctor = reports / "ghidra-doctor.json"
     if doctor.exists():
-        parts.append("\\nGhidra provider diagnostics:\\n" + compact_json(doctor, 4000))
+        parts.append("\nGhidra provider diagnostics:\n" + compact_json(doctor, 4000))
     for p in sorted(reports.glob("ghidra-function-*.json")):
-        parts.append(f"\\n{p.name}: {compact_json(p, 6500)}")
+        parts.append(f"\n{p.name}: {compact_json(p, 6500)}")
     for name in ("ghidra-binary_overview.json", "ghidra-list_procedures.json", "ghidra-get_objc_classes.json", "ghidra-get_objc_protocols.json", "ghidra-analyze_swift_types.json", "ghidra-inspect_native_dispatch_metadata.json"):
         p = reports / name
         if p.exists():
-            parts.append(f"\\n{name}: {compact_json(p, 3000)}")
+            parts.append(f"\n{name}: {compact_json(p, 3000)}")
 
-parts.append("\\nRaw reports remain only on the ephemeral worker and are not uploaded to the public GitHub repository. This response contains bounded analysis evidence, not recovered original source code.")
-(reports / "summary.txt").write_text("\\n".join(parts))
+parts.append("\nRaw reports remain only on the ephemeral worker and are not uploaded to the public GitHub repository. This response contains bounded analysis evidence, not recovered original source code.")
+(reports / "summary.txt").write_text("\n".join(parts))
