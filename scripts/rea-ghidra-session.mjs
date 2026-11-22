@@ -116,7 +116,7 @@ try {
     const row = toolAvailability.find(item => item.name === name || item.name?.split(".").pop() === name || item.tool === name || item.operation === name);
     return row && (row.available === false || row.available === "unavailable" || row.state === "unavailable" || row.status === "unavailable") ? row.reason || row.message || "provider reports unavailable" : null;
   };
-  await call("binary_overview", argumentsFor(toolMap.get("binary_overview")), 1200000);
+  await call("binary_overview", argumentsFor(toolMap.get("binary_overview")), 2100000);
   const procedures = await call("list_procedures", argumentsFor(toolMap.get("list_procedures")), 600000);
   const candidates = procedureCandidates(procedures);
   const priorities = [/UIApplicationMain/i, /application.*didFinishLaunching/i, /scene.*willConnect/i, /main$/i, /_main$/i, /AppDelegate/i, /SceneDelegate/i, /SwiftUI.*App/i, /URLSession/i, /WKWebView/i, /login|auth|network|api/i];
