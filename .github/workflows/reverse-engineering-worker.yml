@@ -151,6 +151,8 @@ jobs:
           clang -target arm64-apple-macos11 -O0 -fno-inline -c "$RUNNER_TEMP/fixture.c" -o "$RUNNER_TEMP/fixture.o"
           file "$RUNNER_TEMP/fixture.o"
       - name: Verify Ghidra and persistent REA function analysis
+        env:
+          REA_GHIDRA_SMOKE: "1"
         run: |
           mkdir -p reports
           set +e
