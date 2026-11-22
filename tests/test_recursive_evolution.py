@@ -29,7 +29,7 @@ class RecursiveEvolutionTests(unittest.TestCase):
         )
 
     def test_patch_rejects_workflow_and_secret_paths(self):
-        for path in (".github/workflows/deploy.yml", "backend/secrets/token.py", "../outside.py"):
+        for path in (".github/workflows/deploy.yml", "backend/secrets/token.py", "../outside.py", "backend/app.py", "scripts/agent_eval_frozen.py", "tests/test_recursive_evolution.py"):
             diff = f"diff --git a/{path} b/{path}\n"
             with self.subTest(path=path), self.assertRaises(RuntimeError):
                 MODULE.validate_patch(diff)
