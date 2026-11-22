@@ -29,7 +29,7 @@ The ULTRON API service needs:
 - `REA_BRIDGE_TOKEN`: same 32+ character secret configured on the REA bridge service.
 - `ULTRON_GITHUB_TOKEN`: fine-grained GitHub token scoped to `MIROKKK0/ultron` with Actions read/write permission. It is used only by the backend to dispatch the workflow.
 - `ULTRON_GITHUB_REPO=MIROKKK0/ultron`
-- `ULTRON_GITHUB_REF=main` once the worker workflow has been merged into the repository's default branch.
+- `ULTRON_GITHUB_REF=feat/ultron-core-assistant` (the Render deployment branch; PR #73 registers the workflow file on `main`, while dispatch runs the worker from this selected branch).
 - `ULTRON_WORKER_CALLBACK_TOKEN`: a separate random secret of at least 32 characters, shared with the GitHub Actions repository secret.
 
 Set secrets in Render's service environment settings. Never commit them or put them in the IPA.
