@@ -165,6 +165,10 @@ def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
         "automatic_deployment": False,
         "human_review_for_production": True,
         "evolution_target": "feat/ultron-core-assistant" if has_recursive_evolution_worker else None,
+        "dispatch_token_configured": bool(os.getenv("ULTRON_GITHUB_TOKEN")),
+        "server_dispatch_ready": bool(has_recursive_evolution_worker and has_evolution_dispatch and os.getenv("ULTRON_GITHUB_TOKEN")),
+        "workflow_ref": os.getenv("ULTRON_EVOLUTION_WORKFLOW_REF", "main"),
+        "model_secrets_location": "GitHub Actions secrets; not readable by the Render process",
         "explanation": (
             "O worker pesquisa fontes públicas, inspeciona o projeto, gera patches em branches "
             "isoladas, executa testes/benchmark e faz uma segunda revisão crítica. Candidatos "
