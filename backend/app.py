@@ -20,6 +20,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
+from backend.project_awareness import build_project_awareness
 from backend.brain import run_multitask
 from backend.cognitive_workspace import CognitiveWorkspace
 from backend.memory_system import MemoryStore
@@ -1320,7 +1321,17 @@ def self_knowledge() -> dict[str, Any]:
         "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
     }
-    return {"identity": SELF_MODEL.public_dict(), "runtime": health}
+    return {
+        "identity": SELF_MODEL.public_dict(),
+        "runtime": health,
+        "project_awareness": build_project_awareness(),
+    }
+
+
+@app.get("/project/awareness", dependencies=[Depends(require_api_token)])
+def project_awareness() -> dict[str, Any]:
+    """Expose a read-only, secret-free map of the checked-out ULTRON project."""
+    return build_project_awareness()
 
 
 @app.post("/reflect", dependencies=[Depends(require_api_token)])
@@ -1330,7 +1341,15 @@ def reflect(request: ReviewRequest) -> dict[str, Any]:
 
 @app.post("/improvement-proposals", dependencies=[Depends(require_api_token)])
 def propose_improvement(request: ImprovementRequest) -> dict[str, Any]:
-    return improvement_proposal(request.problem)
+    proposal = improvement_proposal(request.problem)
+    proposal["project_awareness"] = build_project_awareness()
+    proposal["promotion_policy"] = {
+        "candidate_evaluation": "frozen_benchmark_and_full_regression_suite",
+        "automatic_merge": False,
+        "automatic_deployment": False,
+        "human_review_required": True,
+    }
+    return proposal
 
 
 @app.post("/agent/plan", dependencies=[Depends(require_api_token)])

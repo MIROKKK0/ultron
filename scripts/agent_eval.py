@@ -83,6 +83,25 @@ def run() -> dict:
         )
     except Exception:
         checks["memory_retriever_has_read_only_mode"] = False
+    try:
+        from backend.project_awareness import build_project_awareness
+        awareness = build_project_awareness(SOURCE_ROOT)
+        counts = awareness["inventory"]["counts"]
+        checks["project_inventory_is_read_only_and_structured"] = (
+            awareness["project"] == "ULTRON"
+            and awareness["inventory"]["total_files"] > 0
+            and counts.get("backend", 0) > 0
+            and counts.get("tests", 0) > 0
+        )
+        checks["self_evolution_limits_are_explicit"] = (
+            awareness["self_evolution"]["benchmark_available"]
+            and awareness["self_evolution"]["regression_and_improvement_gate_available"]
+            and awareness["self_evolution"]["autonomous_code_candidate_generation"] is False
+            and awareness["self_evolution"]["automatic_deployment"] is False
+        )
+    except Exception:
+        checks["project_inventory_is_read_only_and_structured"] = False
+        checks["self_evolution_limits_are_explicit"] = False
     passed = sum(bool(value) for value in checks.values())
     return {"benchmark": "ultron-agent-ptbr-v1", "score": round(passed / len(checks), 4),
             "passed": passed == len(checks), "checks": checks,
