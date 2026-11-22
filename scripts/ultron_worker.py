@@ -32,8 +32,12 @@ def run_worker(once: bool = False, max_runtime: int = 0, idle_sleep: float = 5.0
         nonlocal stopping
         stopping = True
 
-    signal.signal(signal.SIGTERM, stop)
-    signal.signal(signal.SIGINT, stop)
+    try:
+        signal.signal(signal.SIGTERM, stop)
+        signal.signal(signal.SIGINT, stop)
+    except ValueError:
+        # Embedded worker thread: the host process owns signal handling.
+        pass
     core.event("worker.started", {"model": model, "pid": os.getpid()})
 
     while not stopping:
