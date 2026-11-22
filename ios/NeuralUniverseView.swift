@@ -1,5 +1,6 @@
 import SwiftUI
 import SceneKit
+import UIKit
 
 struct NeuralMemoryNode: Identifiable, Codable, Hashable {
     let id: String
