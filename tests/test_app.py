@@ -24,6 +24,18 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("ULTRON", response.json()["reply"])
 
+    def test_improvement_proposal_includes_live_project_context_and_gates(self):
+        response = client.post(
+            "/improvement-proposals",
+            json={"problem": "melhorar o entendimento do próprio projeto"},
+            headers=AUTH,
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["project_awareness"]["project"], "ULTRON")
+        self.assertFalse(payload["promotion_policy"]["automatic_merge"])
+        self.assertTrue(payload["promotion_policy"]["human_review_required"])
+
     def test_project_awareness_requires_authentication(self):
         denied = client.get("/project/awareness")
         self.assertEqual(denied.status_code, 401)
