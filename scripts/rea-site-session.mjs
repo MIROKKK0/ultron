@@ -11,17 +11,32 @@ const target = new URL(job.target_url || "");
 if (target.protocol !== "https:" || !target.hostname || target.username || target.password || (target.port && target.port !== "443")) {
   throw new Error("Only public HTTPS URLs on the default port are accepted.");
 }
-const blockedV4 = [/^0\./, /^10\./, /^127\./, /^169\.254\./, /^172\.(1[6-9]|2\d|3[01])\./, /^192\.168\./, /^192\.0\.0\./, /^198\.(18|19)\./, /^224\./, /^255\./];
+const blockedV4 = [
+  /^0\./, /^10\./, /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
+  /^127\./, /^169\.254\./, /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.0\.0\./, /^192\.0\.2\./, /^192\.88\.99\./, /^192\.168\./,
+  /^198\.(18|19)\./, /^198\.51\.100\./, /^203\.0\.113\./,
+  /^224\./, /^240\./, /^255\./
+];
 function publicAddress(address) {
   const family = net.isIP(address);
   if (family === 4) return !blockedV4.some(pattern => pattern.test(address));
   if (family === 6) {
     const a = address.toLowerCase();
-    return !(a === "::" || a === "::1" || a.startsWith("fc") || a.startsWith("fd") || a.startsWith("fe8") || a.startsWith("fe9") || a.startsWith("fea") || a.startsWith("feb") || a.startsWith("::ffff:127.") || a.startsWith("::ffff:10."));
+    // Accept only global-unicast 2000::/3; block mapped, loopback, ULA,
+    // link-local, multicast, documentation and 6to4 ranges.
+    return (a.startsWith("2") || a.startsWith("3")) &&
+      !a.startsWith("2001:db8:") && !a.startsWith("2001:0:") &&
+      !a.startsWith("2002:") && !a.startsWith("3fff:");
   }
   return false;
 }
 async function assertPublicHost(host) {
+  const normalizedHost = host.toLowerCase().replace(/\.$/, "");
+  if (normalizedHost === "localhost" || normalizedHost.endsWith(".localhost") ||
+      normalizedHost.endsWith(".local") || normalizedHost.endsWith(".internal")) {
+    throw new Error("Local or internal hostnames are blocked.");
+  }
   if (net.isIP(host)) {
     if (!publicAddress(host)) throw new Error("Private or reserved IP target blocked.");
     return;
