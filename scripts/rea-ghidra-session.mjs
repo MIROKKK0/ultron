@@ -1,14 +1,21 @@
 import { promises as fs } from "node:fs";
 import { Client } from "@modelcontextprotocol/client";
-import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/client/stdio";
+import { buildReaMcpEnvironment } from "./rea-mcp-env.mjs";
 
 const binaryPath = process.argv[2];
 if (!binaryPath || !binaryPath.startsWith("/")) throw new Error("An absolute Mach-O path is required.");
 await fs.mkdir("reports", { recursive: true });
 const client = new Client({ name: "ultron-ghidra-worker", version: "1.0.0" });
+const childEnvironment = buildReaMcpEnvironment(process.env, getDefaultEnvironment());
+if (!childEnvironment.GHIDRA_INSTALL_DIR || !childEnvironment.JAVA_HOME) {
+  throw new Error("GHIDRA_INSTALL_DIR and JAVA_HOME must be forwarded to the REA MCP child process.");
+}
+console.log("Forwarding Ghidra runtime to REA MCP child:", childEnvironment.GHIDRA_INSTALL_DIR);
 const transport = new StdioClientTransport({
   command: "rea",
   args: ["mcp"],
+  env: childEnvironment,
   stderr: "pipe"
 });
 transport.stderr?.on("data", chunk => { fs.appendFile("reports/rea-mcp-stderr.log", chunk).catch(() => {}); });
