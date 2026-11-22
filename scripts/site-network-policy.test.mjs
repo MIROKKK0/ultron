@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isPublicAddress } from "./site-network-policy.mjs";
+import { assertPublicHost, isPublicAddress } from "./site-network-policy.mjs";
 
 test("blocks IPv4 loopback, private, link-local, shared and reserved ranges", () => {
   for (const address of [
@@ -25,3 +25,9 @@ test("allows representative public IPv4 and IPv6 addresses", () => {
   }
 });
 
+
+test("rejects localhost and internal hostnames before DNS lookup", async () => {
+  for (const host of ["localhost", "printer.local", "api.internal", "127.0.0.1", "[::1]"]) {
+    await assert.rejects(assertPublicHost(host));
+  }
+});
