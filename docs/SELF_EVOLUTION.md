@@ -51,7 +51,7 @@ O worker `scripts/recursive_evolution.py` acrescenta um ciclo real de engenharia
 - faz uma segunda chamada de revisão crítica sobre o diff e o resultado dos testes;
 - abre uma PR e pode incorporá-la automaticamente apenas em `feat/ultron-core-assistant` depois que os checks de CI passarem.
 
-O endpoint autenticado `POST /evolution/dispatch`, a skill `recursive_evolution` e frases explícitas como “ULTRON, evolua agora o próprio projeto” permitem ao ULTRON disparar o worker pela conversa normal. O workflow agendado fica no branch padrão e faz checkout explícito do ramo de desenvolvimento.
+O endpoint `POST /evolution/dispatch` usa a identidade autenticada da instalação. O cliente iOS reconhece frases explícitas como “ULTRON, evolua agora o próprio projeto” e chama essa rota com as credenciais locais; o chat público não pode disparar o worker. A skill `recursive_evolution` também está disponível pela rota de skills autenticada. O workflow agendado fica no branch padrão e faz checkout explícito do ramo de desenvolvimento.
 
 ### Configuração necessária
 
