@@ -32,8 +32,11 @@ elif kind == "ipa":
             f"Bundle name: {main.get('bundle_name')}",
             f"Version: {main.get('version')}",
             f"Main Mach-O: {main.get('executable')}",
-            f"Bundled dylibs queued: {len(manifest.get('libraries', []))}",
+            f"Bundled dylibs discovered (not yet decompiled): {len(manifest.get('libraries', []))}",
         ]
+    session_summary = reports / "ghidra-session-summary.json"
+    if session_summary.exists():
+        parts.append("\\nPersistent REA/Ghidra session summary:\\n" + session_summary.read_text(errors="replace")[:6000])
     doctor = reports / "ghidra-doctor.json"
     if doctor.exists():
         parts.append("\nGhidra provider diagnostics:\n" + doctor.read_text(errors="replace")[:6000])
