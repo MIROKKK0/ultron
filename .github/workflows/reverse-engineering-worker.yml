@@ -94,20 +94,20 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
       - name: Install native prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y procps file clang lld
-      - name: Download and verify Ghidra 12.1.4
+      - name: Download and verify official Ghidra 12.2
         run: |
-          curl --fail --location --retry 3 \
-            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip" \
+          curl --fail --location --retry 3 -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/assets/665189215" \
             -o "$RUNNER_TEMP/ghidra.zip"
-          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
+          echo "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
           mkdir -p "$RUNNER_TEMP/ghidra"
           unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
-          echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.1.4_PUBLIC" >> "$GITHUB_ENV"
+          echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC" >> "$GITHUB_ENV"
           echo "GHIDRA_HEADLESS_MAXMEM=3G" >> "$GITHUB_ENV"
           echo "REA_GHIDRA_STARTUP_TIMEOUT_MS=1200000" >> "$GITHUB_ENV"
       - name: Install REA and MCP SDK
@@ -132,7 +132,12 @@ jobs:
       - name: Verify Ghidra and persistent REA function analysis
         run: |
           mkdir -p reports
+          set +e
           rea doctor --provider ghidra --json > reports/ghidra-doctor.json
+          doctor_status=$?
+          set -e
+          cat reports/ghidra-doctor.json
+          exit "$doctor_status"
           timeout 3600 node scripts/rea-ghidra-session.mjs "$RUNNER_TEMP/fixture.o"
           python - <<'PY'
           import json
@@ -213,18 +218,18 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
 
-      - name: Download and verify Ghidra 12.1.4
+      - name: Download and verify official Ghidra 12.2
         if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
         run: |
-          curl --fail --location --retry 3 \
-            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip" \
+          curl --fail --location --retry 3 -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/assets/665189215" \
             -o "$RUNNER_TEMP/ghidra.zip"
-          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
+          echo "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
           mkdir -p "$RUNNER_TEMP/ghidra"
           unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
-          echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.1.4_PUBLIC" >> "$GITHUB_ENV"
+          echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC" >> "$GITHUB_ENV"
           echo "GHIDRA_HEADLESS_MAXMEM=3G" >> "$GITHUB_ENV"
           echo "REA_GHIDRA_STARTUP_TIMEOUT_MS=1200000" >> "$GITHUB_ENV"
           sudo apt-get update
