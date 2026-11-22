@@ -85,8 +85,8 @@ jobs:
             .github/workflows/agent-evolution.yml
             requirements.txt
           )
-          for path in "\${protected[@]}"; do
-            if [ -f "candidate/$path" ] && [ -f "baseline/$path" ] && ! cmp -s "baseline/$path" "candidate/$path"; then
+          for path in "${protected[@]}"; do
+            if [ ! -f "candidate/$path" ] || ! cmp -s "baseline/$path" "candidate/$path"; then
               echo "::error::Candidate changed the frozen evaluation contract: $path"
               exit 1
             fi
@@ -96,7 +96,7 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Run frozen baseline tests against candidate code
         env:
-          PYTHONPATH: \${{ github.workspace }}/candidate
+          PYTHONPATH: ${{ github.workspace }}/candidate
         run: python -m unittest discover -s baseline/tests -p 'test_*.py' -v
       - name: Evaluate baseline with the frozen baseline evaluator
         run: |
