@@ -10,6 +10,7 @@ import re
 import hmac
 import json
 import sqlite3
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -24,6 +25,9 @@ MAX_IPA_BYTES = 200 * 1024 * 1024
 TOOL_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 READ_ONLY_PREFIXES = ("analyze_", "inspect_", "list_", "compare_", "read_", "decode_", "disassemble_", "export_", "get_", "find_", "search_")
 READ_ONLY_EXACT = {"open_binary", "capture_web_screenshot", "observe_web_session", "export_evidence_bundle"}
+_TOOL_CATALOG_TTL_SECONDS = 60.0
+_TOOL_CATALOG_CACHE: list[dict[str, Any]] = []
+_TOOL_CATALOG_CACHED_AT = 0.0
 
 
 class ToolCallRequest(BaseModel):
@@ -67,13 +71,24 @@ async def rea_status() -> dict[str, Any]:
     return response.json()
 
 
-@router.get("/tools")
-async def rea_tools() -> dict[str, Any]:
+async def _tool_catalog(*, force_refresh: bool = False) -> list[dict[str, Any]]:
+    global _TOOL_CATALOG_CACHE, _TOOL_CATALOG_CACHED_AT
+    now = time.monotonic()
+    if not force_refresh and _TOOL_CATALOG_CACHE and now - _TOOL_CATALOG_CACHED_AT < _TOOL_CATALOG_TTL_SECONDS:
+        return list(_TOOL_CATALOG_CACHE)
     response = await _request("GET", "/api/tools")
     payload = response.json()
     tools = payload.get("tools", [])
-    if not isinstance(tools, list):
+    if not isinstance(tools, list) or any(not isinstance(item, dict) or not isinstance(item.get("name"), str) for item in tools):
         raise HTTPException(status_code=502, detail="Catálogo MCP do REA inválido.")
+    _TOOL_CATALOG_CACHE = tools
+    _TOOL_CATALOG_CACHED_AT = time.monotonic()
+    return list(_TOOL_CATALOG_CACHE)
+
+
+@router.get("/tools")
+async def rea_tools() -> dict[str, Any]:
+    tools = await _tool_catalog(force_refresh=True)
     return {"tools": tools, "count": len(tools), "provider": "REA MCP"}
 
 
@@ -81,7 +96,7 @@ async def rea_tools() -> dict[str, Any]:
 async def rea_call_tool(name: str, payload: ToolCallRequest) -> dict[str, Any]:
     if not TOOL_NAME.fullmatch(name):
         raise HTTPException(status_code=400, detail="Nome de ferramenta inválido.")
-    catalog = (await rea_tools())["tools"]
+    catalog = await _tool_catalog()
     if not any(item.get("name") == name for item in catalog):
         raise HTTPException(status_code=404, detail="Ferramenta não encontrada no catálogo REA.")
     if not (name.startswith(READ_ONLY_PREFIXES) or name in READ_ONLY_EXACT):
@@ -101,7 +116,7 @@ async def rea_analyze_ipa(payload: IPAAnalyzeRequest) -> dict[str, Any]:
     normalized = payload.file_path.replace("\\", "/")
     if not normalized.startswith("/tmp/rea-uploads/") or ".." in normalized.split("/"):
         raise HTTPException(status_code=400, detail="O caminho não pertence à área temporária de uploads do REA.")
-    catalog = (await rea_tools())["tools"]
+    catalog = await _tool_catalog()
     if not any(item.get("name") == "open_binary" for item in catalog):
         raise HTTPException(status_code=503, detail="O servidor REA não anunciou open_binary.")
     return await rea_call_tool("open_binary", ToolCallRequest(arguments={"path": normalized}))
