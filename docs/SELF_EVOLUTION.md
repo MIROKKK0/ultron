@@ -26,7 +26,7 @@ Mudanças em autenticação, memória e isolamento de usuários, banco/migraçõ
 
 ## O que ainda não faz
 
-- Não existe ainda um gerador geral que escreva patches de software por iniciativa própria.
+- O gerador de patches é limitado e executado por GitHub Actions sob demanda ou no agendamento; não é um daemon 24/7 nem escreve diretamente no checkout de produção.
 - Não aprende automaticamente com conversas privadas nem altera pesos do Transformer a partir de feedback.
 - O endpoint de feedback informa explicitamente que não é usado para treino do modelo; a calibração permitida é limitada à prioridade de estratégias.
 - Não aprova nem faz merge/deploy irrestrito para produção.
@@ -38,7 +38,7 @@ O workflow `.github/workflows/model-training.yml` retreina apenas o classificado
 
 ## Próxima etapa de evolução
 
-Conectar um agente de programação como proponente opcional (nunca como autoridade), capaz de gerar hipóteses e patches pequenos. ULTRON deve manter o contexto, a política de segurança, os benchmarks, a decisão de promoção e o registro de experimentos. O ciclo recomendado é: observar falha → criar teste → propor uma alteração isolada → executar baseline e candidato com a mesma régua → manter ou descartar → registrar o resultado → abrir PR.
+Aprimorar a coordenação dos seis especialistas, ampliar benchmarks independentes em português e reduzir a latência de pesquisa e memória. O ciclo recomendado continua sendo: observar falha → criar teste → propor uma alteração isolada → executar baseline e candidato com a mesma régua → manter ou descartar → registrar o resultado → abrir PR. A execução atual é assíncrona e agendada, não seis agentes independentes 24/7.
 
 ## Autoevolução recursiva do código
 

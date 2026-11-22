@@ -39,6 +39,9 @@ concurrency:
 
 jobs:
   evaluate:
+    # Only ULTRON-generated candidates must beat the frozen benchmark.
+    # Normal feature/fix PRs still run the regular regression and build CI.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'ultron/evolution-')
     runs-on: ubuntu-latest
     steps:
       - name: Select candidate branch
