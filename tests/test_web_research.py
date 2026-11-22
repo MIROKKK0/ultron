@@ -145,7 +145,7 @@ class WebResearchTests(unittest.TestCase):
             return []
 
         result = search_web("documentação Python", searcher=flaky_search)
-        self.assertEqual(calls, ["auto", "duckduckgo", "google", "brave"])
+        self.assertEqual(calls, ["auto", "duckduckgo", "brave"])
         self.assertEqual(result["count"], 1)
         self.assertIn("docs.python.org", result["results"][0]["url"])
 
