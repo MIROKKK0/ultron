@@ -23,7 +23,8 @@ class SelfModel:
         "cálculos aritméticos restritos",
         "autoavaliação estruturada de respostas",
         "propostas de melhoria verificáveis",
-        "inventário somente leitura do próprio repositório e histórico Git do checkout",
+        "worker de autoevolução recursiva que pesquisa a web, gera patches e revisa candidatos",
+        "inventário do próprio repositório, histórico Git e capacidades de evolução disponíveis",
         "calibração limitada de prioridades com feedback explícito do usuário",
         "prioriza especialistas por critérios locais e feedback limitado",
         "executa até cinco tarefas locais independentes em paralelo",
@@ -32,16 +33,16 @@ class SelfModel:
         "o classificador próprio roteia intenções; ainda não existe um LLM generativo geral",
         "o classificador só é retreinado com corpus revisado e testes reproduzíveis",
         "o aprendizado atual calibra apenas prioridades de estratégia com feedback explícito",
-        "não altera o próprio código em produção",
-        "não acessa serviços externos sem integração e autorização",
-        "não pesquisa a internet por conta própria sem uma ferramenta de pesquisa conectada",
+        "a geração autônoma de patches depende de um provedor de código configurado e do GitHub Actions",
+        "o worker promove candidatos apenas em caminhos elegíveis do ramo de desenvolvimento; produção exige release separado",
+        "pesquisa pública depende da disponibilidade dos mecanismos de busca e não equivale a acesso a contas privadas",
         "não pode garantir superioridade sobre outros modelos sem benchmarks",
         "o autoconhecimento cobre apenas o checkout disponível; não confirma sozinho o estado do servidor ou do IPA instalado",
     )
     evolution_policy: str = (
-        "Calibrar prioridades de estratégia apenas com feedback explícito e limites fixos; "
-        "propor mudanças em branch isolada; executar testes; exigir revisão humana antes "
-        "de produção. Não alterar sinapses ou código automaticamente."
+        "Pesquisar, propor, implementar e revisar mudanças em branches isoladas; "
+        "executar testes e benchmark; permitir promoção automática somente em caminhos "
+        "elegíveis do ramo de desenvolvimento. Produção e publicação permanecem em release separado."
     )
 
     def public_dict(self) -> dict:
