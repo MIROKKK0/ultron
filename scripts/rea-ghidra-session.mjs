@@ -40,7 +40,7 @@ function procedureCandidates(value) {
     const external = procedure.external === true || item.external === true;
     if (external) return;
     if (typeof address === "string" || typeof name === "string") {
-      const identity = typeof address === "string" ? address : name;
+      const identity = typeof name === "string" && name.length ? name : address;
       if (typeof identity === "string" && identity.length) found.set(identity, {
         procedure: identity,
         address: typeof address === "string" ? address : null,
