@@ -48,6 +48,11 @@ class UltronTests(unittest.TestCase):
         self.assertIn("backend", report["inventory"]["counts"])
         self.assertIn("recent_commits", report["git"])
         self.assertFalse(report["self_evolution"]["autonomous_code_candidate_generation"])
+        self.assertTrue(report["self_evolution"]["recursive_code_evolution_worker"])
+        self.assertTrue(report["self_evolution"]["web_research_for_evolution"])
+        self.assertTrue(report["self_evolution"]["critic_review_for_candidates"])
+        self.assertTrue(report["self_evolution"]["automatic_merge_to_development"])
+        self.assertFalse(report["self_evolution"]["automatic_merge_to_production"])
         self.assertFalse(report["self_evolution"]["automatic_deployment"])
 
     def test_root_post_is_a_normal_chat_alias(self):
@@ -406,6 +411,34 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(agents["memory_curator"]["result"]["status"], "proposal_only")
         self.assertFalse(agents["memory_curator"]["result"]["approved"])
         self.assertTrue(agents["evaluator"]["result"]["checks"]["planner_ran"])
+
+
+    def test_recursive_evolution_dispatch_requires_github_token(self):
+        with patch.dict(os.environ, {"ULTRON_GITHUB_TOKEN": ""}, clear=False):
+            response = client.post("/evolution/dispatch", json={"objective": "melhorar o núcleo"}, headers=AUTH)
+        self.assertEqual(response.status_code, 503)
+
+    def test_recursive_evolution_dispatches_default_branch_worker(self):
+        with patch.dict(os.environ, {
+            "ULTRON_GITHUB_TOKEN": "github-test-token",
+            "ULTRON_GITHUB_REPOSITORY": "MIROKKK0/ultron",
+            "ULTRON_EVOLUTION_WORKFLOW_REF": "main",
+        }, clear=False):
+            with patch("backend.evolution_dispatch.httpx.post") as post:
+                post.return_value.status_code = 204
+                response = client.post(
+                    "/evolution/dispatch",
+                    json={"objective": "melhorar o autoconhecimento"},
+                    headers=AUTH,
+                )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["dispatched"])
+        self.assertEqual(response.json()["development_target"], "feat/ultron-core-assistant")
+        self.assertEqual(post.call_args.kwargs["json"]["ref"], "main")
+        self.assertEqual(
+            post.call_args.kwargs["json"]["inputs"]["objective"],
+            "melhorar o autoconhecimento",
+        )
 
 
 if __name__ == "__main__":
