@@ -413,6 +413,15 @@ class UltronTests(unittest.TestCase):
         self.assertTrue(agents["evaluator"]["result"]["checks"]["planner_ran"])
 
 
+    def test_public_chat_does_not_dispatch_recursive_evolution(self):
+        with patch("backend.skills.dispatch_evolution_workflow") as dispatch:
+            response = client.post(
+                "/chat",
+                json={"message": "ULTRON, evolua agora o próprio projeto"},
+            )
+        self.assertEqual(response.status_code, 200)
+        dispatch.assert_not_called()
+
     def test_recursive_evolution_dispatch_requires_installation_auth(self):
         response = client.post("/evolution/dispatch", json={"objective": "melhorar o núcleo"})
         self.assertEqual(response.status_code, 401)
