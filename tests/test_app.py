@@ -24,6 +24,20 @@ class UltronTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("ULTRON", response.json()["reply"])
 
+    def test_project_awareness_requires_authentication(self):
+        denied = client.get("/project/awareness")
+        self.assertEqual(denied.status_code, 401)
+
+    def test_project_awareness_reports_code_and_evolution_limits(self):
+        response = client.get("/project/awareness", headers=AUTH)
+        self.assertEqual(response.status_code, 200)
+        report = response.json()
+        self.assertEqual(report["project"], "ULTRON")
+        self.assertIn("backend", report["inventory"]["counts"])
+        self.assertIn("recent_commits", report["git"])
+        self.assertFalse(report["self_evolution"]["autonomous_code_candidate_generation"])
+        self.assertFalse(report["self_evolution"]["automatic_deployment"])
+
     def test_root_post_is_a_normal_chat_alias(self):
         response = client.post("/", json={"message": "oi"})
         self.assertEqual(response.status_code, 200)
