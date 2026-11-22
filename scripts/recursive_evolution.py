@@ -167,6 +167,8 @@ def validate_patch(diff: str) -> list[str]:
         raise RuntimeError("Patch excede 90 KB; divida a melhoria em uma alteração menor.")
     paths = []
     for line in diff.splitlines():
+        if line.startswith(("new file mode 120000", "old mode 120000", "new mode 120000", "new file mode 160000", "old mode 160000", "new mode 160000")):
+            raise RuntimeError("Links simbólicos e submódulos não são permitidos no patch.")
         if line.startswith("GIT binary patch") or line.startswith("Binary files "):
             raise RuntimeError("Patch binário não é permitido neste ciclo.")
         if line.startswith("rename from ") or line.startswith("rename to "):
