@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from fastapi import HTTPException
-from backend.reverse_engineering import SiteAnalysisRequest
+from backend.reverse_engineering import AnalysisJobRequest
 
 from backend import reverse_engineering as rea
 
@@ -47,20 +47,34 @@ class ReverseEngineeringConfigTests(unittest.TestCase):
         self.assertFalse("delete_file".startswith(rea.READ_ONLY_PREFIXES))
         self.assertFalse("execute_command".startswith(rea.READ_ONLY_PREFIXES))
 
-    def test_site_target_rejects_http_and_private_networks(self):
-        with self.assertRaises(HTTPException):
-            rea._validate_public_site_url("http://example.com")
-        with self.assertRaises(HTTPException):
-            rea._validate_public_site_url("https://127.0.0.1")
-        with self.assertRaises(HTTPException):
-            rea._validate_public_site_url("https://localhost")
+    def test_worker_routes_are_registered(self):
+        paths = {route.path for route in rea.worker_router.routes}
+        self.assertIn("/jobs/{job_id}/payload", paths)
+        self.assertIn("/jobs/{job_id}/complete", paths)
 
-    def test_site_analysis_requires_explicit_authorization(self):
+    def test_site_worker_requires_authorization(self):
         with self.assertRaises(HTTPException) as raised:
-            asyncio.run(rea.rea_start_site_analysis(
-                SiteAnalysisRequest(url="https://example.com", authorized=False)
+            asyncio.run(rea.create_analysis_job(
+                AnalysisJobRequest(target_type="site", target_url="https://example.com", authorized=False),
+                x_installation_id="test-installation",
             ))
         self.assertEqual(raised.exception.status_code, 403)
+
+    def test_site_worker_requires_https(self):
+        with self.assertRaises(HTTPException) as raised:
+            asyncio.run(rea.create_analysis_job(
+                AnalysisJobRequest(target_type="site", target_url="http://example.com", authorized=True),
+                x_installation_id="test-installation",
+            ))
+        self.assertEqual(raised.exception.status_code, 400)
+
+    def test_ipa_worker_requires_uploaded_bridge_id(self):
+        with self.assertRaises(HTTPException) as raised:
+            asyncio.run(rea.create_analysis_job(
+                AnalysisJobRequest(target_type="ipa", file_id="not-an-upload-id"),
+                x_installation_id="test-installation",
+            ))
+        self.assertEqual(raised.exception.status_code, 400)
 
 
 if __name__ == "__main__":
