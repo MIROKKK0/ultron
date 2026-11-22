@@ -157,7 +157,8 @@ def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
         "scheduled_retraining_crons": [
             item for item in workflows if item["workflow"].endswith("model-training.yml")
         ],
-        "autonomous_code_candidate_generation": has_recursive_evolution_worker,
+        "autonomous_code_candidate_generation": False,
+        "recursive_code_evolution_worker": has_recursive_evolution_worker,
         "web_research_for_evolution": has_recursive_evolution_worker and "backend/web_research.py" in paths,
         "critic_review_for_candidates": has_recursive_evolution_worker,
         "automatic_merge_to_development": has_recursive_evolution_worker,
