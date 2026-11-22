@@ -51,13 +51,13 @@ class UltronCore:
  def recall(self,query="",limit=20):
   """Retrieve memories by lexical relevance, then importance and recency."""
   import re
-  terms=set(re.findall(r"[\\wÀ-ÿ]{2,}",query.casefold()))
+  terms=set(re.findall(r"[\wÀ-ÿ]{2,}",query.casefold()))
   with self._connect() as db:
    rows=db.execute("SELECT * FROM memories ORDER BY updated_at DESC").fetchall()
   scored=[]
   for row in rows:
    item=dict(row)
-   tokens=set(re.findall(r"[\\wÀ-ÿ]{2,}",item["content"].casefold()))
+   tokens=set(re.findall(r"[\wÀ-ÿ]{2,}",item["content"].casefold()))
    overlap=len(terms & tokens)
    if terms and overlap == 0:
     continue
