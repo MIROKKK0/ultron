@@ -40,6 +40,7 @@ class ReverseEngineeringConfigTests(unittest.TestCase):
 
     def test_read_only_tool_policy_blocks_mutating_tools(self):
         self.assertTrue("inspect_web_page".startswith(rea.READ_ONLY_PREFIXES))
+        self.assertTrue("open_binary" in rea.READ_ONLY_EXACT)
         self.assertTrue("capture_web_screenshot" in rea.READ_ONLY_EXACT)
         self.assertFalse("delete_file".startswith(rea.READ_ONLY_PREFIXES))
         self.assertFalse("execute_command".startswith(rea.READ_ONLY_PREFIXES))
