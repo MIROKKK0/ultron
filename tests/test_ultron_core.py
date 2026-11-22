@@ -10,6 +10,12 @@ class CoreTests(unittest.TestCase):
  def test_memory_graph(self):
   a=self.core.remember("Projeto ULTRON","project"); b=self.core.remember("Memória persistente","architecture"); self.core.link_memories(a,b,"supports")
   self.assertEqual(len(self.core.memory_graph()["nodes"]),3); self.assertEqual(self.core.memory_graph()["edges"][0]["relation"],"supports")
+ def test_semantic_recall_ranks_relevant_memories(self):
+  unrelated=self.core.remember("Receita de bolo de chocolate","note",5)
+  relevant=self.core.remember("ULTRON usa memória semântica persistente","architecture",2)
+  results=self.core.recall("memória semântica",limit=5)
+  self.assertEqual(results[0]["id"],relevant)
+  self.assertNotIn(unrelated,[item["id"] for item in results])
  def test_task_loop(self):
   self.core.create_task("Revisar arquitetura","architect"); self.assertEqual(self.core.task_loop(lambda task:"revisado")[0]["status"],"completed")
  def test_skills_and_mcp(self):
