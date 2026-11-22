@@ -76,6 +76,12 @@ jobs:
           ref: feat/ultron-core-assistant
           path: baseline
           persist-credentials: false
+      - name: Checkout immutable evaluator from default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: evaluator
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -85,11 +91,11 @@ jobs:
         working-directory: candidate
         run: python -m unittest discover -s tests -v
       - name: Evaluate baseline
-        run: ULTRON_SOURCE_ROOT=baseline python candidate/scripts/agent_eval.py --output baseline-evaluation.json || true
+        run: ULTRON_SOURCE_ROOT=baseline python evaluator/scripts/agent_eval_frozen.py --output baseline-evaluation.json || true
       - name: Evaluate candidate
-        run: ULTRON_SOURCE_ROOT=candidate python candidate/scripts/agent_eval.py --output candidate-evaluation.json
+        run: ULTRON_SOURCE_ROOT=candidate python evaluator/scripts/agent_eval_frozen.py --output candidate-evaluation.json
       - name: Require measurable improvement and zero regressions
-        run: python candidate/scripts/compare_agent_eval.py baseline-evaluation.json candidate-evaluation.json
+        run: python evaluator/scripts/compare_agent_eval_frozen.py baseline-evaluation.json candidate-evaluation.json
       - name: Upload comparison report
         if: always()
         uses: actions/upload-artifact@v4
