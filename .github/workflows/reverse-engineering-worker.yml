@@ -132,7 +132,12 @@ jobs:
       - name: Verify Ghidra and persistent REA function analysis
         run: |
           mkdir -p reports
+          set +e
           rea doctor --provider ghidra --json > reports/ghidra-doctor.json
+          doctor_status=$?
+          set -e
+          cat reports/ghidra-doctor.json
+          exit "$doctor_status"
           timeout 3600 node scripts/rea-ghidra-session.mjs "$RUNNER_TEMP/fixture.o"
           python - <<'PY'
           import json
