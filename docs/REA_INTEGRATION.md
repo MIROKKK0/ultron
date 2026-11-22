@@ -51,7 +51,7 @@ The workflow dispatch payload contains only a random job ID. The actual target U
 1. Open ULTRON → Engenharia reversa.
 2. For a site, enter an HTTPS URL, confirm authorization, and tap **Analisar site com REA**. The runner checks the hostname, blocks private/reserved IP resolutions, rejects cross-origin redirects, opens a disposable browser profile, and runs REA's CDP inspection and bundle analysis.
 3. For an IPA, select the file, tap **Enviar IPA ao REA**, then tap **Análise profunda com REA + Ghidra**. Uploads are temporary and expire after six hours.
-4. ULTRON polls the job status, receives the worker summary through its authenticated callback, synthesizes a Portuguese technical report with its own brain, and links to the GitHub Actions run where the full evidence artifact is retained for 14 days.
+4. ULTRON polls the job status, receives a bounded worker summary through its authenticated callback, synthesizes a Portuguese technical report with its own brain, and links to the GitHub Actions run for diagnostic logs. Raw IPA, page source, screenshots and pseudocode are not uploaded as public workflow artifacts; they remain in the ephemeral worker and are discarded when the job ends.
 
 ## Evidence and limits
 
