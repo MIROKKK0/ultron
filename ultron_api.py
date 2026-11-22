@@ -14,6 +14,19 @@ from ultron_core import UltronCore, SPECIALISTS
 class UltronAPIHandler(BaseHTTPRequestHandler):
     core = UltronCore()
 
+    def _get_chat_agent(self):
+        agent = getattr(self.server, "_ultron_chat_agent", None)
+        if agent is None:
+            from ultron import Ultron
+            agent = Ultron()
+            self.server._ultron_chat_agent = agent
+        return agent
+
+    def _send_sse(self, payload: dict) -> None:
+        body = ("data: " + json.dumps(payload, ensure_ascii=False) + "\\n\\n").encode("utf-8")
+        self.wfile.write(body)
+        self.wfile.flush()
+
     def _send(self, status: int, payload: dict) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -66,6 +79,34 @@ class UltronAPIHandler(BaseHTTPRequestHandler):
             return
         try:
             payload = self._body()
+            if self.path in {"/chat", "/chat/stream"}:
+                message = str(payload.get("message", "")).strip()
+                if not message or len(message) > 12000:
+                    self._send(400, {"error": "message inválida"})
+                    return
+                if self.path == "/chat/stream":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                    self.send_header("Cache-Control", "no-cache")
+                    self.send_header("Connection", "keep-alive")
+                    self.end_headers()
+                    self._send_sse({"type": "stage", "stage": "processing"})
+                    reply = self._get_chat_agent().chat(message)
+                    self._send_sse({"type": "stage", "stage": "responding"})
+                    self._send_sse({"type": "final", "reply": reply, "strategy": "ultron-core"})
+                    return
+                reply = self._get_chat_agent().chat(message)
+                self._send(200, {"reply": reply, "strategy": "ultron-core"})
+                return
+            if self.path == "/feedback":
+                rating = int(payload.get("rating", 0))
+                strategy = str(payload.get("strategy", ""))[:120]
+                if rating < 1 or rating > 5:
+                    self._send(400, {"error": "rating deve estar entre 1 e 5"})
+                    return
+                self.core.event("chat.feedback", {"rating": rating, "strategy": strategy})
+                self._send(200, {"status": "recorded"})
+                return
             if self.path == "/api/memory/sync":
                 result = self.core.sync_memories(payload.get("installation_id", ""), payload.get("memories", []), replace=bool(payload.get("replace", False)))
                 self._send(200, result)
