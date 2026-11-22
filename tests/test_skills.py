@@ -17,14 +17,11 @@ class SkillTests(unittest.TestCase):
         self.assertIn("branch/PR", result["response"])
         self.assertEqual(result["model"]["intent"], "improve")
 
-    def test_explicit_natural_language_evolution_dispatches_worker(self):
-        with patch(
-            "backend.skills.dispatch_evolution_workflow",
-            return_value={"dispatched": True, "workflow": "recursive-evolution.yml"},
-        ) as dispatch:
+    def test_public_skill_router_does_not_dispatch_from_plain_text(self):
+        with patch("backend.skills.dispatch_evolution_workflow") as dispatch:
             response = run_intent_skill("ULTRON, evolua agora o próprio projeto")
-        self.assertIn("Ciclo de autoevolução enviado", response)
-        dispatch.assert_called_once_with("ULTRON, evolua agora o próprio projeto")
+        self.assertIn("Diagnóstico da autoevolução", response)
+        dispatch.assert_not_called()
 
     def test_recursive_evolution_skill_dispatches_worker(self):
         with patch(
