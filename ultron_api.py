@@ -142,8 +142,9 @@ class UltronAPIHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    if not os.getenv("ULTRON_API_TOKEN"):
-        raise SystemExit("Defina ULTRON_API_TOKEN antes de iniciar a API.")
+    api_token = os.getenv("ULTRON_API_TOKEN", "")
+    if len(api_token) < 32:
+        raise SystemExit("Defina ULTRON_API_TOKEN com pelo menos 32 caracteres aleatórios.")
     host = os.getenv("ULTRON_API_HOST", "0.0.0.0")
     port = int(os.getenv("PORT", os.getenv("ULTRON_API_PORT", "8000")))
     server = ThreadingHTTPServer((host, port), UltronAPIHandler)
