@@ -81,7 +81,7 @@ async function call(name, args = {}, timeout = 1200000) {
   const parsed = parseToolResult(result);
   outputs.set(name, parsed);
   await fs.writeFile(`reports/ghidra-${name}.json`, JSON.stringify(parsed, null, 2), { mode: 0o600 });
-  if (result.isError) throw new Error(`REA tool ${name} returned an error: ${JSON.stringify(parsed).slice(0, 2500)}`);
+  if (result.isError) throw new Error(`REA tool ${name} returned an error; inspect the protected worker report.`);
   return parsed;
 }
 
