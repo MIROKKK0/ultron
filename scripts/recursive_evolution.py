@@ -11,7 +11,8 @@ from pathlib import Path
 import requests
 
 ROOT = Path(__file__).resolve().parents[1]
-ALLOWED = ("ultron.py", "ultron_core.py", "mcp/", "backend/", "tests/", "ios/", "docs/", "skills/", "training/")
+ALLOWED = ("ultron.py", "ultron_core.py", "mcp/", "backend/", "tests/", "ios/", "docs/", "skills/", "training/", "scripts/")
+PROTECTED = {"scripts/recursive_evolution.py", "scripts/agent_eval_frozen.py", "scripts/compare_agent_eval_frozen.py"}
 
 
 def api_chat(messages: list[dict], temperature: float = 0.2) -> str:
@@ -96,7 +97,7 @@ def generate(objective: str) -> None:
     if not patch or len(patch) > 60000:
         raise ValueError("Patch vazio ou maior que 60 KB.")
     paths = re.findall(r"^\+\+\+ b/(.+)$", patch, re.M)
-    if not paths or any(not any(p == allowed or p.startswith(allowed) for allowed in ALLOWED) for p in paths):
+    if not paths or any(p in PROTECTED or not any(p == allowed or p.startswith(allowed) for allowed in ALLOWED) for p in paths):
         raise ValueError("O patch tenta alterar caminhos não permitidos.")
     patch_path = Path("/tmp/ultron-evolution.patch")
     patch_path.write_text(patch, encoding="utf-8")
