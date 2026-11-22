@@ -1,40 +1,41 @@
 # ULTRON — skills e autoevolução segura
 
-## Núcleo leve atual
+## Núcleo atual
 
-- Classificador de intenções próprio, treinado do zero com 225 exemplos em português.
-- Tokenizador próprio de bytes UTF-8, palavras e n-gramas, com 4096 IDs hash.
-- Multinomial Naive Bayes com pesos próprios versionados em `backend/model/intent_model.json`.
-- Inferência na CPU usando apenas a biblioteca padrão do Python; sem downloads de modelos, GPU ou provedores externos.
-- Skills nativas: conversa, ajuda, autoconhecimento, planejamento, cálculo/pesquisa via ferramentas existentes, status, memória protegida, autoavaliação e autoevolução segura.
+- Classificador de intenções próprio, treinado com corpus revisado em português.
+- Tokenizador próprio e inferência leve na CPU.
+- Skills nativas para conversa, planejamento, cálculo, pesquisa, status, memória, autoavaliação e autoconhecimento.
+- Mapa somente leitura do repositório e do histórico Git disponível no checkout, documentado em [PROJECT_AWARENESS.md](PROJECT_AWARENESS.md).
 
-## Limite explícito
+O classificador de intenções não é um LLM generativo geral. A presença de um módulo Transformer ou de um adaptador de provedor não prova que esteja carregado no runtime de produção.
 
-O modelo é um classificador de intenções, não um LLM generativo. Ele aprende a encaminhar pedidos conhecidos para habilidades locais; perguntas abertas continuam limitadas pelo decodificador determinístico. Não deve ser anunciado como equivalente ao ChatGPT ou como inteligência geral.
+## O que o ciclo já faz
 
-## Ciclo de evolução
+1. Mantém um benchmark determinístico em português e um conjunto de testes.
+2. Avalia uma branch candidata contra a versão-base.
+3. Exige ganho mensurável e ausência de regressões nos critérios congelados.
+4. Abre uma PR depois da avaliação, quando acionado pelo fluxo autorizado.
+5. Marca PRs com `ultron-eligible-for-promotion` somente quando os gates passam e os arquivos alterados estão na lista de baixo risco; outros caminhos recebem `ultron-human-review-required`.
+6. O merge e o deploy continuam separados da aprovação técnica.
 
-1. Medir a qualidade em conjunto de validação fixo.
-2. Revisar exemplos novos antes de adicioná-los ao corpus.
-3. Treinar pesos novamente com `python scripts/train_intent_model.py`.
-4. Verificar reprodutibilidade com `python scripts/train_intent_model.py --check`.
-5. Executar toda a suíte de testes e medir latência/RAM.
-6. Abrir PR com corpus, pesos, métricas e regressões.
-7. Exigir revisão humana antes de integrar ou implantar.
+## Proteções do gate
 
-Feedback público, páginas da web e mensagens de usuários não são incorporados automaticamente ao corpus. Isso evita envenenamento de dados, prompt injection e gravação de informações pessoais. Skills são funções Python internas; arquivos externos de skills são documentação e nunca são executados como código.
+O avaliador e o comparador são lidos da branch-base e usados tanto para baseline quanto para candidato. O candidato não pode mudar os próprios critérios, o comparador, o workflow de evolução ou as dependências do ambiente de teste. O CI executa os testes novos do candidato e também a suíte da versão-base contra o código candidato, impedindo que uma alteração apague testes antigos para parecer melhor.
 
+Mudanças em autenticação, memória e isolamento de usuários, banco/migrações, dependências, workflows, infraestrutura, assinatura e publicação do IPA exigem revisão humana. O gate mede somente o que os casos cobrem; um score maior não prova inteligência geral nem ausência de bugs desconhecidos.
 
-## Estado real da automação no GitHub
+## O que ainda não faz
 
-O workflow `.github/workflows/model-training.yml` foi configurado para executar
-diariamente às 14:17 UTC (11:17 no horário de Brasília): retreina o classificador
-a partir apenas do corpus revisado, verifica a reprodutibilidade, executa testes,
-mede latência/RSS e publica um relatório de execução por 14 dias. Também pode
-ser iniciado manualmente.
+- Não existe ainda um gerador geral que escreva patches de software por iniciativa própria.
+- Não aprende automaticamente com conversas privadas nem altera pesos do Transformer a partir de feedback.
+- O endpoint de feedback informa explicitamente que não é usado para treino do modelo; a calibração permitida é limitada à prioridade de estratégias.
+- Não aprova nem faz merge/deploy irrestrito para produção.
+- Não consegue afirmar que o código no servidor ou no IPA é o mesmo checkout sem consultar o deploy/versão correspondente.
 
-A automação não lê conversas privadas, não adiciona dados automaticamente,
-não modifica o código de produção e não faz merge ou deploy. Agendamento do
-GitHub Actions passa a executar quando o workflow estiver na branch padrão do
-repositório; enquanto estiver apenas nesta PR, a execução pode ser disparada
-manualmente.
+## Treino agendado
+
+O workflow `.github/workflows/model-training.yml` retreina apenas o classificador de intenções a partir do corpus revisado. Ele não treina um LLM geral. O cron definido é diário às 14:17 UTC (11:17 em Brasília), mas o agendamento do GitHub Actions só é executado na branch padrão. Como a arquitetura cognitiva ainda está em uma branch diferente de `main`, esse cron não deve ser considerado ativo até a integração na branch padrão.
+
+## Próxima etapa de evolução
+
+Conectar um agente de programação como proponente opcional (nunca como autoridade), capaz de gerar hipóteses e patches pequenos. ULTRON deve manter o contexto, a política de segurança, os benchmarks, a decisão de promoção e o registro de experimentos. O ciclo recomendado é: observar falha → criar teste → propor uma alteração isolada → executar baseline e candidato com a mesma régua → manter ou descartar → registrar o resultado → abrir PR.
