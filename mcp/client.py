@@ -142,11 +142,16 @@ class MCPClient:
     def close(self) -> None:
         if self.session_id:
             try:
-                self.session.delete(
+                response = self.session.delete(
                     self.endpoint,
                     headers=self._headers(),
                     timeout=self.timeout,
                 )
+                if response.status_code not in (200, 202, 204, 404, 405):
+                    response.raise_for_status()
+            except requests.RequestException:
+                # Session termination is optional in MCP; preserve the tool result.
+                pass
             finally:
                 self.session_id = None
         self.session.close()
