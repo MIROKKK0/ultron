@@ -66,11 +66,11 @@ jobs:
       - name: Start disposable Chromium container
         run: |
           docker run --detach --rm --name ultron-cdp-smoke \
-            --publish 127.0.0.1:9222:9222 \
+            --network host \
             --init --shm-size=1g --memory=2g --cpus=2 --pids-limit=512 \
             --user pwuser --security-opt seccomp=scripts/playwright-seccomp.json \
             mcr.microsoft.com/playwright:v1.64.1-noble \
-            bash -lc 'CHROME="$(find /ms-playwright -type f -name chrome -perm -111 | head -n 1)"; test -x "$CHROME"; exec "$CHROME" --headless=new --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --remote-allow-origins=http://127.0.0.1:9222,http://localhost:9222 --user-data-dir=/tmp/ultron-rea-cdp --no-first-run --no-default-browser-check --disable-background-networking --disable-extensions --disable-sync --disable-dev-shm-usage about:blank'
+            bash -lc 'CHROME="$(find /ms-playwright -type f -name chrome -perm -111 | head -n 1)"; test -x "$CHROME"; exec "$CHROME" --headless=new --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --remote-allow-origins=http://127.0.0.1:9222,http://localhost:9222 --user-data-dir=/tmp/ultron-rea-cdp --no-first-run --no-default-browser-check --disable-background-networking --disable-extensions --disable-sync --disable-dev-shm-usage about:blank'
           for attempt in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:9222/json/version >/dev/null; then exit 0; fi
             sleep 1
@@ -231,11 +231,11 @@ jobs:
         if: ${{ steps.job_type.outputs.target_type == 'site' }}
         run: |
           docker run --detach --rm --name ultron-cdp-worker \
-            --publish 127.0.0.1:9222:9222 \
+            --network host \
             --init --shm-size=1g --memory=2g --cpus=2 --pids-limit=512 \
             --user pwuser --security-opt seccomp=scripts/playwright-seccomp.json \
             mcr.microsoft.com/playwright:v1.64.1-noble \
-            bash -lc 'CHROME="$(find /ms-playwright -type f -name chrome -perm -111 | head -n 1)"; test -x "$CHROME"; exec "$CHROME" --headless=new --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --remote-allow-origins=http://127.0.0.1:9222,http://localhost:9222 --user-data-dir=/tmp/ultron-rea-cdp --no-first-run --no-default-browser-check --disable-background-networking --disable-extensions --disable-sync --disable-dev-shm-usage about:blank'
+            bash -lc 'CHROME="$(find /ms-playwright -type f -name chrome -perm -111 | head -n 1)"; test -x "$CHROME"; exec "$CHROME" --headless=new --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --remote-allow-origins=http://127.0.0.1:9222,http://localhost:9222 --user-data-dir=/tmp/ultron-rea-cdp --no-first-run --no-default-browser-check --disable-background-networking --disable-extensions --disable-sync --disable-dev-shm-usage about:blank'
           for attempt in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:9222/json/version >/dev/null; then exit 0; fi
             sleep 1
