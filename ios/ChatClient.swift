@@ -365,6 +365,16 @@ struct ChatClient {
         )
     }
 
+    func analyzeREAIPA(filePath: String, serverURL: String) async throws -> Data {
+        let body = try JSONSerialization.data(withJSONObject: ["file_path": filePath])
+        return try await authenticatedData(
+            path: "/v2/reverse-engineering/ipa/analyze",
+            method: "POST",
+            serverURL: serverURL,
+            body: body
+        )
+    }
+
     func callREATool(_ name: String, arguments: Data, serverURL: String) async throws -> Data {
         guard name.range(of: "^[A-Za-z0-9_.-]{1,128}$", options: .regularExpression) != nil else {
             throw ChatClientError.invalidResponse
