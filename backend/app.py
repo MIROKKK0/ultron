@@ -1321,7 +1321,11 @@ def self_knowledge() -> dict[str, Any]:
         "external_ai_tokens_required": False,
         "auth_configured": bool(os.getenv("ULTRON_API_TOKEN")),
     }
-    return {"identity": SELF_MODEL.public_dict(), "runtime": health}
+    return {
+        "identity": SELF_MODEL.public_dict(),
+        "runtime": health,
+        "project_awareness": build_project_awareness(),
+    }
 
 
 @app.get("/project/awareness", dependencies=[Depends(require_api_token)])
