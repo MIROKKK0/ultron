@@ -14,6 +14,8 @@ class ProjectAwarenessTests(unittest.TestCase):
             root = Path(temporary)
             (root / "backend").mkdir()
             (root / "backend" / "app.py").write_text("app = True\n", encoding="utf-8")
+            (root / ".ultron" / "skills").mkdir(parents=True)
+            (root / ".ultron" / "skills" / "README.md").write_text("skills\n", encoding="utf-8")
             (root / ".github" / "workflows").mkdir(parents=True)
             (root / ".github" / "workflows" / "model-training.yml").write_text(
                 "on:\n  schedule:\n    - cron: \"17 14 * * *\"\n",
@@ -24,6 +26,7 @@ class ProjectAwarenessTests(unittest.TestCase):
             report = build_project_awareness(root)
 
             self.assertIn("backend/app.py", report["inventory"]["tracked_source_paths"])
+            self.assertIn(".ultron/skills/README.md", report["inventory"]["tracked_source_paths"])
             self.assertNotIn(".env", report["inventory"]["tracked_source_paths"])
             self.assertEqual(report["inventory"]["counts"]["github_workflows"], 1)
             self.assertEqual(
