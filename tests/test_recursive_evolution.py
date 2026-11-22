@@ -48,6 +48,16 @@ class RecursiveEvolutionTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             MODULE.validate_patch(binary)
 
+    def test_patch_rejects_symlinks_and_submodules(self):
+        for mode in ("120000", "160000"):
+            diff = (
+                "diff --git a/backend/link.py b/backend/link.py\\n"
+                f"new file mode {mode}\\n"
+                "--- /dev/null\\n+++ b/backend/link.py\\n"
+            )
+            with self.subTest(mode=mode), self.assertRaises(RuntimeError):
+                MODULE.validate_patch(diff)
+
     def test_patch_limits_number_of_files(self):
         diff = "".join(
             f"diff --git a/backend/file{i}.py b/backend/file{i}.py\n"
