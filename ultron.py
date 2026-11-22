@@ -24,7 +24,7 @@ OPENAI_API_KEY = os.getenv("ULTRON_LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
 OPENAI_BASE_URL = os.getenv("ULTRON_LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 MODEL = os.getenv("ULTRON_LLM_MODEL") or os.getenv("ULTRON_MODEL", "gpt-4o-mini")
 DATA_DIR = Path(os.getenv("ULTRON_DATA_DIR", str(Path.home() / ".ultron")))
-DATA_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 MEMORY_DB = DATA_DIR / "memory.db"
 SYSTEM_PROMPT_FILE = DATA_DIR / "system_prompt.txt"
 
