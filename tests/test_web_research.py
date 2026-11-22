@@ -26,6 +26,29 @@ class WebResearchTests(unittest.TestCase):
         self.assertEqual(result["results"][0]["url"], "https://www.youtube.com/watch?v=abc123")
         self.assertIn("YouTube", result["summary"])
 
+    def test_tiktok_video_request_uses_tiktok_results(self):
+        def videos(query, **kwargs):
+            return [
+                {
+                    "title": "Agente de IA que melhora o próprio código",
+                    "content": "https://www.tiktok.com/@example/video/123456789",
+                    "description": "Demonstração de um projeto de autoevolução de software.",
+                    "duration": "00:45",
+                    "publisher": "TikTok",
+                },
+                {
+                    "title": "AI coding agent",
+                    "content": "https://www.youtube.com/watch?v=abc123",
+                    "description": "YouTube result should not leak into TikTok-only search.",
+                },
+            ]
+
+        result = search_web("vídeos no TikTok sobre IA que melhora o próprio código", searcher=videos)
+        self.assertEqual(result["search_type"], "video")
+        self.assertEqual(result["count"], 1)
+        self.assertIn("tiktok.com", result["results"][0]["url"])
+        self.assertIn("TikTok", result["summary"])
+
     def test_video_search_excludes_unrelated_wikipedia_and_keeps_youtube_links(self):
         from backend.web_research import search_web
         raw = [
