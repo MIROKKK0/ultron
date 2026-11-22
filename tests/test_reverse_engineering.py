@@ -1,8 +1,10 @@
 import os
+import asyncio
 import unittest
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from backend.reverse_engineering import SiteAnalysisRequest
 
 from backend import reverse_engineering as rea
 
@@ -44,6 +46,21 @@ class ReverseEngineeringConfigTests(unittest.TestCase):
         self.assertTrue("capture_web_screenshot" in rea.READ_ONLY_EXACT)
         self.assertFalse("delete_file".startswith(rea.READ_ONLY_PREFIXES))
         self.assertFalse("execute_command".startswith(rea.READ_ONLY_PREFIXES))
+
+    def test_site_target_rejects_http_and_private_networks(self):
+        with self.assertRaises(HTTPException):
+            rea._validate_public_site_url("http://example.com")
+        with self.assertRaises(HTTPException):
+            rea._validate_public_site_url("https://127.0.0.1")
+        with self.assertRaises(HTTPException):
+            rea._validate_public_site_url("https://localhost")
+
+    def test_site_analysis_requires_explicit_authorization(self):
+        with self.assertRaises(HTTPException) as raised:
+            asyncio.run(rea.rea_start_site_analysis(
+                SiteAnalysisRequest(url="https://example.com", authorized=False)
+            ))
+        self.assertEqual(raised.exception.status_code, 403)
 
 
 if __name__ == "__main__":
