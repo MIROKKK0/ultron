@@ -4,6 +4,7 @@ from __future__ import annotations
 from backend.agent_core import SELF_MODEL, improvement_proposal, plan_task
 from backend.intent_model import predict_intent, resolve_intent, model_status
 from backend.project_awareness import build_project_awareness
+from backend.evolution_dispatch import dispatch_evolution_workflow
 
 SKILLS = {
     "conversation": {"title": "Conversa", "intents": ["greeting", "thanks"], "risk": "low"},
@@ -14,6 +15,7 @@ SKILLS = {
     "memory": {"title": "Memória protegida", "intents": ["remember"], "risk": "medium"},
     "self_review": {"title": "Autoavaliação", "intents": ["improve"], "risk": "low"},
     "safe_evolution": {"title": "Autoevolução segura", "intents": ["improve"], "risk": "review_required"},
+    "recursive_evolution": {"title": "Autoevolução recursiva", "intents": ["improve"], "risk": "github_actions_dispatch"},
     "iphone_actions": {"title": "Ações seguras no iPhone", "intents": ["user_invoked_shortcut"], "risk": "permission_required"},
 }
 
@@ -85,6 +87,22 @@ def run_intent_skill(message: str) -> str | None:
 def run_named_skill(name: str, input_text: str) -> dict:
     if name not in SKILLS:
         raise ValueError("Habilidade desconhecida.")
+    if name == "recursive_evolution":
+        try:
+            result = dispatch_evolution_workflow(input_text)
+            return {
+                "skill": name,
+                "response": "Ciclo de autoevolução enviado ao GitHub Actions. O worker vai pesquisar fontes públicas, inspecionar o checkout, propor uma mudança, executar testes e fazer uma revisão crítica antes de abrir/mesclar no ramo de desenvolvimento.",
+                "execution": result,
+                "model": predict_intent(input_text),
+            }
+        except (RuntimeError, ValueError) as exc:
+            return {
+                "skill": name,
+                "response": str(exc),
+                "execution": {"dispatched": False},
+                "model": predict_intent(input_text),
+            }
     if name == "iphone_actions":
         return {
             "skill": name,
