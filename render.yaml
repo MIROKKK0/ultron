@@ -31,6 +31,6 @@ services:
       - key: ULTRON_GITHUB_REPO
         value: MIROKKK0/ultron
       - key: ULTRON_GITHUB_REF
-        value: main
+        value: feat/ultron-core-assistant
       - key: ULTRON_WORKER_CALLBACK_TOKEN
         sync: false
