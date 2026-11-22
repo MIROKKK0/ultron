@@ -77,7 +77,7 @@ def run_intent_skill(message: str) -> str | None:
             f"benchmark congelado={'sim' if evolution['benchmark_available'] else 'não'}; "
             f"gate de regressões={'sim' if evolution['regression_and_improvement_gate_available'] else 'não'}; "
             f"workflow de avaliação de branches={'sim' if evolution['candidate_branch_evaluation_available'] else 'não'}; "
-            f"geração autônoma de patches={'sim' if evolution['autonomous_code_candidate_generation'] else 'não'}; "
+            f"worker de geração de patches presente={'sim' if evolution.get('recursive_code_evolution_worker') else 'não'}; "
             f"pesquisa web para evolução={'sim' if evolution.get('web_research_for_evolution') else 'não'}; "
             f"revisão crítica={'sim' if evolution.get('critic_review_for_candidates') else 'não'}; "
             f"promoção no ramo de desenvolvimento={'sim' if evolution.get('automatic_merge_to_development') else 'não'}; "
