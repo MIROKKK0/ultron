@@ -106,8 +106,10 @@ def research() -> list[dict[str, Any]]:
 
     queries = [
         "self evolving coding agents repository context code modification benchmark sandbox research",
+        "GitHub open source self-improving coding agents repository autonomous software engineering",
         "OpenHands software agent SDK isolated workspace tools agent evaluation GitHub",
         "YouTube autonomous self coding AI agent recursive self improvement coding agent",
+        "vídeos no TikTok sobre agente de IA que modifica o próprio código e evolui software",
         "Darwin Godel Machine open ended self improving coding agents archive evaluation",
     ]
     results: list[dict[str, Any]] = []
