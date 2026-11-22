@@ -192,7 +192,7 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
             "summary": f"Vídeos do {platform_label} encontrados e ordenados por relevância:\n" + summary,
         }
 
-    fallback_backends = ("duckduckgo", "brave", "mojeek", "startpage", "yahoo", "wikipedia", "grokipedia")
+    fallback_backends = ("duckduckgo", "google", "brave", "mojeek", "startpage", "yahoo", "wikipedia", "grokipedia")
     if searcher is None:
         from ddgs import DDGS
         from ddgs.engines import ENGINES
