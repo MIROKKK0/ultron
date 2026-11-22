@@ -110,8 +110,12 @@ jobs:
 
       - name: Analyze exported JavaScript application
         run: |
-          rea analyze-javascript-application "$GITHUB_WORKSPACE/analysis/exported-scripts/files" \
-            --json > "$GITHUB_WORKSPACE/analysis/javascript-analysis.json"
+          SCRIPT_ROOT="$GITHUB_WORKSPACE/analysis/exported-scripts/files"
+          if [ -d "$SCRIPT_ROOT" ] && find "$SCRIPT_ROOT" -type f -print -quit | grep -q .; then
+            rea analyze-javascript-application "$SCRIPT_ROOT" --json > "$GITHUB_WORKSPACE/analysis/javascript-analysis.json"
+          else
+            echo '{"status":"no_script_files_exported","note":"DOM and browser evidence are still available."}' > "$GITHUB_WORKSPACE/analysis/javascript-analysis.json"
+          fi
 
       - name: Write analysis manifest
         if: always()
