@@ -61,6 +61,8 @@ jobs:
         with:
           node-version: "24.22.1"
       - name: Install REA and Playwright client
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
         run: |
           npm install --global rea-agents@6.10.1
           npm install --no-save --no-package-lock playwright@1.64.1
