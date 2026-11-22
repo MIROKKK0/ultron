@@ -18,6 +18,10 @@ struct ReverseEngineeringView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var mode = "SITE"
     @State private var targetURL = ""
+    @State private var siteAuthorized = false
+    @State private var siteAnalysisID = ""
+    @State private var siteRunURL = ""
+    @State private var siteStatus = ""
     @State private var selectedIPA: URL?
     @State private var showImporter = false
     @State private var tools: [REATool] = []
@@ -74,6 +78,19 @@ struct ReverseEngineeringView: View {
                             .keyboardType(.URL)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                        Toggle("Tenho autorização para analisar este site", isOn: $siteAuthorized)
+                        Button("Analisar site com REA", systemImage: "globe", action: startSiteAnalysis)
+                            .disabled(busy || !siteAuthorized || targetURL.isEmpty)
+                        if !siteAnalysisID.isEmpty {
+                            Button("Atualizar status da análise", systemImage: "arrow.clockwise", action: refreshSiteStatus)
+                                .disabled(busy)
+                            Text("Status: \(siteStatus.isEmpty ? "enviado" : siteStatus)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let runURL = URL(string: siteRunURL), !siteRunURL.isEmpty {
+                            Link("Abrir execução e baixar evidências", destination: runURL)
+                        }
                     } else {
                         Button {
                             showImporter = true
@@ -197,6 +214,46 @@ struct ReverseEngineeringView: View {
                 prefillArguments()
             } catch {
                 output = "Falha ao conectar ao REA: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func startSiteAnalysis() {
+        guard siteAuthorized else { return }
+        busy = true
+        output = "ULTRON está enviando o site para um worker isolado do REA…"
+        Task {
+            defer { busy = false }
+            do {
+                let data = try await client.startREASiteAnalysis(
+                    url: targetURL,
+                    authorized: siteAuthorized,
+                    serverURL: serverURL
+                )
+                let result = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                siteAnalysisID = result?["analysis_id"] as? String ?? ""
+                siteRunURL = result?["run_url"] as? String ?? ""
+                siteStatus = result?["status"] as? String ?? "dispatched"
+                output = "Análise de site enviada ao worker temporário. O REA vai abrir o site num Chromium isolado, recolher evidências e analisar os scripts observados. Abra a execução para acompanhar e descarregar o relatório."
+            } catch {
+                output = "Não foi possível iniciar a análise do site: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func refreshSiteStatus() {
+        guard !siteAnalysisID.isEmpty else { return }
+        busy = true
+        Task {
+            defer { busy = false }
+            do {
+                let data = try await client.reaSiteAnalysisStatus(id: siteAnalysisID, serverURL: serverURL)
+                let result = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                siteStatus = result?["conclusion"] as? String ?? result?["status"] as? String ?? "unknown"
+                siteRunURL = result?["run_url"] as? String ?? siteRunURL
+                output = "Status da análise REA: \(siteStatus). O artefato fica disponível na execução do GitHub Actions quando o job terminar."
+            } catch {
+                output = "Falha ao consultar o status: \(error.localizedDescription)"
             }
         }
     }
