@@ -1341,7 +1341,15 @@ def reflect(request: ReviewRequest) -> dict[str, Any]:
 
 @app.post("/improvement-proposals", dependencies=[Depends(require_api_token)])
 def propose_improvement(request: ImprovementRequest) -> dict[str, Any]:
-    return improvement_proposal(request.problem)
+    proposal = improvement_proposal(request.problem)
+    proposal["project_awareness"] = build_project_awareness()
+    proposal["promotion_policy"] = {
+        "candidate_evaluation": "frozen_benchmark_and_full_regression_suite",
+        "automatic_merge": False,
+        "automatic_deployment": False,
+        "human_review_required": True,
+    }
+    return proposal
 
 
 @app.post("/agent/plan", dependencies=[Depends(require_api_token)])
