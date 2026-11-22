@@ -137,6 +137,8 @@ jobs:
           npm install --no-save --no-package-lock @modelcontextprotocol/client@2.3.1
       - name: Install REA workflow skill for the headless worker
         run: rea setup --skill --yes --json
+      - name: Test safe environment forwarding to REA MCP
+        run: node --test scripts/rea-mcp-env.test.mjs
       - name: Install Zig Mach-O cross-linker
         uses: mlugg/setup-zig@v2
         with:
