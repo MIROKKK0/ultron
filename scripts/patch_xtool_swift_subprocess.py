@@ -40,7 +40,7 @@ root = Path(sys.argv[1])
 
 patch_file(
     root,
-    ".build/checkouts/swift-subprocess/Sources/Subprocess/Input+Foundation.swift",
+    ".build/checkouts/swift-subprocess/Sources/Subprocess/SubprocessFoundation/Input+Foundation.swift",
     "return try await self.write(data.bytes, to: diskIO, for: processIdentifier)",
     "return try await self.write(Array(data), to: diskIO, for: processIdentifier)",
     "swift-subprocess Data input",
