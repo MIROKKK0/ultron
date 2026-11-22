@@ -113,8 +113,8 @@ try {
     rawAvailability && typeof rawAvailability === "object" ?
       Object.entries(rawAvailability).map(([name, value]) => ({ name, ...(typeof value === "object" ? value : { available: Boolean(value) }) })) : [];
   const unavailable = name => {
-    const row = toolAvailability.find(item => item.name === name || item.tool === name || item.operation === name);
-    return row && (row.available === false || row.state === "unavailable" || row.status === "unavailable") ? row.reason || row.message || "provider reports unavailable" : null;
+    const row = toolAvailability.find(item => item.name === name || item.name?.split(".").pop() === name || item.tool === name || item.operation === name);
+    return row && (row.available === false || row.available === "unavailable" || row.state === "unavailable" || row.status === "unavailable") ? row.reason || row.message || "provider reports unavailable" : null;
   };
   await call("binary_overview", argumentsFor(toolMap.get("binary_overview")), 1200000);
   const procedures = await call("list_procedures", argumentsFor(toolMap.get("list_procedures")), 600000);
