@@ -38,6 +38,12 @@ class ReverseEngineeringConfigTests(unittest.TestCase):
         self.assertIsNone(rea.TOOL_NAME.fullmatch("../upload"))
         self.assertIsNone(rea.TOOL_NAME.fullmatch("x" * 129))
 
+    def test_read_only_tool_policy_blocks_mutating_tools(self):
+        self.assertTrue("inspect_web_page".startswith(rea.READ_ONLY_PREFIXES))
+        self.assertTrue("capture_web_screenshot" in rea.READ_ONLY_EXACT)
+        self.assertFalse("delete_file".startswith(rea.READ_ONLY_PREFIXES))
+        self.assertFalse("execute_command".startswith(rea.READ_ONLY_PREFIXES))
+
 
 if __name__ == "__main__":
     unittest.main()
