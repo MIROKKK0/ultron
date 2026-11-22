@@ -43,7 +43,7 @@ Conectar um agente de programação como proponente opcional (nunca como autorid
 ## Autoevolução recursiva do código
 
 O worker `scripts/recursive_evolution.py` acrescenta um ciclo real de engenharia de software:
-- inspeciona o mapa do projeto, histórico e skills;
+- inspeciona o mapa do projeto, o próprio código do worker, histórico Git, PRs incorporadas, execuções de CI e skills;
 - pesquisa fontes públicas e vídeos técnicos com a ferramenta web já usada pelo ULTRON;
 - escolhe uma melhoria e gera um patch unified diff;
 - aplica o patch apenas num checkout efêmero e numa branch candidata;
