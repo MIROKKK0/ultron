@@ -17,7 +17,7 @@ This avoids installing Chromium or Ghidra in the small Render API process.
 
 REA's CDP inspector is passive: it attaches to an existing Chrome-family page and records DOM/resource/script/runtime evidence. It does not provide general browser control. Playwright creates the disposable browser session and navigates to the target; REA then inspects that session. The worker uses a fresh profile with no personal cookies or logged-in browser state. CDP stays bound to `127.0.0.1:9222`; it is never published as a public service.
 
-Ghidra is the native-analysis provider selected for this project because it is open-source and can run headlessly. REA's current setup guide documents Ghidra 12.1.x with a full JDK 21 installation and a `procps`-compatible `ps` on Linux. The workflow pins Ghidra 12.1.4 and verifies the official ZIP SHA-256 before use. Ghidra's headless analyzer is designed for automated import, analysis and scripts.
+Ghidra is the native-analysis provider selected for this project because it is open-source and can run headlessly. REA's current setup guide documents Ghidra 12.1.x with a full JDK 21 installation and a `procps`-compatible `ps` on Linux. The workflow pins Ghidra 12.2 and verifies the official ZIP SHA-256 before use. Ghidra's headless analyzer is designed for automated import, analysis and scripts.
 
 Hopper and IDA remain optional alternatives, not prerequisites. Hopper is commercial and IDA requires its own license/provider setup. They are not installed by this workflow.
 
@@ -44,7 +44,7 @@ In `MIROKKK0/ultron` → Settings → Secrets and variables → Actions, add:
 
 The workflow dispatch payload contains only a random job ID. The actual target URL or uploaded IPA ID is fetched from ULTRON through the callback-authenticated endpoint, so it is not copied into the public workflow-dispatch input.
 
-**Release gate:** GitHub only accepts `workflow_dispatch` for a workflow file present on the repository's default branch. PR #73 is now merged into `main`, registering the worker workflow and scripts. Render dispatches the worker using `ULTRON_GITHUB_REF=feat/ultron-core-assistant`, which is the selected deployment branch containing the ULTRON API routes and worker code.
+**Release gate:** GitHub only accepts `workflow_dispatch` for a workflow file present on the repository's default branch. PR #73 is merged into `main`, registering the worker workflow. PR #75 updates that default-branch registration to the current Ghidra 12.2/JDK 25 contract. Render dispatches the worker using `ULTRON_GITHUB_REF=feat/ultron-core-assistant`, which contains the ULTRON API routes and worker code.
 
 ## iPhone workflow
 
