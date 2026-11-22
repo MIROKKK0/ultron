@@ -155,7 +155,7 @@ jobs:
           doctor_status=$?
           set -e
           cat reports/ghidra-doctor.json
-          exit "$doctor_status"
+          if [ "$doctor_status" -ne 0 ]; then exit "$doctor_status"; fi
           timeout 3600 node scripts/rea-ghidra-session.mjs "$RUNNER_TEMP/fixture.o"
           python - <<'PY'
           import json
