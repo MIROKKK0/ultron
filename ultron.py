@@ -14,6 +14,7 @@ from pathlib import Path
 
 from openai import OpenAI
 from dotenv import load_dotenv
+from ultron_core import UltronCore, SPECIALISTS
 
 load_dotenv()
 
@@ -121,7 +122,8 @@ class Ultron:
 
         self.client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
         self.memory = MemoryManager()
-        self.system_prompt = self._load_system_prompt()
+        self.core = UltronCore()
+        self.system_prompt = self._load_system_prompt() + "\n\nNÚCLEO ULTRON: identidade e memória independentes do modelo. Seis especialistas: " + json.dumps(SPECIALISTS, ensure_ascii=False)
         self.tools = self._define_tools()
 
     def _load_system_prompt(self) -> str:
@@ -223,7 +225,25 @@ class Ultron:
                     }
                 }
             }
-        ]
+        ],
+            {
+                "type": "function",
+                "function": {
+                    "name": "ultron_core",
+                    "description": "Acessa o núcleo persistente ULTRON: memória, grafo neural, tarefas, especialistas, skills, servidores MCP e propostas de evolução.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "action": {"type":"string","enum":["remember","recall","graph","specialists","task","skills","save_skill","mcp_list","mcp_register","evolution_propose","health"]},
+                            "content":{"type":"string"}, "query":{"type":"string"}, "kind":{"type":"string"},
+                            "specialist":{"type":"string"}, "name":{"type":"string"}, "description":{"type":"string"},
+                            "procedure":{"type":"string"}, "evidence":{"type":"string"}, "endpoint":{"type":"string"},
+                            "title":{"type":"string"}, "rationale":{"type":"string"}, "patch":{"type":"string"}
+                        },
+                        "required":["action"]
+                    }
+                }
+            }
 
     def _execute_tool(self, name: str, arguments: Dict) -> str:
         try:
@@ -254,6 +274,24 @@ class Ultron:
                 )
             elif name == "self_improve":
                 return self._self_improve(arguments.get("feedback", ""))
+            elif name == "ultron_core":
+                action = arguments.get("action")
+                if action == "remember": return self.core.remember(arguments.get("content",""), arguments.get("kind","fact"))
+                if action == "recall": return json.dumps(self.core.recall(arguments.get("query","")), ensure_ascii=False)
+                if action == "graph": return json.dumps(self.core.memory_graph(), ensure_ascii=False)
+                if action == "specialists": return json.dumps(self.core.specialists(), ensure_ascii=False)
+                if action == "task": return self.core.create_task(arguments.get("content",""), arguments.get("specialist","architect"))
+                if action == "skills": return json.dumps(self.core.list_skills(), ensure_ascii=False)
+                if action == "save_skill":
+                    self.core.save_skill(arguments.get("name",""), arguments.get("description",""), arguments.get("procedure",""), arguments.get("evidence",""))
+                    return "Skill persistida."
+                if action == "mcp_list": return json.dumps(self.core.list_mcp_servers(), ensure_ascii=False)
+                if action == "mcp_register":
+                    self.core.register_mcp_server(arguments.get("name",""), arguments.get("endpoint",""))
+                    return "Servidor MCP registrado; conexão ainda precisa ser validada."
+                if action == "evolution_propose": return self.core.propose_evolution(arguments.get("title",""), arguments.get("rationale",""), arguments.get("patch",""))
+                if action == "health": return json.dumps(self.core.health(), ensure_ascii=False)
+                return "Ação do núcleo não reconhecida."
             else:
                 return f"Ferramenta desconhecida: {name}"
         except Exception as e:
