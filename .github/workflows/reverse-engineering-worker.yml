@@ -186,17 +186,6 @@ jobs:
             printf "Worker ended before evidence summary could be generated.\n" > reports/summary.txt
           fi
 
-      - name: Upload full evidence bundle
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ultron-rea-evidence-${{ inputs.job_id }}
-          path: |
-            reports/
-            work/ipa-manifest.json
-          retention-days: 14
-          if-no-files-found: warn
-
       - name: Return result to ULTRON
         if: always()
         env:
@@ -212,9 +201,9 @@ jobs:
           payload = {
               "status": os.environ["WORKER_STATUS"],
               "result_summary": summary,
-              "artifact_name": "ultron-rea-evidence-" + os.environ["JOB_ID"],
+              "artifact_name": "private-ultron-database-report",
               "run_url": os.environ["RUN_URL"],
-              "error": "" if os.environ["WORKER_STATUS"] == "succeeded" else "Worker terminou com falha; consulte os logs e as limitações no artefato."
+              "error": "" if os.environ["WORKER_STATUS"] == "succeeded" else "Worker terminou com falha; consulte o status e os logs técnicos."
           }
           json.dump(payload, open("reports/callback.json", "w"), ensure_ascii=False)
           PY
