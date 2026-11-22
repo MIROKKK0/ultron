@@ -37,3 +37,18 @@ O que ainda não existe nesta versão:
 - prova de que o Transformer generativo experimental esteja integrado ao chat de produção.
 
 A próxima etapa de autoevolução deve usar o mapa do projeto como contexto, propor uma hipótese por vez, criar primeiro um teste reproduzível, executar a mudança em sandbox e comparar o mesmo conjunto de avaliação. Mudanças em autenticação, isolamento de memória, privacidade, dependências, CI, infraestrutura, migrações de banco, assinatura e publicação do IPA ficam fora de promoção autônoma.
+
+## Evolução recursiva
+
+O snapshot agora detecta a presença do worker de evolução, endpoint de disparo e skill correspondente. Quando presentes, informa se o projeto pode pesquisar a web, gerar patches, fazer revisão crítica e promover candidatos no ramo de desenvolvimento.
+
+O endpoint `POST /evolution/dispatch` dispara o workflow no branch padrão do GitHub. O worker faz checkout de `feat/ultron-core-assistant`, pesquisa documentação/projetos/vídeos, lê o estado do repositório, gera uma alteração e executa testes. Uma segunda etapa de crítica avalia o diff e o relatório. O CI do PR compara o candidato com o baseline.
+
+O autoconhecimento distingue:
+- capacidade presente no código;
+- worker configurado e disparável;
+- candidato realmente testado;
+- candidato incorporado ao ramo de desenvolvimento;
+- versão implantada no Render e IPA instalada.
+
+Um arquivo ou skill presente não significa que o worker esteja configurado ou executando. A ausência das secrets do modelo ou do token GitHub deve aparecer como configuração pendente, nunca como sucesso.
