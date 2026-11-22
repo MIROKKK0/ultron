@@ -56,6 +56,10 @@ elif kind == "ipa":
     doctor = reports / "ghidra-doctor.json"
     if doctor.exists():
         parts.append("\nGhidra provider diagnostics:\n" + compact_json(doctor, 4000))
+    for name in ("ghidra-binary-session-before-open.json", "ghidra-binary-session-after-open.json"):
+        p = reports / name
+        if p.exists():
+            parts.append("\n" + name + ": " + compact_json(p, 3000))
     for p in sorted(reports.glob("ghidra-function-*.json")):
         parts.append(f"\n{p.name}: {compact_json(p, 6500)}")
     for name in ("ghidra-binary_overview.json", "ghidra-list_procedures.json", "ghidra-get_objc_classes.json", "ghidra-get_objc_protocols.json", "ghidra-analyze_swift_types.json", "ghidra-inspect_native_dispatch_metadata.json"):
