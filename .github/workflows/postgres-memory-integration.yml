@@ -1,0 +1,57 @@
+name: ULTRON PostgreSQL memory integration
+
+on:
+  pull_request:
+    branches:
+      - "fix/postgres-memory-retrieval-null-parameter-2026-11-19"
+      - "feat/ultron-core-assistant"
+    paths:
+      - "backend/memory_system.py"
+      - "backend/local_vector_index.py"
+      - "tests/postgres_memory_integration.py"
+      - ".github/workflows/postgres-memory-integration.yml"
+      - "requirements.txt"
+  push:
+    branches:
+      - "test/postgres-memory-integration-ci-2026-11-19"
+      - "feat/ultron-core-assistant"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-memory:
+    name: PostgreSQL ${{ matrix.postgres-version }} memory integration
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-version: ["16", "18"]
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-version }}
+        env:
+          POSTGRES_USER: ultron
+          POSTGRES_PASSWORD: ultron_test_only
+          POSTGRES_DB: ultron_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ultron -d ultron_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      ULTRON_TEST_DATABASE_URL: postgresql://ultron:ultron_test_only@localhost:5432/ultron_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install project dependencies
+        run: pip install -r requirements.txt
+      - name: Run real PostgreSQL memory integration
+        run: python -m tests.postgres_memory_integration

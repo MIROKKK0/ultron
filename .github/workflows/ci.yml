@@ -1,0 +1,38 @@
+name: ULTRON CI
+
+on:
+  push:
+    branches: ["main", "ultron/**"]
+  pull_request:
+    branches: ["main", "feat/ultron-core-assistant", "integration/ultron-unified-core-2026-11-18"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Verify reproducible ULTRON model
+        run: python scripts/train_intent_model.py --check
+      - name: Compile Python modules
+        run: python -m compileall -q backend scripts
+      - name: Benchmark lightweight intent inference
+        run: python scripts/benchmark_intent_model.py --iterations 1000
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: Run frozen Portuguese agent benchmark
+        run: python scripts/agent_eval.py

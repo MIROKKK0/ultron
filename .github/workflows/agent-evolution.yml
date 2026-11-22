@@ -1,0 +1,171 @@
+name: ULTRON Agent Evolution Gate
+
+on:
+  pull_request:
+    branches:
+      - "feat/ultron-core-assistant"
+    paths:
+      - "backend/agent_core.py"
+      - "backend/project_awareness.py"
+      - "backend/skills.py"
+      - "tests/test_app.py"
+      - "tests/test_project_awareness.py"
+      - "backend/brain.py"
+      - "backend/cognitive_workspace.py"
+      - "backend/evidence_critic.py"
+      - "backend/hierarchical_planner.py"
+      - "backend/tool_runtime.py"
+      - "backend/web_research.py"
+      - "tests/test_agent_evaluation.py"
+      - "tests/test_hierarchical_planner.py"
+      - "tests/test_tool_runtime.py"
+      - "training/**"
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      candidate_branch:
+        description: "Branch experimental a avaliar"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: ultron-evolution-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Select candidate branch
+        id: candidate
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "branch=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ inputs.candidate_branch }}" ]; then
+            echo "branch=${{ inputs.candidate_branch }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "branch=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.candidate.outputs.branch }}
+          path: candidate
+      - name: Checkout baseline
+        uses: actions/checkout@v4
+        with:
+          ref: feat/ultron-core-assistant
+          path: baseline
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install frozen baseline dependencies
+        run: pip install -r baseline/requirements.txt
+      - name: Protect the frozen evaluator and dependency contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          protected=(
+            scripts/agent_eval.py
+            scripts/compare_agent_eval.py
+            .github/workflows/agent-evolution.yml
+            requirements.txt
+          )
+          for path in "${protected[@]}"; do
+            if [ ! -f "candidate/$path" ] || ! cmp -s "baseline/$path" "candidate/$path"; then
+              echo "::error::Candidate changed the frozen evaluation contract: $path"
+              exit 1
+            fi
+          done
+      - name: Run candidate regression suite
+        working-directory: candidate
+        run: python -m unittest discover -s tests -v
+      - name: Run frozen baseline tests against candidate code
+        env:
+          PYTHONPATH: ${{ github.workspace }}/candidate
+        run: python -m unittest discover -s baseline/tests -p 'test_*.py' -v
+      - name: Evaluate baseline with the frozen baseline evaluator
+        run: |
+          ULTRON_SOURCE_ROOT=baseline python baseline/scripts/agent_eval.py --output baseline-evaluation.json || true
+          python -c 'import json; report=json.load(open("baseline-evaluation.json")); assert "score" in report and "checks" in report'
+      - name: Evaluate candidate with the same frozen baseline evaluator
+        run: ULTRON_SOURCE_ROOT=candidate python baseline/scripts/agent_eval.py --output candidate-evaluation.json
+      - name: Compare with the frozen baseline comparator
+        run: python baseline/scripts/compare_agent_eval.py baseline-evaluation.json candidate-evaluation.json
+      - name: Upload comparison report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultron-agent-evolution-report
+          path: |
+            baseline-evaluation.json
+            candidate-evaluation.json
+          if-no-files-found: ignore
+      - name: Mark PR with ULTRON's promotion decision
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner, repo: context.repo.repo,
+              pull_number: context.issue.number, per_page: 100
+            });
+            const safePaths = [
+              /^docs\//,
+              /^tests\//
+            ];
+            const safe = files.length > 0 && files.every(file =>
+              safePaths.some(pattern => pattern.test(file.filename))
+            );
+            const label = safe ? "ultron-eligible-for-promotion" : "ultron-human-review-required";
+            const description = safe
+              ? "Frozen baseline, old tests, candidate tests and regression gate passed; only low-risk paths changed."
+              : "Automated tests and benchmark passed, but the change touches paths requiring human review.";
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner, repo: context.repo.repo,
+                name: label, color: safe ? "0E8A16" : "D93F0B", description
+              });
+            } catch (error) {
+              if (error.status !== 422) throw error;
+            }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number, labels: [label]
+            });
+            core.info("ULTRON promotion decision: " + label);
+      - name: Open PR only after all gates pass
+        if: success() && github.event_name != 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const headBranch = "${{ steps.candidate.outputs.branch }}";
+            const base = "feat/ultron-core-assistant";
+            const existing = await github.rest.pulls.list({
+              owner: context.repo.owner, repo: context.repo.repo,
+              head: context.repo.owner + ":" + headBranch, base, state: "open"
+            });
+            if (existing.data.length) {
+              core.info("PR já existe: " + existing.data[0].html_url);
+              return;
+            }
+            const pr = await github.rest.pulls.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              head: headBranch, base,
+              title: "ULTRON: candidato de autoevolução validado",
+              body: [
+                "## Candidato avaliado automaticamente",
+                "",
+                "A suíte de regressão passou e o benchmark PT-BR melhorou em relação à branch base, sem regressões nos critérios medidos.",
+                "Este PR ainda exige revisão humana; o workflow não faz merge nem deploy.",
+                "",
+                "O relatório completo está no artefato ultron-agent-evolution-report."
+              ].join("\n")
+            });
+            core.info("PR criado: " + pr.data.html_url);

@@ -1,0 +1,92 @@
+name: ULTRON iOS Build
+
+on:
+  push:
+    branches: ["main", "feat/mandatory-fly-brain-core", "feat/ultron-core-assistant", "ultron/**"]
+    paths:
+      - "ios/**"
+      - "project.yml"
+      - ".github/workflows/ios-build.yml"
+  pull_request:
+    branches: ["main", "feat/ultron-core-assistant", "ultron/**", "integration/ultron-unified-core-2026-11-18"]
+    paths:
+      - "ios/**"
+      - "project.yml"
+      - ".github/workflows/ios-build.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  simulator-build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild \
+            -project ULTRON.xcodeproj \
+            -scheme ULTRON \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: Upload simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ULTRON-iOS-Simulator
+          path: build/DerivedData/Build/Products/Debug-iphonesimulator/ULTRON.app
+          if-no-files-found: error
+          retention-days: 7
+
+  device-ipa:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build unsigned app for physical iPhone
+        run: |
+          xcodebuild \
+            -project ULTRON.xcodeproj \
+            -scheme ULTRON \
+            -sdk iphoneos \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DeviceData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+      - name: Package IPA for SideStore signing
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/DeviceData/Build/Products/Release-iphoneos/ULTRON.app build/ipa/Payload/
+          cd build/ipa
+          /usr/bin/zip -qry ULTRON.ipa Payload
+      - name: Upload iPhone IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ULTRON-iPhone-IPA
+          path: build/ipa/ULTRON.ipa
+          if-no-files-found: error
+          retention-days: 7
