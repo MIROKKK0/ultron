@@ -76,8 +76,7 @@ function argumentsFor(tool, seed = {}) {
 }
 async function call(name, args = {}, timeout = 1200000) {
   const result = await client.callTool({ name, arguments: args }, {
-    timeout,
-    resetTimeoutOnProgress: true
+    timeout
   });
   const parsed = parseToolResult(result);
   outputs.set(name, parsed);
