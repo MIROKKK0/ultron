@@ -45,11 +45,13 @@ enum ChatClientError: LocalizedError {
     case invalidServerURL
     case invalidResponse
     case serverError(Int)
+    case missingAPIToken
 
     var errorDescription: String? {
         switch self {
         case .invalidServerURL: return "Configure o endereço HTTPS do servidor."
         case .invalidResponse: return "O servidor enviou uma resposta inválida."
+        case .missingAPIToken: return "Adicione o token privado da API nas configurações do ULTRON."
         case .serverError(let code):
             if code == 404 {
                 return "A rota de chat não existe nesta versão do servidor. Atualize o backend ou confira o endereço configurado."
@@ -63,6 +65,23 @@ enum ChatClientError: LocalizedError {
 }
 
 private struct HealthResponse: Decodable { let status: String }
+private struct MemoryGraphResponse: Decodable {
+    let nodes: [NeuralMemoryNode]
+    let edges: [NeuralMemoryEdge]
+}
+private struct MemorySyncItem: Encodable {
+    let id: String
+    let content: String
+    let kind: String
+    let importance: Int
+    let source: String
+    let created_at: String
+    let updated_at: String
+}
+private struct MemorySyncRequest: Encodable {
+    let installation_id: String
+    let memories: [MemorySyncItem]
+}
 
 struct ChatClient {
     private func endpoint(_ path: String, serverURL: String) -> URL? {
@@ -164,6 +183,61 @@ struct ChatClient {
             }
         }
         throw ChatClientError.invalidResponse
+    }
+
+    private func authenticatedRequest(path: String, serverURL: String) throws -> URLRequest {
+        guard let base = URL(string: serverURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              var components = URLComponents(url: base, resolvingAgainstBaseURL: false),
+              base.scheme?.lowercased() == "https" else {
+            throw ChatClientError.invalidServerURL
+        }
+        components.path = path
+        guard let url = components.url else { throw ChatClientError.invalidServerURL }
+        guard let token = KeychainStore.read("api_token"), !token.isEmpty else {
+            throw ChatClientError.missingAPIToken
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+        return request
+    }
+
+    func fetchMemoryGraph(serverURL: String, installationID: String) async throws -> (nodes: [NeuralMemoryNode], edges: [NeuralMemoryEdge]) {
+        var request = try authenticatedRequest(path: "/api/memory/graph", serverURL: serverURL)
+        guard var components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false) else {
+            throw ChatClientError.invalidServerURL
+        }
+        components.queryItems = [URLQueryItem(name: "installation_id", value: installationID)]
+        request.url = components.url
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw ChatClientError.serverError(http.statusCode) }
+        let graph = try JSONDecoder().decode(MemoryGraphResponse.self, from: data)
+        return (graph.nodes, graph.edges)
+    }
+
+    func syncMemories(_ messages: [ChatMessage], serverURL: String, installationID: String) async throws {
+        let now = ISO8601DateFormatter().string(from: Date())
+        let items = messages.suffix(60).map { message in
+            MemorySyncItem(
+                id: message.id.uuidString,
+                content: String(message.text.prefix(4000)),
+                kind: message.role.rawValue,
+                importance: message.role == .user ? 3 : 2,
+                source: "ios-chat",
+                created_at: now,
+                updated_at: now
+            )
+        }
+        var request = try authenticatedRequest(path: "/api/memory/sync", serverURL: serverURL)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONEncoder().encode(
+            MemorySyncRequest(installation_id: installationID, memories: items)
+        )
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw ChatClientError.serverError(http.statusCode) }
     }
 
     func sendFeedback(_ rating: Int, strategy: String, serverURL: String) async throws {
