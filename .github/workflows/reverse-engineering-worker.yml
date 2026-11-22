@@ -125,6 +125,8 @@ jobs:
           unzip -t "$RUNNER_TEMP/ghidra.zip" >/dev/null
           mkdir -p "$RUNNER_TEMP/ghidra"
           unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          test -x "$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC/support/analyzeHeadless"
+          echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC" >> "$GITHUB_ENV"
           echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC" >> "$GITHUB_ENV"
           echo "GHIDRA_HEADLESS_MAXMEM=3G" >> "$GITHUB_ENV"
           echo "REA_GHIDRA_STARTUP_TIMEOUT_MS=1200000" >> "$GITHUB_ENV"
