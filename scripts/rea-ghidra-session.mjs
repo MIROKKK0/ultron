@@ -34,10 +34,13 @@ function walk(value, visit) {
 function procedureCandidates(value) {
   const found = new Map();
   walk(value, item => {
-    const address = item.address || item.entry || item.entry_address || item.start_address;
-    const name = item.name || item.procedure || item.symbol || item.label;
+    const procedure = item.procedure && typeof item.procedure === "object" ? item.procedure : item;
+    const address = item.address || procedure.address || item.entry || item.entry_address || item.start_address;
+    const name = procedure.name || item.name || procedure.symbol || item.symbol || procedure.label || item.label;
+    const external = procedure.external === true || item.external === true;
+    if (external) return;
     if (typeof address === "string" || typeof name === "string") {
-      const identity = typeof name === "string" && name.length ? name : address;
+      const identity = typeof address === "string" ? address : name;
       if (typeof identity === "string" && identity.length) found.set(identity, {
         procedure: identity,
         address: typeof address === "string" ? address : null,
