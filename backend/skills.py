@@ -81,6 +81,7 @@ def run_intent_skill(message: str) -> str | None:
             f"pesquisa web para evolução={'sim' if evolution.get('web_research_for_evolution') else 'não'}; "
             f"revisão crítica={'sim' if evolution.get('critic_review_for_candidates') else 'não'}; "
             f"promoção no ramo de desenvolvimento={'sim' if evolution.get('automatic_merge_to_development') else 'não'}; "
+            f"disparo configurado={'sim' if evolution.get('server_dispatch_ready') else 'não'}; "
             f"merge em produção={'sim' if evolution['automatic_merge_to_production'] else 'não'}. "
             "O worker pode gerar e testar mudanças em branches isoladas; a promoção ao núcleo de desenvolvimento depende do CI e da revisão crítica.\n"
             + "\n".join(f"- {item}" for item in proposal["plan"])
