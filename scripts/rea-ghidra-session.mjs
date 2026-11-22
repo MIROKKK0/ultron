@@ -14,6 +14,7 @@ const transport = new StdioClientTransport({
 transport.stderr?.on("data", chunk => process.stderr.write(chunk));
 const outputs = new Map();
 let opened = false;
+let toolMap = new Map();
 
 function parseToolResult(result) {
   if (result?.structuredContent !== undefined) return result.structuredContent;
@@ -85,7 +86,7 @@ async function call(name, args = {}, timeout = 1200000) {
 try {
   await client.connect(transport);
   const catalog = await client.listTools();
-  const toolMap = new Map((catalog.tools || []).map(tool => [tool.name, tool]));
+  toolMap = new Map((catalog.tools || []).map(tool => [tool.name, tool]));
   for (const required of ["open_binary", "binary_overview", "list_procedures", "analyze_function", "close_binary"]) {
     if (!toolMap.has(required)) throw new Error(`Pinned REA package does not advertise required tool ${required}.`);
   }
@@ -148,7 +149,7 @@ try {
   console.log(JSON.stringify(summary));
 } finally {
   if (opened) {
-    try { await call("close_binary", argumentsFor(new Map([["close_binary", toolMap?.get("close_binary")]]).get("close_binary") || { inputSchema: { properties: {}, required: [] } }), 120000); }
+    try { await call("close_binary", argumentsFor(toolMap.get("close_binary") || { inputSchema: { properties: {}, required: [] } }), 120000); }
     catch (error) { await fs.appendFile("reports/limitations.txt", `close_binary cleanup: ${error.message}\n`); }
   }
   await client.close().catch(() => {});
