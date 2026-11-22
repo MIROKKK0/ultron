@@ -80,13 +80,12 @@ try {
   const finalUrl = new URL(page.url());
   if (finalUrl.origin !== target.origin) throw new Error("The site redirected to another origin; review and authorize that destination separately.");
   const origin = target.origin;
-  const reaEnv = { ...process.env, REA_BROWSER_OBSERVE_ENABLED: "true", REA_BROWSER_CDP_ENDPOINTS_JSON: JSON.stringify([endpoint]), REA_BROWSER_ALLOWED_ORIGINS_JSON: JSON.stringify([origin]) };
   const runRea = async (name, args, output) => {
-    const result = await execFile("rea", [name, endpoint, ...args, "--json"], { env: reaEnv, timeout: 600000, maxBuffer: 128 * 1024 * 1024 });
+    const result = await execFile("rea", [name, endpoint, ...args, "--json"], { env: process.env, timeout: 600000, maxBuffer: 128 * 1024 * 1024 });
     await fs.writeFile(output, result.stdout || result.stderr || "", { mode: 0o600 });
     return result.stdout || "";
   };
-  const targetsText = await runRea("list-browser-targets", [], `${reportDir}/browser-targets.json`);
+  const targetsText = await runRea("list-browser-targets", ["--allowed-origins", origin], `${reportDir}/browser-targets.json`);
   const targetsJson = JSON.parse(targetsText);
   const candidates = [];
   const visit = value => {
