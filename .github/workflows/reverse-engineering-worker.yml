@@ -30,7 +30,7 @@ permissions:
 
 concurrency:
   group: ultron-rea-analysis-${{ github.event.inputs.job_id || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   validate:
