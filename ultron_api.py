@@ -95,7 +95,12 @@ class UltronAPIHandler(BaseHTTPRequestHandler):
                     self.send_header("Connection", "keep-alive")
                     self.end_headers()
                     self._send_sse({"type": "stage", "stage": "processing"})
-                    reply = self._run_chat(message)
+                    try:
+                        reply = self._run_chat(message)
+                    except Exception as exc:
+                        self.core.event("chat.failed", {"error_type": type(exc).__name__})
+                        self._send_sse({"type": "error", "status": 503})
+                        return
                     self._send_sse({"type": "stage", "stage": "responding"})
                     self._send_sse({"type": "final", "reply": reply, "strategy": "ultron-core"})
                     return
