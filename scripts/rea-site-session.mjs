@@ -30,7 +30,7 @@ if (!ready) throw new Error("Disposable Chromium CDP endpoint did not become rea
 console.log("Disposable Chromium CDP endpoint is ready.");
 const browser = await chromium.connectOverCDP(endpoint, { timeout: 30000 });
 try {
-  const context = await browser.newContext({ acceptDownloads: false, ignoreHTTPSErrors: false });
+  const context = await browser.newContext({ acceptDownloads: false, ignoreHTTPSErrors: false, serviceWorkers: "block" });
   await context.route("**/*", async route => {
     const requestUrl = route.request().url();
     if (requestUrl.startsWith("data:") || requestUrl.startsWith("blob:") || requestUrl.startsWith("about:")) return route.continue();
@@ -41,6 +41,16 @@ try {
       return route.abort("blockedbyclient");
     }
     try { await assertPublicHost(parsed.hostname); return route.continue(); } catch { return route.abort("blockedbyclient"); }
+  });
+  await context.routeWebSocket("**/*", async socket => {
+    try {
+      const wsURL = new URL(socket.url());
+      if (!["ws:", "wss:"].includes(wsURL.protocol)) return socket.close({ code: 1008, reason: "Unsupported WebSocket protocol" });
+      await assertPublicHost(wsURL.hostname);
+      socket.connectToServer();
+    } catch {
+      await socket.close({ code: 1008, reason: "Private or reserved WebSocket destination blocked" });
+    }
   });
   const page = await context.newPage();
   await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: 45000 });
