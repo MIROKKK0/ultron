@@ -124,6 +124,7 @@ class Ultron:
         self.client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
         self.memory = MemoryManager()
         self.core = UltronCore()
+        self.mcp_clients: Dict[str, MCPClient] = {}
         self.system_prompt = self._load_system_prompt() + "\n\nNÚCLEO ULTRON: identidade e memória independentes do modelo. Seis especialistas: " + json.dumps(SPECIALISTS, ensure_ascii=False)
         self.tools = self._define_tools()
 
@@ -247,6 +248,25 @@ class Ultron:
             }
         ]
 
+    def _get_mcp_client(self, server_name: str, server: Dict) -> MCPClient:
+        current = self.mcp_clients.get(server_name)
+        if current and current.endpoint != server["endpoint"]:
+            current.close()
+            current = None
+        if current is None:
+            current = MCPClient(server["endpoint"])
+            current.connect()
+            self.mcp_clients[server_name] = current
+        return current
+
+    def close(self) -> None:
+        for client in self.mcp_clients.values():
+            try:
+                client.close()
+            except Exception:
+                pass
+        self.mcp_clients.clear()
+
     def _execute_tool(self, name: str, arguments: Dict) -> str:
         try:
             if name == "web_search":
@@ -296,10 +316,10 @@ class Ultron:
                     server = next((item for item in self.core.list_mcp_servers() if item["name"] == server_name and item["enabled"]), None)
                     if not server:
                         return "Servidor MCP não encontrado ou desabilitado. Registre-o e habilite-o primeiro."
-                    with MCPClient(server["endpoint"]) as mcp:
-                        if action == "mcp_discover":
-                            return json.dumps(mcp.list_tools(), ensure_ascii=False)
-                        return json.dumps(mcp.call_tool(arguments.get("tool_name", ""), arguments.get("arguments", {})), ensure_ascii=False)
+                    mcp = self._get_mcp_client(server_name, server)
+                    if action == "mcp_discover":
+                        return json.dumps(mcp.list_tools(), ensure_ascii=False)
+                    return json.dumps(mcp.call_tool(arguments.get("tool_name", ""), arguments.get("arguments", {})), ensure_ascii=False)
                 if action == "evolution_propose": return self.core.propose_evolution(arguments.get("title",""), arguments.get("rationale",""), arguments.get("patch",""))
                 if action == "health": return json.dumps(self.core.health(), ensure_ascii=False)
                 return "Ação do núcleo não reconhecida."
@@ -441,6 +461,7 @@ Retorne APENAS o novo system prompt completo.
                 if not user_input:
                     continue
                 if user_input.lower() in ("sair", "exit", "quit"):
+                    self.close()
                     print("Ultron offline. absolute olliE.")
                     break
                 if user_input.lower() == "melhorar":
