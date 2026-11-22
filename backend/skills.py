@@ -79,7 +79,7 @@ def run_intent_skill(message: str) -> str | None:
         status = model_status()
         return (f"ULTRON online no processo atual. Modelo {status['version']} carregado; "
                 f"{status['training_examples']} exemplos de treino; {status['artifact_bytes']} bytes. "
-                "Classificador de intenções ativo; geração livre de linguagem ainda não implementada.")
+                "Classificador de intenções ativo; geração local livre ainda não implementada. O worker de código usa um provedor opcional no GitHub Actions.")
     if intent == "remember":
         return ("A memória pessoal ainda exige autenticação por instalação. Para não misturar "
                 "dados entre usuários, esta conversa pública não grava memórias compartilhadas.")
