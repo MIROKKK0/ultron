@@ -37,6 +37,11 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
+      - name: Fetch frozen evaluator from default branch
+        run: |
+          git fetch origin main
+          git show origin/main:scripts/agent_eval_frozen.py > /tmp/agent_eval_frozen.py
+
       - name: Install ULTRON dependencies
         run: pip install -r requirements.txt
 
@@ -60,7 +65,7 @@ jobs:
           python -m unittest discover -s tests -v 2>&1 | tee /tmp/ultron-tests.log
 
       - name: Run frozen agent benchmark
-        run: python scripts/agent_eval.py --output /tmp/ultron-agent-evaluation.json
+        run: ULTRON_SOURCE_ROOT="$GITHUB_WORKSPACE" python /tmp/agent_eval_frozen.py --output /tmp/ultron-agent-evaluation.json
 
       - name: Prepare private test report for the critic
         run: |
