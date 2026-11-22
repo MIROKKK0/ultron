@@ -51,6 +51,98 @@ jobs:
           node --check scripts/rea-site-session.mjs
           node --check scripts/rea-ghidra-session.mjs
 
+  site-worker-smoke:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.22.1"
+      - name: Install REA and Playwright
+        run: |
+          npm install --global rea-agents@6.10.1
+          npm install --no-save --no-package-lock playwright@1.64.1
+          npx playwright install --with-deps chromium
+      - name: Exercise real CDP + REA website capture
+        run: |
+          mkdir -p reports
+          printf '{"target_type":"site","target_url":"https://example.com"}' > job.json
+          JOB_FILE=job.json node scripts/rea-site-session.mjs
+          TARGET_TYPE=site python scripts/summarize-analysis.py
+          test -s reports/page-01-inspection.json
+          test -s reports/page-01-bundle-analysis.json
+          test -s reports/page-01-screenshot.json
+          python - <<'PY'
+          import json
+          report=json.load(open("reports/site-session.json"))
+          assert len(report["pagesVisited"]) >= 1
+          assert report["pagesVisited"][0]["url"].startswith("https://example.com")
+          print("CDP/REA site smoke passed.")
+          PY
+
+  native-worker-smoke:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.22.1"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install native prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y procps file clang lld
+      - name: Download and verify Ghidra 12.1.4
+        run: |
+          curl --fail --location --retry 3 \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip" \
+            -o "$RUNNER_TEMP/ghidra.zip"
+          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.1.4_PUBLIC" >> "$GITHUB_ENV"
+          echo "GHIDRA_HEADLESS_MAXMEM=3G" >> "$GITHUB_ENV"
+          echo "REA_GHIDRA_STARTUP_TIMEOUT_MS=1200000" >> "$GITHUB_ENV"
+      - name: Install REA and MCP SDK
+        run: |
+          npm install --global rea-agents@6.10.1
+          npm install --no-save --no-package-lock @modelcontextprotocol/sdk@1.29.0
+      - name: Build a tiny arm64 Mach-O test target
+        run: |
+          cat > "$RUNNER_TEMP/fixture.c" <<'C'
+          __attribute__((noinline)) int ultron_add(int left, int right) {
+              return left + right;
+          }
+          __attribute__((noinline)) int ultron_calculate(int value) {
+              return ultron_add(value, 17) * 3;
+          }
+          int main(void) {
+              return ultron_calculate(25);
+          }
+          C
+          clang -target arm64-apple-macos11 -O0 -fno-inline -c "$RUNNER_TEMP/fixture.c" -o "$RUNNER_TEMP/fixture.o"
+          file "$RUNNER_TEMP/fixture.o"
+      - name: Verify Ghidra and persistent REA function analysis
+        run: |
+          mkdir -p reports
+          rea doctor --provider ghidra --json > reports/ghidra-doctor.json
+          timeout 3600 node scripts/rea-ghidra-session.mjs "$RUNNER_TEMP/fixture.o"
+          python - <<'PY'
+          import json
+          report=json.load(open("reports/ghidra-session-summary.json"))
+          assert report["provider"] == "ghidra"
+          assert report["procedureCandidates"] > 0
+          assert report["functionDossiers"] > 0
+          print("REA/Ghidra native smoke passed.")
+          PY
+
   analyze:
     if: github.event_name == 'workflow_dispatch'
     needs: validate
