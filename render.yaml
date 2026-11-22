@@ -26,3 +26,9 @@ services:
         value: https://rea-bridge-vt6z.onrender.com
       - key: REA_BRIDGE_TOKEN
         sync: false
+      - key: ULTRON_GITHUB_TOKEN
+        sync: false
+      - key: ULTRON_GITHUB_REPO
+        value: MIROKKK0/ultron
+      - key: ULTRON_GITHUB_REF
+        value: feat/rea-reverse-engineering-integration
