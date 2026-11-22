@@ -473,6 +473,7 @@ Retorne APENAS o novo system prompt completo.
                 print(response)
                 print()
             except KeyboardInterrupt:
+                self.close()
                 print("\nUltron offline. absolute olliE.")
                 break
             except Exception as e:
