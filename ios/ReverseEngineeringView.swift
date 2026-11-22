@@ -189,7 +189,7 @@ struct ReverseEngineeringView: View {
         Task {
             defer { busy = false }
             do {
-                await fetchAndPresentWorkerStatus(jobID: jobID)
+                try await fetchAndPresentWorkerStatus(jobID: jobID)
             } catch {
                 output = "Não foi possível consultar o worker: \(error.localizedDescription)"
             }
