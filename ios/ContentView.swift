@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var isSending = false
     @State private var brainPhase: BrainPhase = .idle
     @State private var showSettings = false
+    @State private var showNeuralUniverse = false
     @State private var errorMessage: String?
     @State private var serverOnline = false
     @State private var serverStatusChecked = false
@@ -30,6 +31,10 @@ struct ContentView: View {
                         .fill(serverOnline ? .green : (serverStatusChecked ? .red : .orange))
                         .frame(width: 8, height: 8)
                         .accessibilityLabel(serverOnline ? "API online" : (serverStatusChecked ? "API offline" : "Verificando API"))
+                    Button { showNeuralUniverse = true } label: {
+                        Image(systemName: "point.3.connected.trianglepath.dotted").font(.title3).padding(10)
+                    }
+                    .accessibilityLabel("Universo Neural")
                     Button { showSettings = true } label: {
                         Image(systemName: "slider.horizontal.3").font(.title3).padding(10)
                     }
@@ -101,6 +106,9 @@ struct ContentView: View {
                 SettingsView(serverURL: $serverURL, onClearHistory: clearLocalHistory)
                     .presentationDetents([.medium, .large])
             }
+            .sheet(isPresented: $showNeuralUniverse) {
+                NeuralUniverseView(nodes: localMemoryNodes, edges: localMemoryEdges)
+            }
         }
         .preferredColorScheme(.dark)
         .task {
@@ -111,6 +119,24 @@ struct ContentView: View {
         .onChange(of: serverURL) { _ in
             serverStatusChecked = false
             Task { await refreshServerStatus() }
+        }
+    }
+
+    private var localMemoryNodes: [NeuralMemoryNode] {
+        messages.map { message in
+            NeuralMemoryNode(
+                id: message.id.uuidString,
+                content: message.text,
+                kind: message.role.rawValue,
+                importance: message.role == .user ? 3 : 2
+            )
+        }
+    }
+
+    private var localMemoryEdges: [NeuralMemoryEdge] {
+        guard localMemoryNodes.count > 1 else { return [] }
+        return zip(localMemoryNodes, localMemoryNodes.dropFirst()).map { left, right in
+            NeuralMemoryEdge(sourceID: left.id, targetID: right.id, relation: "conversation")
         }
     }
 
