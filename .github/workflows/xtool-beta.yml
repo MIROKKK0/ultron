@@ -1,0 +1,112 @@
+name: ULTRON xtool 2 beta IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "feat/rea-reverse-engineering-integration"
+    paths:
+      - "ios/**"
+      - "project.yml"
+      - "xtool.yml"
+      - ".github/workflows/xtool-beta.yml"
+  pull_request:
+    branches:
+      - "feat/ultron-core-assistant"
+    paths:
+      - "ios/**"
+      - "project.yml"
+      - "xtool.yml"
+      - ".github/workflows/xtool-beta.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ultron-xtool-beta-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-unsigned-ipa:
+    name: Build and validate ULTRON IPA with xtool 2 beta
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Checkout ULTRON
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Install Swiftly and Swift 6.4.3
+        run: |
+          curl -fsSL https://download.swift.org/swiftly/darwin/swiftly.pkg -o "$RUNNER_TEMP/swiftly.pkg"
+          installer -pkg "$RUNNER_TEMP/swiftly.pkg" -target CurrentUserHomeDirectory
+          "$HOME/.swiftly/bin/swiftly" init --quiet-shell-followup
+          source "$HOME/.swiftly/env.sh"
+          swiftly install 6.4.3
+          swiftly use 6.4.3
+          export PATH="$HOME/.swiftly/bin:$PATH"
+          swift --version
+          swift --version | grep -E 'Swift version 6[.]4([ .]|$)'
+          echo "$HOME/.swiftly/bin" >> "$GITHUB_PATH"
+
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen --version
+
+      - name: Generate ULTRON Xcode project
+        run: |
+          xcodegen generate --spec project.yml
+          test -d ULTRON.xcodeproj
+          xcodebuild -list -project ULTRON.xcodeproj
+
+      - name: Checkout pinned xtool 2.0.0-beta.1
+        uses: actions/checkout@v4
+        with:
+          repository: xtool-org/xtool
+          ref: 2.0.0-beta.1
+          path: .xtool-source
+
+      - name: Build xtool CLI
+        run: |
+          swift build --package-path .xtool-source --configuration release --product xtool
+          test -x .xtool-source/.build/release/xtool
+          .xtool-source/.build/release/xtool --help
+
+      - name: Build ULTRON with xtool
+        run: |
+          "$GITHUB_WORKSPACE/.xtool-source/.build/release/xtool" dev build \
+            --configuration release \
+            --scheme ULTRON \
+            --ipa \
+            --verbose
+
+      - name: Validate unsigned IPA
+        run: |
+          IPA_PATH="$(find . -path './.xtool-source' -prune -o -type f -name 'ULTRON.ipa' -print -quit)"
+          test -n "$IPA_PATH"
+          test -s "$IPA_PATH"
+          /usr/bin/unzip -t "$IPA_PATH"
+          TEMP_DIR="$(mktemp -d)"
+          /usr/bin/unzip -q "$IPA_PATH" -d "$TEMP_DIR"
+          APP_PATH="$TEMP_DIR/Payload/ULTRON.app"
+          test -d "$APP_PATH"
+          test -x "$APP_PATH/ULTRON"
+          plutil -lint "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist" | grep -Fx 'com.mirokkk0.ultron'
+          mkdir -p artifacts
+          cp "$IPA_PATH" artifacts/ULTRON-xtool-unsigned.ipa
+          shasum -a 256 artifacts/ULTRON-xtool-unsigned.ipa
+          ls -lh artifacts/ULTRON-xtool-unsigned.ipa
+
+      - name: Upload xtool IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ULTRON-xtool-unsigned-IPA
+          path: artifacts/ULTRON-xtool-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
