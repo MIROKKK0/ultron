@@ -239,7 +239,7 @@ class Ultron:
                             "specialist":{"type":"string"}, "name":{"type":"string"}, "description":{"type":"string"},
                             "procedure":{"type":"string"}, "evidence":{"type":"string"}, "endpoint":{"type":"string"},
                             "title":{"type":"string"}, "rationale":{"type":"string"}, "patch":{"type":"string"},
-                            "server_name":{"type":"string"}, "tool_name":{"type":"string"}, "arguments":{"type":"object"}
+                            "server_name":{"type":"string"}, "tool_name":{"type":"string"}, "arguments":{"type":"object"}, "enabled":{"type":"boolean"}
                         },
                         "required":["action"]
                     }
@@ -289,7 +289,7 @@ class Ultron:
                     return "Skill persistida."
                 if action == "mcp_list": return json.dumps(self.core.list_mcp_servers(), ensure_ascii=False)
                 if action == "mcp_register":
-                    self.core.register_mcp_server(arguments.get("name",""), arguments.get("endpoint",""))
+                    self.core.register_mcp_server(arguments.get("name",""), arguments.get("endpoint",""), enabled=bool(arguments.get("enabled", False)))
                     return "Servidor MCP registrado; conexão ainda precisa ser validada."
                 if action in {"mcp_discover", "mcp_call"}:
                     server_name = arguments.get("server_name") or arguments.get("name", "")
