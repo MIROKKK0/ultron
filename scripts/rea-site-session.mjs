@@ -85,29 +85,66 @@ try {
     await fs.writeFile(output, result.stdout || result.stderr || "", { mode: 0o600 });
     return result.stdout || "";
   };
-  const targetsText = await runRea("list-browser-targets", ["--allowed-origins", origin], `${reportDir}/browser-targets.json`);
-  const targetsJson = JSON.parse(targetsText);
-  const candidates = [];
-  const visit = value => {
-    if (!value) return;
-    if (Array.isArray(value)) return value.forEach(visit);
-    if (typeof value !== "object") return;
-    const url = typeof value.url === "string" ? value.url : "";
-    const id = value.target_id || value.targetId || value.id;
-    if (typeof id === "string" && url.startsWith(origin)) candidates.push({ id, url });
-    Object.values(value).forEach(visit);
+  const capturePage = async (pageURL, index) => {
+    const targetsText = await runRea("list-browser-targets", ["--allowed-origins", origin], `${reportDir}/browser-targets-${index}.json`);
+    const targetsJson = JSON.parse(targetsText);
+    const candidates = [];
+    const visit = value => {
+      if (!value) return;
+      if (Array.isArray(value)) return value.forEach(visit);
+      if (typeof value !== "object") return;
+      const url = typeof value.url === "string" ? value.url : "";
+      const id = value.target_id || value.targetId || value.id;
+      if (typeof id === "string" && url.startsWith(origin)) candidates.push({ id, url });
+      Object.values(value).forEach(visit);
+    };
+    visit(targetsJson);
+    const selected = candidates[0];
+    if (!selected) throw new Error("REA did not discover the isolated page target at the approved origin.");
+    const prefix = `${reportDir}/page-${String(index).padStart(2, "0")}`;
+    await runRea("inspect-web-page", [selected.id, "--observation-ms", "1500", "--include-script-sources"], `${prefix}-inspection.json`);
+    await runRea("analyze-web-bundle", [selected.id], `${prefix}-bundle-analysis.json`);
+    await runRea("capture-web-screenshot", [selected.id], `${prefix}-screenshot.json`);
+    return { url: pageURL, targetId: selected.id, title: await page.title() };
   };
-  visit(targetsJson);
-  const selected = candidates[0];
-  if (!selected) throw new Error("REA did not discover the isolated page target at the approved origin.");
-  await runRea("inspect-web-page", [selected.id, "--observation-ms", "1500"], `${reportDir}/web-inspection.json`);
-  await runRea("analyze-web-bundle", [selected.id], `${reportDir}/web-bundle-analysis.json`);
-  await runRea("capture-web-screenshot", [selected.id], `${reportDir}/web-screenshot.json`);
-  await runRea("observe-web-session", [selected.id, "--observation-ms", "4000"], `${reportDir}/web-session-observation.json`);
+
+  const pages = [];
+  pages.push(await capturePage(page.url(), 1));
+  const rawLinks = await page.locator("a[href]").evaluateAll(anchors => anchors.map(anchor => anchor.href));
+  const routeQueue = [];
+  const seen = new Set([target.href]);
+  const unsafePath = /(?:logout|log-out|signout|sign-out|delete|remove|purchase|checkout|payment|subscribe|unsubscribe|cancel|confirm|submit|create)/i;
+  for (const href of rawLinks) {
+    try {
+      const candidate = new URL(href);
+      candidate.hash = "";
+      candidate.search = "";
+      if (candidate.origin !== target.origin || candidate.protocol !== "https:" || unsafePath.test(candidate.pathname)) continue;
+      if (!seen.has(candidate.href)) {
+        seen.add(candidate.href);
+        routeQueue.push(candidate.href);
+      }
+    } catch {}
+  }
+
+  for (const routeURL of routeQueue.slice(0, 7)) {
+    await page.goto(routeURL, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForTimeout(1500);
+    const current = new URL(page.url());
+    if (current.origin !== target.origin) {
+      await fs.appendFile(`${reportDir}/limitations.txt`, "A linked page redirected outside the approved origin and was skipped.\\n");
+      continue;
+    }
+    pages.push(await capturePage(current.href, pages.length + 1));
+  }
+
   await fs.writeFile(`${reportDir}/site-session.json`, JSON.stringify({
-    requestedOrigin: origin, finalUrl: finalUrl.href, cdpEndpoint: endpoint,
-    isolatedBrowserProfile: true, targetId: selected.id, targetTitle: await page.title(),
-    steps: ["list-browser-targets", "inspect-web-page", "analyze-web-bundle", "capture-web-screenshot", "observe-web-session"]
+    requestedOrigin: origin,
+    initialUrl: target.href,
+    isolatedBrowserProfile: true,
+    maxSameOriginPages: 8,
+    pagesVisited: pages,
+    crawlPolicy: "GET links only; no forms, authentication, purchases, destructive actions or cross-origin redirects"
   }, null, 2), { mode: 0o600 });
   await context.close();
 } finally {
