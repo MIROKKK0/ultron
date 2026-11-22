@@ -135,6 +135,8 @@ jobs:
         run: |
           npm install --global rea-agents@6.10.1
           npm install --no-save --no-package-lock @modelcontextprotocol/client@2.3.1
+      - name: Install REA workflow skill for the headless worker
+        run: rea setup --skill --yes --json
       - name: Install Zig Mach-O cross-linker
         uses: mlugg/setup-zig@v2
         with:
