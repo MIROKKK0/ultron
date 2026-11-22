@@ -69,11 +69,13 @@ jobs:
         with:
           ref: ${{ steps.candidate.outputs.branch }}
           path: candidate
+          persist-credentials: false
       - name: Checkout baseline
         uses: actions/checkout@v4
         with:
           ref: feat/ultron-core-assistant
           path: baseline
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
