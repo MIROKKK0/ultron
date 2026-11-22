@@ -102,9 +102,21 @@ def run() -> dict:
     except Exception:
         checks["project_inventory_is_read_only_and_structured"] = False
         checks["self_evolution_limits_are_explicit"] = False
+    # Capability metrics are additive: an older baseline may not have a new
+    # optional worker yet, but its core checks must still remain valid.
+    metrics = {}
+    try:
+        from backend.project_awareness import build_project_awareness
+        awareness = build_project_awareness(SOURCE_ROOT)
+        metrics["recursive_code_evolution_worker"] = bool(
+            awareness.get("self_evolution", {}).get("recursive_code_evolution_worker", False)
+        )
+    except Exception:
+        metrics["recursive_code_evolution_worker"] = False
     passed = sum(bool(value) for value in checks.values())
-    return {"benchmark": "ultron-agent-ptbr-v1", "score": round(passed / len(checks), 4),
-            "passed": passed == len(checks), "checks": checks,
+    total = passed + sum(bool(value) for value in metrics.values())
+    return {"benchmark": "ultron-agent-ptbr-v1", "score": round(total / (len(checks) + len(metrics)), 4),
+            "passed": passed == len(checks), "checks": checks, "metrics": metrics,
             "privacy": "no prompts, responses, identifiers or personal content recorded"}
 
 if __name__ == "__main__":
