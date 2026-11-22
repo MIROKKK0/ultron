@@ -42,7 +42,7 @@ jobs:
           python-version: "3.12"
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.23.4"
+          node-version: "24.22.1"
       - name: Validate worker source
         run: |
           python -m py_compile backend/reverse_engineering.py scripts/extract-ipa-for-ghidra.py scripts/summarize-analysis.py
