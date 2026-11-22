@@ -2,7 +2,7 @@
 
 ## Worker de agentes em segundo plano
 
-`scripts/ultron_worker.py` consome a fila persistida em `UltronCore`, seleciona o especialista registrado para cada tarefa e executa o objetivo usando um modelo compatível com a API OpenAI.
+`scripts/ultron_worker.py` consome a fila persistida em `UltronCore`, seleciona o especialista registrado para cada tarefa e executa o objetivo usando um modelo compatível com a API OpenAI. Nesta primeira versão, um worker processa uma tarefa por vez; os seis especialistas são perfis selecionáveis, ainda não seis processos concorrentes coordenados.
 
 Variáveis:
 - `ULTRON_LLM_API_KEY` (ou `OPENAI_API_KEY`)
