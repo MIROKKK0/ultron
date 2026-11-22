@@ -383,7 +383,7 @@ struct ChatClient {
             withJSONObject: ["arguments": try JSONSerialization.jsonObject(with: arguments)]
         )
         return try await authenticatedData(
-            path: "/v2/reverse-engineering/tools/\\(name)/call",
+            path: "/v2/reverse-engineering/tools/\(name)/call",
             method: "POST",
             serverURL: serverURL,
             body: body
