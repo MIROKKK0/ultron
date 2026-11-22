@@ -365,6 +365,30 @@ struct ChatClient {
         )
     }
 
+    func startREASiteAnalysis(url: String, authorized: Bool, serverURL: String) async throws -> Data {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "url": url,
+            "authorized": authorized
+        ])
+        return try await authenticatedData(
+            path: "/v2/reverse-engineering/site/start",
+            method: "POST",
+            serverURL: serverURL,
+            body: body
+        )
+    }
+
+    func reaSiteAnalysisStatus(id: String, serverURL: String) async throws -> Data {
+        guard id.range(of: "^[a-f0-9]{32}$", options: .regularExpression) != nil else {
+            throw ChatClientError.invalidResponse
+        }
+        return try await authenticatedData(
+            path: "/v2/reverse-engineering/site/status/\\(id)",
+            method: "GET",
+            serverURL: serverURL
+        )
+    }
+
     func analyzeREAIPA(filePath: String, serverURL: String) async throws -> Data {
         let body = try JSONSerialization.data(withJSONObject: ["file_path": filePath])
         return try await authenticatedData(
