@@ -66,7 +66,7 @@ class UltronAPIHandler(BaseHTTPRequestHandler):
         try:
             payload = self._body()
             if self.path == "/api/memory/sync":
-                result = self.core.sync_memories(payload.get("installation_id", ""), payload.get("memories", []))
+                result = self.core.sync_memories(payload.get("installation_id", ""), payload.get("memories", []), replace=bool(payload.get("replace", False)))
                 self._send(200, result)
                 return
             if self.path == "/api/tasks":
