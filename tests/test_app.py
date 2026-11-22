@@ -423,7 +423,7 @@ class UltronTests(unittest.TestCase):
             "ULTRON_GITHUB_REPOSITORY": "MIROKKK0/ultron",
             "ULTRON_EVOLUTION_WORKFLOW_REF": "main",
         }, clear=False):
-            with patch("backend.app.httpx.post") as post:
+            with patch("backend.evolution_dispatch.httpx.post") as post:
                 post.return_value.status_code = 204
                 response = client.post(
                     "/evolution/dispatch",
