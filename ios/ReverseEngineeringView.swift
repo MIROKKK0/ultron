@@ -10,6 +10,7 @@ struct ReverseEngineeringView: View {
     @AppStorage("ultron.rea.lastRunURL") private var runURLString = ""
     @AppStorage("ultron.rea.lastWorkerStatus") private var workerStatus = ""
     @AppStorage("ultron.rea.lastSynthesizedJobID") private var synthesizedJobID = ""
+    @AppStorage("ultron.rea.lastReport") private var savedReport = ""
 
     @State private var mode = "SITE"
     @State private var targetURL = ""
@@ -153,6 +154,8 @@ struct ReverseEngineeringView: View {
     private func runIsolatedAnalysis(targetType: String, targetURL: String?, fileID: String?) {
         busy = true
         runURLString = ""
+        savedReport = ""
+        synthesizedJobID = ""
         workerStatus = "queued"
         output = targetType == "site"
             ? "ULTRON está iniciando Chromium descartável, CDP e inspeção REA…"
@@ -242,7 +245,7 @@ struct ReverseEngineeringView: View {
             return
         }
         if synthesizedJobID == currentJobID {
-            output = summary
+            output = savedReport.isEmpty ? summary : savedReport
             return
         }
         output = "REA/Ghidra concluiu a coleta. O cérebro do ULTRON está cruzando as evidências…"
@@ -260,6 +263,7 @@ struct ReverseEngineeringView: View {
             let synthesis = try await client.send(prompt, serverURL: serverURL)
             synthesizedJobID = currentJobID
             output = "RELATÓRIO ULTRON + REA\n\n\(synthesis.reply)\n\nRESUMO BRUTO DO WORKER:\n\(String(summary.prefix(2500)))"
+            savedReport = output
         } catch {
             output = "Resumo REA/Ghidra:\n\n\(summary)\n\nA síntese do ULTRON falhou: \(error.localizedDescription)"
         }
