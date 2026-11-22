@@ -16,6 +16,14 @@ class CoreTests(unittest.TestCase):
   results=self.core.recall("memória semântica",limit=5)
   self.assertEqual(results[0]["id"],relevant)
   self.assertNotIn(unrelated,[item["id"] for item in results])
+ def test_memory_sync_isolated_and_replaceable(self):
+  self.core.sync_memories("device-a",[{"id":"m1","content":"ULTRON memory","kind":"chat","importance":3}],replace=True)
+  graph_a=self.core.memory_graph(installation_id="device-a")
+  graph_b=self.core.memory_graph(installation_id="device-b")
+  self.assertTrue(any(node["id"]=="device-a:m1" for node in graph_a["nodes"]))
+  self.assertFalse(any(node["id"]=="device-a:m1" for node in graph_b["nodes"]))
+  self.core.sync_memories("device-a",[],replace=True)
+  self.assertFalse(any(node["id"]=="device-a:m1" for node in self.core.memory_graph(installation_id="device-a")["nodes"]))
  def test_task_loop(self):
   self.core.create_task("Revisar arquitetura","architect"); self.assertEqual(self.core.task_loop(lambda task:"revisado")[0]["status"],"completed")
  def test_skills_and_mcp(self):
