@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { Client } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
 const binaryPath = process.argv[2];
 if (!binaryPath || !binaryPath.startsWith("/")) throw new Error("An absolute Mach-O path is required.");
