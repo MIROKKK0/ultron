@@ -8,6 +8,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Lock, Thread
 from urllib.parse import parse_qs, urlparse
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from ultron_core import UltronCore, SPECIALISTS
 
 
