@@ -53,15 +53,24 @@ try {
     }
   });
   const page = await context.newPage();
-  await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: 45000 });
+  try {
+    await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: 45000 });
+  } catch {
+    throw new Error("The approved site could not be loaded; inspect the protected worker report.");
+  }
   await page.waitForTimeout(3500);
   const finalUrl = new URL(page.url());
   if (finalUrl.origin !== target.origin) throw new Error("The site redirected to another origin; review and authorize that destination separately.");
   const origin = target.origin;
   const runRea = async (name, args, output) => {
-    const result = await execFile("rea", [name, endpoint, ...args, "--json"], { env: process.env, timeout: 600000, maxBuffer: 128 * 1024 * 1024 });
-    await fs.writeFile(output, result.stdout || result.stderr || "", { mode: 0o600 });
-    return result.stdout || "";
+    try {
+      const result = await execFile("rea", [name, endpoint, ...args, "--json"], { env: process.env, timeout: 600000, maxBuffer: 128 * 1024 * 1024 });
+      await fs.writeFile(output, result.stdout || result.stderr || "", { mode: 0o600 });
+      return result.stdout || "";
+    } catch (error) {
+      await fs.writeFile(output + ".error.txt", String(error.stderr || error.message || "REA command failed"), { mode: 0o600 });
+      throw new Error(`REA command ${name} failed; diagnostics are stored in the protected worker report.`);
+    }
   };
   const capturePage = async (pageURL, index) => {
     const targetsText = await runRea("list-browser-targets", ["--allowed-origins", origin], `${reportDir}/browser-targets-${index}.json`);
@@ -106,8 +115,13 @@ try {
   }
 
   for (const routeURL of routeQueue.slice(0, 7)) {
-    await page.goto(routeURL, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForTimeout(1500);
+    try {
+      await page.goto(routeURL, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.waitForTimeout(1500);
+    } catch {
+      await fs.appendFile(`${reportDir}/limitations.txt`, "A same-origin page failed to load and was skipped.\\n");
+      continue;
+    }
     const current = new URL(page.url());
     if (current.origin !== target.origin) {
       await fs.appendFile(`${reportDir}/limitations.txt`, "A linked page redirected outside the approved origin and was skipped.\\n");
