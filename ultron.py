@@ -225,7 +225,6 @@ class Ultron:
                     }
                 }
             }
-        ],
             {
                 "type": "function",
                 "function": {
