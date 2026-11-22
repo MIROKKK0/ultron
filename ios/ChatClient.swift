@@ -406,7 +406,7 @@ struct ChatClient {
 
         let boundary = UUID().uuidString
         let bodyURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ultron-rea-\\(UUID().uuidString).multipart")
+            .appendingPathComponent("ultron-rea-\(UUID().uuidString).multipart")
         FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
         defer { try? FileManager.default.removeItem(at: bodyURL) }
         let output = try FileHandle(forWritingTo: bodyURL)
@@ -418,12 +418,12 @@ struct ChatClient {
         let safeFilename = String(fileURL.lastPathComponent.map {
             $0.isLetter || $0.isNumber || "._-".contains($0) ? $0 : "_"
         }.prefix(100))
-        let header = "--\\(boundary)\\r\\nContent-Disposition: form-data; name=\\"file\\"; filename=\\"\\(safeFilename)\\"\\r\\nContent-Type: application/octet-stream\\r\\n\\r\\n"
+        let header = "--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(safeFilename)\"\r\nContent-Type: application/octet-stream\r\n\r\n"
         try output.write(contentsOf: Data(header.utf8))
         while let chunk = try input.read(upToCount: 1024 * 1024), !chunk.isEmpty {
             try output.write(contentsOf: chunk)
         }
-        try output.write(contentsOf: Data("\\r\\n--\\(boundary)--\\r\\n".utf8))
+        try output.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
         try output.close()
 
         var request = URLRequest(url: url)
@@ -431,7 +431,7 @@ struct ChatClient {
         request.timeoutInterval = 300
         request.setValue(credentials.id, forHTTPHeaderField: "X-Installation-ID")
         request.setValue(credentials.token, forHTTPHeaderField: "X-Installation-Token")
-        request.setValue("multipart/form-data; boundary=\\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         let (data, response) = try await URLSession.shared.upload(for: request, fromFile: bodyURL)
         guard let http = response as? HTTPURLResponse else { throw ChatClientError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else { throw ChatClientError.serverError(http.statusCode) }
