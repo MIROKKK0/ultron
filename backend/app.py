@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 import hmac
 import hashlib
-import httpx
 import secrets
 import time
 import json
@@ -22,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from backend.agent_core import (SELF_MODEL, benchmark_cases, improvement_proposal, plan_task, rank_memories, review_response, system_instructions)
 from backend.project_awareness import build_project_awareness
+from backend.evolution_dispatch import dispatch_evolution_workflow
 from backend.brain import run_multitask
 from backend.cognitive_workspace import CognitiveWorkspace
 from backend.memory_system import MemoryStore
@@ -1360,38 +1360,12 @@ def propose_improvement(request: ImprovementRequest) -> dict[str, Any]:
 @app.post("/evolution/dispatch", dependencies=[Depends(require_api_token)])
 def dispatch_recursive_evolution(request: EvolutionDispatchRequest) -> dict[str, Any]:
     """Ask the default-branch worker to research and evolve the development core."""
-    token = os.getenv("ULTRON_GITHUB_TOKEN", "")
-    repository = os.getenv("ULTRON_GITHUB_REPOSITORY", "MIROKKK0/ultron")
-    workflow_ref = os.getenv("ULTRON_EVOLUTION_WORKFLOW_REF", "main")
-    workflow_file = "recursive-evolution.yml"
-    if not token:
-        raise HTTPException(status_code=503, detail="ULTRON_GITHUB_TOKEN não está configurado no Render.")
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
-        raise HTTPException(status_code=503, detail="Repositório de evolução inválido.")
-    url = f"https://api.github.com/repos/{repository}/actions/workflows/{workflow_file}/dispatches"
     try:
-        response = httpx.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
-            json={"ref": workflow_ref, "inputs": {"objective": request.objective.strip()}},
-            timeout=httpx.Timeout(20.0, connect=8.0),
-        )
-        if response.status_code != 204:
-            raise HTTPException(status_code=502, detail=f"GitHub recusou o disparo do worker (HTTP {response.status_code}).")
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="Não foi possível contactar o GitHub Actions.") from exc
-    return {
-        "dispatched": True,
-        "workflow": workflow_file,
-        "workflow_ref": workflow_ref,
-        "development_target": "feat/ultron-core-assistant",
-        "objective": request.objective.strip() or "O ULTRON escolhe a melhoria mais valiosa após pesquisar e inspecionar o projeto.",
-        "promotion": "O agente pode revisar e incorporar candidatos aprovados no ramo de desenvolvimento; não publica diretamente no main nem implanta o Render.",
-    }
+        return dispatch_evolution_workflow(request.objective)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/agent/plan", dependencies=[Depends(require_api_token)])
