@@ -127,6 +127,9 @@ def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
     has_intent_model = "backend/intent_model.py" in paths
     has_generative_adapter = "backend/generative.py" in paths
     has_local_transformer = "backend/local_transformer_runtime.py" in paths
+    has_recursive_evolution_worker = "scripts/recursive_evolution.py" in paths
+    has_evolution_dispatch = "backend/evolution_dispatch.py" in paths
+    has_recursive_evolution_skill = "skills/ultron-recursive-evolution/SKILL.md" in paths
 
     component_map = [
         {"path": path, "purpose": purpose, "files": counts.get(
@@ -142,6 +145,9 @@ def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
         "measurable_improvement_gate": has_improvement_gate,
         "automated_candidate_evaluation_workflow": has_evolution_gate,
         "scheduled_classifier_retraining_workflow": has_model_training,
+        "recursive_code_evolution_worker": has_recursive_evolution_worker,
+        "evolution_dispatch_api": has_evolution_dispatch,
+        "recursive_evolution_skill": has_recursive_evolution_skill,
     }
     evolution = {
         "benchmark_available": has_agent_eval,
@@ -151,13 +157,20 @@ def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
         "scheduled_retraining_crons": [
             item for item in workflows if item["workflow"].endswith("model-training.yml")
         ],
-        "autonomous_code_candidate_generation": False,
+        "autonomous_code_candidate_generation": has_recursive_evolution_worker,
+        "web_research_for_evolution": has_recursive_evolution_worker and "backend/web_research.py" in paths,
+        "critic_review_for_candidates": has_recursive_evolution_worker,
+        "automatic_merge_to_development": has_recursive_evolution_worker,
         "automatic_merge_to_production": False,
         "automatic_deployment": False,
         "human_review_for_production": True,
+        "evolution_target": "feat/ultron-core-assistant" if has_recursive_evolution_worker else None,
         "explanation": (
-            "O ciclo atual mede e valida candidatos e pode abrir PRs; não contém "
-            "um gerador autônomo geral de patches nem autorização de merge/deploy."
+            "O worker pesquisa fontes públicas, inspeciona o projeto, gera patches em branches "
+            "isoladas, executa testes/benchmark e faz uma segunda revisão crítica. Candidatos "
+            "aprovados podem ser incorporados ao ramo de desenvolvimento; main e deploy continuam separados."
+            if has_recursive_evolution_worker else
+            "O ciclo atual mede e valida candidatos existentes, sem gerador autônomo geral de patches."
         ),
     }
     return {
