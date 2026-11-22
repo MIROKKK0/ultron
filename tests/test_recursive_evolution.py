@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "recursive_evolution.py"
 SPEC = importlib.util.spec_from_file_location("recursive_evolution", SCRIPT)
@@ -12,6 +13,38 @@ SPEC.loader.exec_module(MODULE)
 
 
 class RecursiveEvolutionTests(unittest.TestCase):
+    def test_remote_history_records_merged_prs_and_run_outcomes(self):
+        class Response:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return self.payload
+
+        pulls = [{
+            "number": 77,
+            "title": "Harden self-evolution",
+            "merged_at": "2026-11-22T12:00:00Z",
+            "head": {"ref": "fix/frozen-gate"},
+            "html_url": "https://github.com/MIROKKK0/ultron/pull/77",
+            "labels": [{"name": "ultron-eligible-for-promotion"}],
+        }]
+        runs = {"workflow_runs": [{
+            "name": "ULTRON CI",
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-11-22T12:05:00Z",
+            "html_url": "https://github.com/MIROKKK0/ultron/actions/runs/123",
+        }]}
+        with patch.object(MODULE.httpx, "get", side_effect=[Response(pulls), Response(runs)]):
+            history = MODULE.remote_evolution_history()
+        self.assertEqual(history["merged_prs"][0]["number"], 77)
+        self.assertEqual(history["recent_runs"][0]["conclusion"], "success")
+        self.assertNotIn("token", str(history).lower())
+
     def test_patch_accepts_backend_and_test_changes(self):
         diff = (
             "diff --git a/backend/example.py b/backend/example.py\n"
