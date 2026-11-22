@@ -11,7 +11,7 @@ const transport = new StdioClientTransport({
   args: ["mcp"],
   stderr: "pipe"
 });
-transport.stderr?.on("data", chunk => process.stderr.write(chunk));
+transport.stderr?.on("data", chunk => { fs.appendFile("reports/rea-mcp-stderr.log", chunk).catch(() => {}); });
 const outputs = new Map();
 let opened = false;
 let toolMap = new Map();
@@ -149,7 +149,7 @@ try {
     limitations: candidates.length ? [] : ["REA returned no procedure identities from list_procedures."]
   };
   await fs.writeFile("reports/ghidra-session-summary.json", JSON.stringify(summary, null, 2), { mode: 0o600 });
-  console.log(JSON.stringify(summary));
+  console.log("Persistent REA/Ghidra analysis session completed.");
 } finally {
   if (opened) {
     try { await call("close_binary", argumentsFor(toolMap.get("close_binary") || { inputSchema: { properties: {}, required: [] } }), 120000); }
