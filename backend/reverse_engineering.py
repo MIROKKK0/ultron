@@ -16,6 +16,8 @@ from pydantic import BaseModel, Field
 router = APIRouter()
 MAX_IPA_BYTES = 200 * 1024 * 1024
 TOOL_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
+READ_ONLY_PREFIXES = ("analyze_", "inspect_", "list_", "compare_", "read_", "decode_", "disassemble_", "export_", "get_", "find_", "search_")
+READ_ONLY_EXACT = {"capture_web_screenshot", "observe_web_session", "export_evidence_bundle"}
 
 
 class ToolCallRequest(BaseModel):
@@ -73,6 +75,8 @@ async def rea_call_tool(name: str, payload: ToolCallRequest) -> dict[str, Any]:
     catalog = (await rea_tools())["tools"]
     if not any(item.get("name") == name for item in catalog):
         raise HTTPException(status_code=404, detail="Ferramenta não encontrada no catálogo REA.")
+    if not (name.startswith(READ_ONLY_PREFIXES) or name in READ_ONLY_EXACT):
+        raise HTTPException(status_code=403, detail="Ferramenta bloqueada pela política de análise somente leitura.")
     response = await _request(
         "POST",
         f"/api/tools/{name}/call",
@@ -86,15 +90,17 @@ async def rea_upload_ipa(file: UploadFile = File(...)) -> dict[str, Any]:
     filename = (file.filename or "").replace("\\", "/").split("/")[-1]
     if not filename.lower().endswith(".ipa"):
         raise HTTPException(status_code=415, detail="Envie um arquivo .ipa válido.")
-    data = await file.read(MAX_IPA_BYTES + 1)
-    if not data:
+    file.file.seek(0, 2)
+    size = file.file.tell()
+    file.file.seek(0)
+    if size <= 0:
         raise HTTPException(status_code=400, detail="O arquivo IPA está vazio.")
-    if len(data) > MAX_IPA_BYTES:
+    if size > MAX_IPA_BYTES:
         raise HTTPException(status_code=413, detail="O IPA excede o limite de 200 MB.")
     response = await _request(
         "POST",
         "/api/upload",
-        files={"file": (filename, data, "application/octet-stream")},
+        files={"file": (filename, file.file, "application/octet-stream")},
     )
     result = response.json()
     if not result.get("filePath"):
@@ -102,7 +108,7 @@ async def rea_upload_ipa(file: UploadFile = File(...)) -> dict[str, Any]:
     return {
         "id": result.get("id"),
         "fileName": result.get("fileName", filename),
-        "size": result.get("size", len(data)),
+        "size": result.get("size", size),
         "filePath": result["filePath"],
         "next": "Escolha uma ferramenta REA cujo schema aceite caminho de arquivo e passe filePath nos argumentos.",
     }
