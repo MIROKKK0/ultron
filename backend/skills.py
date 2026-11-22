@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from backend.agent_core import SELF_MODEL, improvement_proposal, plan_task
 from backend.intent_model import predict_intent, resolve_intent, model_status
+from backend.project_awareness import build_project_awareness
 
 SKILLS = {
     "conversation": {"title": "Conversa", "intents": ["greeting", "thanks"], "risk": "low"},
@@ -38,9 +39,23 @@ def run_intent_skill(message: str) -> str | None:
                 "diagnóstico, memória protegida, autoavaliação e proposta de autoevolução. "
                 "Exemplos: /plan objetivo, /calc 12*(3+4), /research assunto, /self, /skills.")
     if intent == "identity":
-        return ("Sou ULTRON. Minha versão atual usa um classificador próprio treinado do zero "
-                "para reconhecer intenções e acionar ferramentas locais. Ainda não sou um LLM "
-                "generativo geral e não uso modelos ou provedores de IA externos.")
+        awareness = build_project_awareness()
+        git = awareness["git"]
+        counts = awareness["inventory"]["counts"]
+        recent = git["recent_commits"][:3]
+        history = "; ".join(
+            f"{item['date']} {item['subject']}" for item in recent
+        ) or "histórico Git indisponível neste ambiente"
+        return (
+            "Sou ULTRON. Meu autoconhecimento agora consulta o checkout real do projeto: "
+            f"branch {git['branch'] or 'desconhecida'}, commit {git['head'] or 'indisponível'}, "
+            f"{awareness['inventory']['total_files']} arquivos inventariados, "
+            f"{counts['backend']} módulos backend, {counts['tests']} arquivos de teste e "
+            f"{counts['swift']} arquivos Swift. Mudanças recentes: {history}. "
+            "Meu classificador de intenções é próprio; o adaptador generativo é opcional. "
+            "A presença de módulos no repositório não prova que estejam implantados no iPhone. "
+            "Ainda não tenho um gerador autônomo geral de código."
+        )
     if intent == "plan":
         return _format_plan(message)
     if intent == "status":
@@ -53,9 +68,18 @@ def run_intent_skill(message: str) -> str | None:
                 "dados entre usuários, esta conversa pública não grava memórias compartilhadas.")
     if intent == "improve":
         proposal = improvement_proposal(message)
-        return ("Autoavaliação concluída: posso propor melhorias, comparar métricas, criar testes "
-                "e preparar uma branch/PR. Não altero produção, segurança ou pesos automaticamente.\n"
-                + "\n".join(f"- {item}" for item in proposal["plan"]))
+        awareness = build_project_awareness()
+        evolution = awareness["self_evolution"]
+        return (
+            "Diagnóstico da autoevolução com base no repositório atual: "
+            f"benchmark congelado={'sim' if evolution['benchmark_available'] else 'não'}; "
+            f"gate de regressões={'sim' if evolution['regression_and_improvement_gate_available'] else 'não'}; "
+            f"workflow de avaliação de branches={'sim' if evolution['candidate_branch_evaluation_available'] else 'não'}; "
+            f"geração autônoma geral de patches={'sim' if evolution['autonomous_code_candidate_generation'] else 'não'}; "
+            f"merge automático={'sim' if evolution['automatic_merge_to_production'] else 'não'}. "
+            "O ciclo atual avalia candidatos existentes; ainda não gera sozinho qualquer patch de software.\n"
+            + "\n".join(f"- {item}" for item in proposal["plan"])
+        )
     return None
 
 def run_named_skill(name: str, input_text: str) -> dict:
