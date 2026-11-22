@@ -135,8 +135,8 @@ struct ContentView: View {
 
     private var localMemoryEdges: [NeuralMemoryEdge] {
         guard localMemoryNodes.count > 1 else { return [] }
-        return zip(localMemoryNodes, localMemoryNodes.dropFirst()).map { left, right in
-            NeuralMemoryEdge(sourceID: left.id, targetID: right.id, relation: "conversation")
+        return zip(localMemoryNodes, localMemoryNodes.dropFirst()).map { pair in
+            NeuralMemoryEdge(sourceID: pair.0.id, targetID: pair.1.id, relation: "conversation")
         }
     }
 
