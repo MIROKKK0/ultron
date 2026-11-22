@@ -265,6 +265,7 @@ class AnalysisJobRequest(BaseModel):
     target_type: str
     target_url: str | None = None
     file_id: str | None = None
+    authorized: bool = False
 
 
 class WorkerCompletion(BaseModel):
@@ -335,6 +336,8 @@ async def create_analysis_job(
     target_url = None
     file_id = None
     if target_type == "site":
+        if not payload.authorized:
+            raise HTTPException(status_code=403, detail="Confirme que você tem autorização para analisar este site.")
         from urllib.parse import urlparse
         parsed = urlparse((payload.target_url or "").strip())
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
@@ -348,8 +351,8 @@ async def create_analysis_job(
             raise HTTPException(status_code=400, detail="Identificador de IPA inválido; envie o arquivo primeiro.")
 
     token = os.getenv("ULTRON_GITHUB_TOKEN", "")
-    repository = os.getenv("ULTRON_GITHUB_REPOSITORY", "MIROKKK0/ultron")
-    ref = os.getenv("ULTRON_ANALYSIS_REF", "main")
+    repository = os.getenv("ULTRON_GITHUB_REPO", "MIROKKK0/ultron")
+    ref = os.getenv("ULTRON_GITHUB_REF", "main")
     if not token:
         raise HTTPException(status_code=503, detail="Configure ULTRON_GITHUB_TOKEN no Render para habilitar os workers.")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
