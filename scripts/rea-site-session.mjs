@@ -1,7 +1,6 @@
 import { promises as fs } from "node:fs";
 import { promisify } from "node:util";
-import dns from "node:dns/promises";
-import net from "node:net";
+import { assertPublicHost } from "./site-network-policy.mjs";
 import { chromium } from "playwright";
 
 const execFile = promisify((await import("node:child_process")).execFile);
@@ -9,39 +8,6 @@ const job = JSON.parse(await fs.readFile(process.env.JOB_FILE || "job.json", "ut
 const target = new URL(job.target_url || "");
 if (target.protocol !== "https:" || !target.hostname || target.username || target.password || (target.port && target.port !== "443")) {
   throw new Error("Only public HTTPS URLs on the default port are accepted.");
-}
-const blockedV4 = [
-  /^0\./, /^10\./, /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
-  /^127\./, /^169\.254\./, /^172\.(1[6-9]|2\d|3[01])\./,
-  /^192\.0\.0\./, /^192\.0\.2\./, /^192\.88\.99\./, /^192\.168\./,
-  /^198\.(18|19)\./, /^198\.51\.100\./, /^203\.0\.113\./,
-  /^224\./, /^240\./, /^255\./
-];
-function publicAddress(address) {
-  const family = net.isIP(address);
-  if (family === 4) return !blockedV4.some(pattern => pattern.test(address));
-  if (family === 6) {
-    const a = address.toLowerCase();
-    if (a.startsWith("::ffff:")) return false;
-    return !(a === "::" || a === "::1" || a.startsWith("fc") || a.startsWith("fd") ||
-      a.startsWith("fe8") || a.startsWith("fe9") || a.startsWith("fea") ||
-      a.startsWith("feb") || a.startsWith("ff") || a.startsWith("2001:db8:") ||
-      a.startsWith("2001:10:") || a.startsWith("2002:"));
-  }
-  return false;
-}
-async function assertPublicHost(host) {
-  const normalizedHost = host.toLowerCase().replace(/\.$/, "");
-  if (normalizedHost === "localhost" || normalizedHost.endsWith(".localhost") ||
-      normalizedHost.endsWith(".local") || normalizedHost.endsWith(".internal")) {
-    throw new Error("Local or internal hostnames are blocked.");
-  }
-  if (net.isIP(host)) {
-    if (!publicAddress(host)) throw new Error("Private or reserved IP target blocked.");
-    return;
-  }
-  const addresses = await dns.lookup(host, { all: true, verbatim: true });
-  if (!addresses.length || addresses.some(item => !publicAddress(item.address))) throw new Error("DNS resolved to a private or reserved address; request blocked.");
 }
 await assertPublicHost(target.hostname);
 const reportDir = "reports";
