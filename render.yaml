@@ -22,3 +22,7 @@ services:
           property: connectionString
       - key: ULTRON_API_TOKEN
         generateValue: true
+      - key: REA_BRIDGE_URL
+        value: https://rea-bridge-vt6z.onrender.com
+      - key: REA_BRIDGE_TOKEN
+        sync: false
