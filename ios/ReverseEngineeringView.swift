@@ -30,14 +30,19 @@ struct ReverseEngineeringView: View {
     @State private var busy = false
 
     private var filteredTools: [REATool] {
+        let safeExact = ["open_binary", "capture_web_screenshot", "observe_web_session", "export_evidence_bundle"]
+        let safePrefixes = ["analyze_", "inspect_", "list_", "compare_", "read_", "decode_", "disassemble_", "export_", "get_", "find_", "search_"]
+        let safe = tools.filter { tool in
+            safeExact.contains(tool.name) || safePrefixes.contains(where: tool.name.hasPrefix)
+        }
         let terms = mode == "SITE"
-            ? ["web", "browser", "website", "javascript", "http", "page", "capture", "inspect"]
+            ? ["web", "browser", "website", "javascript", "http", "page", "inspect"]
             : ["apple", "application", "binary", "package", "artifact", "ipa", "plist", "inspect"]
-        let matching = tools.filter { tool in
+        let matching = safe.filter { tool in
             let text = (tool.name + " " + (tool.description ?? "")).lowercased()
             return terms.contains(where: text.contains)
         }
-        let candidates = (matching.isEmpty ? tools : matching).sorted { $0.name < $1.name }
+        let candidates = (matching.isEmpty ? safe : matching).sorted { $0.name < $1.name }
         guard !filter.isEmpty else { return candidates }
         return candidates.filter { ($0.name + " " + ($0.description ?? "")).localizedCaseInsensitiveContains(filter) }
     }
@@ -55,6 +60,11 @@ struct ReverseEngineeringView: View {
                         Text("IPA").tag("IPA")
                     }
                     .pickerStyle(.segmented)
+                    if mode == "SITE" {
+                        Text("A URL sozinha não cria uma sessão de navegador. As ferramentas de site precisam de um alvo CDP já disponível; o provisionamento de navegador isolado ainda está pendente.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     if mode == "SITE" {
                         TextField("https://dominio-autorizado.com", text: $targetURL)
                             .keyboardType(.URL)
