@@ -69,11 +69,13 @@ class UltronCore:
   return scored[:max(1,min(500,int(limit)))]
  def link_memories(self,source_id,target_id,relation="related"):
   with self._connect() as db: db.execute("INSERT OR IGNORE INTO memory_links VALUES(?,?,?)",(source_id,target_id,relation))
- def sync_memories(self,installation_id,memories):
+ def sync_memories(self,installation_id,memories,replace=False):
   if not installation_id or len(installation_id)>128: raise ValueError("installation_id inválido")
   if not isinstance(memories,list) or len(memories)>500: raise ValueError("Lote de memórias inválido")
   accepted=0
   with self._connect() as db:
+   if replace:
+    db.execute("DELETE FROM synced_memories WHERE installation_id=?",(installation_id,))
    for item in memories:
     if not isinstance(item,dict): continue
     memory_id=str(item.get("id","")).strip()
@@ -98,6 +100,7 @@ class UltronCore:
    if installation_id:
     synced=db.execute("SELECT memory_id,content,kind,importance,updated_at FROM synced_memories WHERE installation_id=? ORDER BY updated_at DESC LIMIT ?",(installation_id,limit)).fetchall()
     nodes.extend({"id":f"{installation_id}:{r['memory_id']}","content":r["content"],"kind":r["kind"],"importance":r["importance"],"updated_at":r["updated_at"]} for r in synced)
+    edges.extend({"source_id":f"{installation_id}:{synced[i]['memory_id']}","target_id":f"{installation_id}:{synced[i+1]['memory_id']}","relation":"conversation"} for i in range(len(synced)-1))
   return {"nodes":nodes[:limit],"edges":edges}
  def list_tasks(self,limit=100):
   with self._connect() as db:
