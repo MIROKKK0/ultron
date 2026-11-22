@@ -1,8 +1,4 @@
-"""Read-only self-knowledge about ULTRON's checked-out source tree and Git history.
-
-This module inventories code and version history without executing project files,
-reading secrets, or modifying the repository.
-"""
+"""Read-only self-knowledge about ULTRON's checked-out source tree and Git history."""
 from __future__ import annotations
 
 import os
@@ -12,8 +8,7 @@ from pathlib import Path
 from typing import Any
 
 _SECRET_PATH = re.compile(
-    r"(^|/)(?:\.env(?:\..*)?|secrets?)(?:/|$)|"
-    r"(?:\.pem|\.key|\.p12|\.pfx|\.mobileprovision)$",
+    r"""(^|/)(?:\.env(?:\..*)?|secrets?)(?:/|$)|(?:\.pem|\.key|\.p12|\.pfx|\.mobileprovision)$""",
     re.IGNORECASE,
 )
 _IGNORED_DIRS = {
@@ -44,8 +39,9 @@ def _git(root: Path, *args: str, timeout: float = 4.0) -> str | None:
 
 
 def _safe_path(value: str) -> bool:
-    normalized = value.replace("\\\\", "/").lstrip("/")
+    normalized = value.replace("\\", "/").lstrip("/")
     return bool(normalized) and not _SECRET_PATH.search(normalized)
+
 
 def _inventory(root: Path) -> tuple[list[str], dict[str, int]]:
     paths: list[str] = []
@@ -87,7 +83,7 @@ def _recent_commits(root: Path, limit: int = 12) -> list[dict[str, str]]:
         if len(parts) != 3:
             continue
         sha, date, subject = parts
-        subject = re.sub(r"[\\x00-\\x1f\\x7f]", " ", subject).strip()[:180]
+        subject = "".join(ch if ch.isprintable() else " " for ch in subject).strip()[:180]
         result.append({"sha": sha[:12], "date": date[:10], "subject": subject})
     return result
 
@@ -101,9 +97,11 @@ def _scheduled_workflows(root: Path, paths: list[str]) -> list[dict[str, str]]:
             content = (root / relative).read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        for match in re.finditer(r"(?m)^\\s*-\\s*cron:\\s*[\"']?([^\"'\\n]+)", content):
+        pattern = r"""(?m)^\s*-\s*cron:\s*["']?([^"'\n]+)"""
+        for match in re.finditer(pattern, content):
             schedules.append({"workflow": relative, "cron": match.group(1).strip()})
     return schedules
+
 
 def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
     """Return a bounded, secret-free snapshot of the checked-out ULTRON project."""
@@ -163,7 +161,6 @@ def build_project_awareness(root: str | Path | None = None) -> dict[str, Any]:
     return {
         "project": "ULTRON",
         "snapshot_version": 1,
-        "repository_root": str(project_root),
         "git": {
             "branch": branch or None,
             "head": commit or None,
