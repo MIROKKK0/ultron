@@ -130,6 +130,7 @@ def _video_search(query: str, max_results: int, searcher: Any = None) -> list[di
     )
     results = []
     requested_platform = "tiktok" if re.search(r"tik\s?tok", query, re.IGNORECASE) else "youtube"
+    platform_label = "TikTok" if requested_platform == "tiktok" else "YouTube"
     for item in raw or []:
         title = str(item.get("title", "")).strip()[:300]
         original_url = str(item.get("content", item.get("url", ""))).strip()
@@ -175,12 +176,12 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
                 "results": [],
                 "search_type": "video",
                 "summary": (
-                    f"Não encontrei vídeos do {requested_platform.title()} suficientemente relacionados. "
+                    f"Não encontrei vídeos do {platform_label} suficientemente relacionados. "
                     "Tente acrescentar o nome do projeto ou assunto."
                 ),
             }
         summary = "\n".join(
-            f"{index}. {item['title']}\n   {item['snippet']}\n   Duração: {item['duration'] or 'não informada'}\n   {requested_platform.title()}: {item['url']}"
+            f"{index}. {item['title']}\n   {item['snippet']}\n   Duração: {item['duration'] or 'não informada'}\n   {platform_label}: {item['url']}"
             for index, item in enumerate(videos, 1)
         )
         return {
@@ -188,7 +189,7 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
             "count": len(videos),
             "results": videos,
             "search_type": "video",
-            "summary": f"Vídeos do {requested_platform.title()} encontrados e ordenados por relevância:\n" + summary,
+            "summary": f"Vídeos do {platform_label} encontrados e ordenados por relevância:\n" + summary,
         }
 
     fallback_backends = ("duckduckgo", "brave", "mojeek", "startpage", "yahoo", "wikipedia", "grokipedia")
