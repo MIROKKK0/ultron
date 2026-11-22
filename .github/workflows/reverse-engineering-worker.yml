@@ -335,7 +335,7 @@ jobs:
           payload = {
               "status": os.environ["WORKER_STATUS"],
               "result_summary": summary,
-              "artifact_name": "private-ultron-database-report",
+              "artifact_name": "",
               "run_url": os.environ["RUN_URL"],
               "error": "" if os.environ["WORKER_STATUS"] == "succeeded" else "Worker terminou com falha; consulte o status e os logs técnicos."
           }
