@@ -28,6 +28,8 @@ O avaliador congelado e o próprio gerador ficam protegidos contra alteração p
 
 ## Memória e Universo Neural
 
-O núcleo persiste memórias e relações em SQLite e agora classifica a recuperação lexical por relevância. Isso é uma base de recuperação, não embeddings semânticos. O visualizador SceneKit/SwiftUI mostra as mensagens locais do chat como nós 3D, com rotação, zoom e seleção.
+O núcleo persiste memórias e relações em SQLite e classifica a recuperação lexical por relevância. Isso melhora a busca por palavras e contexto textual, mas ainda não equivale a embeddings semânticos.
 
-Ainda faltam embeddings reais ou um modelo local leve, rotas autenticadas de sincronização, recuperação do grafo remoto no iOS e integração do arquivo Swift ao projeto Xcode/IPA. Não declare sincronização entre dispositivos ou dados semânticos completos até essas partes serem implantadas e testadas.
+A API `ultron_api.py` oferece rotas autenticadas para consultar o grafo, sincronizar snapshots isolados por ID de instalação e enfileirar tarefas. O iOS guarda o token e o ID de instalação no Keychain, envia o histórico local ao endpoint de sincronização e carrega o grafo remoto. Se a API/token estiver indisponível, o visualizador usa o histórico local e informa essa origem.
+
+O visualizador SceneKit/SwiftUI permite rotação, zoom e seleção de nós. Ainda falta validar o Swift no projeto Xcode/IPA, implantar a API com `ULTRON_API_TOKEN` e armazenamento persistente, testar a sincronização real no iPhone e adicionar embeddings ou um modelo semântico leve. O worker também precisa ser implantado em processo contínuo com volume persistente; o código sozinho não o mantém online.
