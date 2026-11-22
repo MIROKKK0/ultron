@@ -405,7 +405,10 @@ struct ChatClient {
             try? input.close()
             try? output.close()
         }
-        let header = "--\\(boundary)\\r\\nContent-Disposition: form-data; name=\\"file\\"; filename=\\"\\(fileURL.lastPathComponent)\\"\\r\\nContent-Type: application/octet-stream\\r\\n\\r\\n"
+        let safeFilename = String(fileURL.lastPathComponent.map {
+            $0.isLetter || $0.isNumber || "._-".contains($0) ? $0 : "_"
+        }.prefix(100))
+        let header = "--\\(boundary)\\r\\nContent-Disposition: form-data; name=\\"file\\"; filename=\\"\\(safeFilename)\\"\\r\\nContent-Type: application/octet-stream\\r\\n\\r\\n"
         try output.write(contentsOf: Data(header.utf8))
         while let chunk = try input.read(upToCount: 1024 * 1024), !chunk.isEmpty {
             try output.write(contentsOf: chunk)
