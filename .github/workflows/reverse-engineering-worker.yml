@@ -115,7 +115,7 @@ jobs:
       - name: Install native prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y procps file clang lld
+          sudo apt-get install -y procps file
       - name: Download and verify official Ghidra 12.2
         run: |
           curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 1200 \
@@ -135,6 +135,10 @@ jobs:
         run: |
           npm install --global rea-agents@6.10.1
           npm install --no-save --no-package-lock @modelcontextprotocol/client@2.3.1
+      - name: Install Zig Mach-O cross-linker
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
       - name: Build a tiny arm64 Mach-O test target
         run: |
           cat > "$RUNNER_TEMP/fixture.c" <<'C'
@@ -148,8 +152,10 @@ jobs:
               return ultron_calculate(25);
           }
           C
-          clang -target arm64-apple-macos11 -O0 -fno-inline -c "$RUNNER_TEMP/fixture.c" -o "$RUNNER_TEMP/fixture.o"
-          ld64.lld -arch arm64 -platform_version macos 11.0 11.0 -e _main -o "$RUNNER_TEMP/fixture.macho" "$RUNNER_TEMP/fixture.o"
+          zig version
+          zig cc -target aarch64-macos.11.0 -O0 -fno-inline -nostdlib \
+            -Wl,-e,_main -Wl,-platform_version,macos,11.0,11.0 \
+            -o "$RUNNER_TEMP/fixture.macho" "$RUNNER_TEMP/fixture.c"
           chmod +x "$RUNNER_TEMP/fixture.macho"
           file "$RUNNER_TEMP/fixture.macho" | tee "$RUNNER_TEMP/fixture-type.txt"
           grep -E "Mach-O 64-bit arm64 executable" "$RUNNER_TEMP/fixture-type.txt"
