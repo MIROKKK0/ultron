@@ -212,46 +212,6 @@ struct ReverseEngineeringView: View {
         }
     }
 
-    private func startSiteAnalysis() {
-        guard siteAuthorized else { return }
-        busy = true
-        output = "ULTRON está enviando o site para um worker isolado do REA…"
-        Task {
-            defer { busy = false }
-            do {
-                let data = try await client.startREASiteAnalysis(
-                    url: targetURL,
-                    authorized: siteAuthorized,
-                    serverURL: serverURL
-                )
-                let result = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                siteAnalysisID = result?["analysis_id"] as? String ?? ""
-                siteRunURL = result?["run_url"] as? String ?? ""
-                siteStatus = result?["status"] as? String ?? "dispatched"
-                output = "Análise de site enviada ao worker temporário. O REA vai abrir o site num Chromium isolado, recolher evidências e analisar os scripts observados. Abra a execução para acompanhar e descarregar o relatório."
-            } catch {
-                output = "Não foi possível iniciar a análise do site: \(error.localizedDescription)"
-            }
-        }
-    }
-
-    private func refreshSiteStatus() {
-        guard !siteAnalysisID.isEmpty else { return }
-        busy = true
-        Task {
-            defer { busy = false }
-            do {
-                let data = try await client.reaSiteAnalysisStatus(id: siteAnalysisID, serverURL: serverURL)
-                let result = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                siteStatus = result?["conclusion"] as? String ?? result?["status"] as? String ?? "unknown"
-                siteRunURL = result?["run_url"] as? String ?? siteRunURL
-                output = "Status da análise REA: \(siteStatus). O artefato fica disponível na execução do GitHub Actions quando o job terminar."
-            } catch {
-                output = "Falha ao consultar o status: \(error.localizedDescription)"
-            }
-        }
-    }
-
     private func analyzeSite() {
         guard siteAuthorized,
               let url = URL(string: targetURL.trimmingCharacters(in: .whitespacesAndNewlines)),
