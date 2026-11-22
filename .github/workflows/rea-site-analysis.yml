@@ -98,20 +98,20 @@ jobs:
 
       - name: Capture browser evidence with REA
         run: |
-          rea capture-browser-scenario analysis/scenario.json \
+          rea capture-browser-scenario "$GITHUB_WORKSPACE/analysis/scenario.json" \
             --detail summary \
-            --evidence_output analysis/capture-evidence.json \
-            --json > analysis/capture-summary.json
+            --evidence_output "$GITHUB_WORKSPACE/analysis/capture-evidence.json" \
+            --json > "$GITHUB_WORKSPACE/analysis/capture-summary.json"
 
       - name: Export observed website scripts
         run: |
-          rea export-web-scripts analysis/capture-evidence.json analysis/exported-scripts \
-            --json > analysis/script-export.json
+          rea export-web-scripts "$GITHUB_WORKSPACE/analysis/capture-evidence.json" "$GITHUB_WORKSPACE/analysis/exported-scripts" \
+            --json > "$GITHUB_WORKSPACE/analysis/script-export.json"
 
       - name: Analyze exported JavaScript application
         run: |
-          rea analyze-javascript-application analysis/exported-scripts/files \
-            --json > analysis/javascript-analysis.json
+          rea analyze-javascript-application "$GITHUB_WORKSPACE/analysis/exported-scripts/files" \
+            --json > "$GITHUB_WORKSPACE/analysis/javascript-analysis.json"
 
       - name: Write analysis manifest
         if: always()
