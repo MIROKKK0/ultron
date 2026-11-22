@@ -224,7 +224,7 @@ class Ultron:
                         "required": []
                     }
                 }
-            }
+            },
             {
                 "type": "function",
                 "function": {
