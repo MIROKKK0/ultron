@@ -44,7 +44,7 @@ In `MIROKKK0/ultron` → Settings → Secrets and variables → Actions, add:
 
 The workflow dispatch payload contains only a random job ID. The actual target URL or uploaded IPA ID is fetched from ULTRON through the callback-authenticated endpoint, so it is not copied into the public workflow-dispatch input.
 
-**Release gate:** GitHub only accepts `workflow_dispatch` for a workflow file present on the repository's default branch. PR #73 registers the worker workflow and scripts on `main`; Render dispatches the worker using `ULTRON_GITHUB_REF=feat/ultron-core-assistant`, which is the selected deployment branch containing the ULTRON API routes and worker code.
+**Release gate:** GitHub only accepts `workflow_dispatch` for a workflow file present on the repository's default branch. PR #73 is now merged into `main`, registering the worker workflow and scripts. Render dispatches the worker using `ULTRON_GITHUB_REF=feat/ultron-core-assistant`, which is the selected deployment branch containing the ULTRON API routes and worker code.
 
 ## iPhone workflow
 
