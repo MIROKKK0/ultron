@@ -101,10 +101,11 @@ jobs:
           sudo apt-get install -y procps file clang lld
       - name: Download and verify official Ghidra 12.2
         run: |
-          curl --fail --location --retry 3 -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/assets/665189215" \
+          curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 1200 \
+            "https://sourceforge.net/projects/ghidra.mirror/files/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip/download" \
             -o "$RUNNER_TEMP/ghidra.zip"
           echo "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
+          unzip -t "$RUNNER_TEMP/ghidra.zip" >/dev/null
           mkdir -p "$RUNNER_TEMP/ghidra"
           unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
           echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC" >> "$GITHUB_ENV"
@@ -218,8 +219,8 @@ jobs:
       - name: Download and verify official Ghidra 12.2
         if: ${{ steps.job_type.outputs.target_type == 'ipa' }}
         run: |
-          curl --fail --location --retry 3 -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/assets/665189215" \
+          curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 1200 \
+            "https://sourceforge.net/projects/ghidra.mirror/files/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip/download" \
             -o "$RUNNER_TEMP/ghidra.zip"
           echo "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
           mkdir -p "$RUNNER_TEMP/ghidra"
