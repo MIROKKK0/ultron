@@ -164,6 +164,8 @@ def search_web(query: str, max_results: int = 6, searcher: Callable[..., Any] | 
     limit = max(1, min(int(max_results), 8))
 
     if VIDEO_TERMS.search(cleaned):
+        requested_platform = "tiktok" if re.search(r"tik\\s?tok", cleaned, re.IGNORECASE) else "youtube"
+        platform_label = "TikTok" if requested_platform == "tiktok" else "YouTube"
         try:
             videos = _video_search(cleaned, limit, searcher)
         except Exception as exc:
