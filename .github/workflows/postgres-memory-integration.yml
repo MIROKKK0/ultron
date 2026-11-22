@@ -14,6 +14,7 @@ on:
   push:
     branches:
       - "test/postgres-memory-integration-ci-2026-11-19"
+      - "feat/ultron-core-assistant"
   workflow_dispatch:
 
 permissions:
@@ -21,11 +22,16 @@ permissions:
 
 jobs:
   postgres-memory:
+    name: PostgreSQL ${{ matrix.postgres-version }} memory integration
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-version: ["16", "18"]
     timeout-minutes: 10
     services:
       postgres:
-        image: postgres:16
+        image: postgres:${{ matrix.postgres-version }}
         env:
           POSTGRES_USER: ultron
           POSTGRES_PASSWORD: ultron_test_only
