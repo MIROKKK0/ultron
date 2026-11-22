@@ -4,7 +4,7 @@ struct ContentView: View {
     @AppStorage("ultronServerURL") private var serverURL = "https://ultron-api-c5ae.onrender.com"
     @AppStorage("ultronChatHistoryData") private var storedChatHistory: Data = Data()
     @State private var messages: [ChatMessage] = [
-        ChatMessage(role: .assistant, text: "Olá. Sou o ULTRON. Meu classificador próprio e minhas habilidades locais estão disponíveis. Use /plan, /research, /calc, /self ou /skills. A geração livre ainda está em desenvolvimento.")
+        ChatMessage(role: .assistant, text: "Olá. Sou o ULTRON. Converse comigo normalmente: posso pesquisar, planejar, explicar, programar e organizar memórias.")
     ]
     @State private var draft = ""
     @State private var isSending = false
