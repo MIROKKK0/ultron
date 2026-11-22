@@ -209,7 +209,7 @@ struct ReverseEngineeringView: View {
                 let synthesis = try await client.send(prompt, serverURL: serverURL)
                 output = "RELATÓRIO ULTRON + REA\n\n\(synthesis.reply)\n\nEVIDÊNCIA BRUTA REA (limitada):\n\(String(evidence.prefix(2500)))"
             } catch {
-                output = "A análise automática do IPA falhou: \\(error.localizedDescription)"
+                output = "A análise automática do IPA falhou: \(error.localizedDescription)"
             }
         }
     }
