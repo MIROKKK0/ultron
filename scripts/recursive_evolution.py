@@ -41,6 +41,8 @@ CONTEXT_FILES = (
     "docs/PROJECT_AWARENESS.md",
     "docs/SELF_EVOLUTION.md",
     "docs/COGNITIVE_ARCHITECTURE_V1.md",
+    "docs/REA_INTEGRATION.md",
+    "scripts/recursive_evolution.py",
     "skills/ultron-safe-evolution/SKILL.md",
     "skills/ultron-tdd-loop/SKILL.md",
     "backend/agent_core.py",
@@ -126,12 +128,58 @@ def research() -> list[dict[str, Any]]:
     return results[:12]
 
 
+def remote_evolution_history() -> dict[str, Any]:
+    """Read public PR and Actions history so ULTRON can compare its past iterations."""
+    repository = os.getenv("GITHUB_REPOSITORY", "MIROKKK0/ultron")
+    api = os.getenv("GITHUB_API_URL", "https://api.github.com").rstrip("/")
+    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    history: dict[str, Any] = {"merged_prs": [], "recent_runs": []}
+    try:
+        response = httpx.get(
+            f"{api}/repos/{repository}/pulls",
+            params={"state": "closed", "base": "feat/ultron-core-assistant", "per_page": 15},
+            headers=headers,
+            timeout=httpx.Timeout(12.0, connect=5.0),
+        )
+        response.raise_for_status()
+        for item in response.json():
+            if item.get("merged_at"):
+                history["merged_prs"].append({
+                    "number": item.get("number"),
+                    "title": str(item.get("title", ""))[:220],
+                    "merged_at": item.get("merged_at"),
+                    "head": item.get("head", {}).get("ref"),
+                    "url": item.get("html_url"),
+                    "labels": [label.get("name") for label in item.get("labels", [])],
+                })
+        runs = httpx.get(
+            f"{api}/repos/{repository}/actions/runs",
+            params={"branch": "feat/ultron-core-assistant", "per_page": 10},
+            headers=headers,
+            timeout=httpx.Timeout(12.0, connect=5.0),
+        )
+        runs.raise_for_status()
+        for item in runs.json().get("workflow_runs", []):
+            history["recent_runs"].append({
+                "name": item.get("name"),
+                "status": item.get("status"),
+                "conclusion": item.get("conclusion"),
+                "created_at": item.get("created_at"),
+                "url": item.get("html_url"),
+            })
+    except Exception as exc:
+        history["lookup_error"] = type(exc).__name__
+    return history
+
+
 def project_context() -> str:
     from backend.project_awareness import build_project_awareness
 
     awareness = build_project_awareness(ROOT)
+    history = remote_evolution_history()
     sections = [
         "## PROJECT SNAPSHOT\n" + json.dumps(awareness, ensure_ascii=False)[:9000],
+        "## REMOTE EVOLUTION HISTORY\n" + json.dumps(history, ensure_ascii=False)[:10000],
         "## RECENT PROJECT FILES",
     ]
     remaining = 25000
