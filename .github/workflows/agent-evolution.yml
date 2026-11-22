@@ -8,7 +8,14 @@ on:
     branches:
       - "feat/ultron-core-assistant"
     paths:
+      - "backend/app.py"
       - "backend/agent_core.py"
+      - "backend/project_awareness.py"
+      - "backend/skills.py"
+      - "docs/PROJECT_AWARENESS.md"
+      - "docs/SELF_EVOLUTION.md"
+      - "tests/test_app.py"
+      - "tests/test_project_awareness.py"
       - "backend/brain.py"
       - "backend/cognitive_workspace.py"
       - "backend/evidence_critic.py"
