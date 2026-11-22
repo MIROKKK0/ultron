@@ -19,9 +19,6 @@ struct ReverseEngineeringView: View {
     @State private var mode = "SITE"
     @State private var targetURL = ""
     @State private var siteAuthorized = false
-    @State private var siteAnalysisID = ""
-    @State private var siteRunURL = ""
-    @State private var siteStatus = ""
     @State private var selectedIPA: URL?
     @State private var showImporter = false
     @State private var tools: [REATool] = []
@@ -71,7 +68,7 @@ struct ReverseEngineeringView: View {
                         prefillArguments()
                     }
                     if mode == "SITE" {
-                        Text("A URL sozinha não cria uma sessão de navegador. As ferramentas de site precisam de um alvo CDP já disponível; o provisionamento de navegador isolado ainda está pendente.")
+                        Text("ULTRON inicia um Chromium descartável e isolado; o REA observa a página por CDP, captura scripts e gera evidências. Só HTTPS público; redirecionamentos para outra origem são interrompidos.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -81,20 +78,8 @@ struct ReverseEngineeringView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                         Button("Analisar site com Chromium + REA", systemImage: "globe", action: analyzeSite)
-                            .disabled(busy || URL(string: targetURL)?.scheme != "https")
+                            .disabled(busy || !siteAuthorized || URL(string: targetURL)?.scheme != "https")
                         Toggle("Tenho autorização para analisar este site", isOn: $siteAuthorized)
-                        Button("Analisar site com REA", systemImage: "globe", action: startSiteAnalysis)
-                            .disabled(busy || !siteAuthorized || targetURL.isEmpty)
-                        if !siteAnalysisID.isEmpty {
-                            Button("Atualizar status da análise", systemImage: "arrow.clockwise", action: refreshSiteStatus)
-                                .disabled(busy)
-                            Text("Status: \(siteStatus.isEmpty ? "enviado" : siteStatus)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        if let runURL = URL(string: siteRunURL), !siteRunURL.isEmpty {
-                            Link("Abrir execução e baixar evidências", destination: runURL)
-                        }
                     } else {
                         Button {
                             showImporter = true
@@ -268,7 +253,8 @@ struct ReverseEngineeringView: View {
     }
 
     private func analyzeSite() {
-        guard let url = URL(string: targetURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+        guard siteAuthorized,
+              let url = URL(string: targetURL.trimmingCharacters(in: .whitespacesAndNewlines)),
               url.scheme == "https", url.host != nil else {
             output = "Informe uma URL HTTPS válida."
             return
@@ -297,6 +283,7 @@ struct ReverseEngineeringView: View {
                     targetType: targetType,
                     targetURL: targetURL,
                     fileID: fileID,
+                    authorized: targetType == "site",
                     serverURL: serverURL
                 )
                 guard let startObject = try JSONSerialization.jsonObject(with: started) as? [String: Any],
